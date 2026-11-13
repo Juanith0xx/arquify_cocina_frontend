@@ -167,6 +167,177 @@ export function exportClientQuotePdf(
   doc.save(`Cotizacion_${metadata.projectName.replace(/\s+/g, '_')}_PVP.pdf`);
 }
 
+function applyB2BQuoteStyles(ws: any, sheetType: 'b2b' | 'pvp') {
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const totalCols = range.e.c;
+  const totalRows = range.e.r;
+
+  const colWidths = sheetType === 'b2b' ? [20, 38, 42, 12, 14, 18, 20] : [10, 32, 58, 22];
+  ws['!cols'] = colWidths.map((w) => ({ wch: w }));
+
+  const thinBorder = {
+    top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+  };
+
+  for (let R = 0; R <= totalRows; ++R) {
+    for (let C = 0; C <= totalCols; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ c: C, r: R });
+      if (!ws[cellAddress]) {
+        ws[cellAddress] = { v: '', t: 's' };
+      }
+      const cell = ws[cellAddress];
+      const valStr = String(cell.v ?? '');
+
+      if (R === 0) {
+        cell.s = {
+          fill: { patternType: 'solid', fgColor: { rgb: sheetType === 'b2b' ? '1E293B' : '065F46' } },
+          font: { name: 'Calibri', bold: true, size: 12, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'left', vertical: 'center' },
+        };
+      } else if (sheetType === 'b2b') {
+        if (R === 6 || R === 13) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+            font: { name: 'Calibri', bold: true, size: 10.5, color: { rgb: '0F172A' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: 'CBD5E1' } },
+              bottom: { style: 'medium', color: { rgb: 'CBD5E1' } },
+            },
+          };
+        } else if (R >= 1 && R <= 4) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '475569' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else if (C === 1) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R >= 7 && R <= 11) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 9.5, color: { rgb: '334155' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else if (C === 1) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 9.5, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R === 14) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: 'F97316' } },
+            font: { name: 'Calibri', bold: true, size: 10, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: 'EA580C' } },
+              bottom: { style: 'medium', color: { rgb: 'EA580C' } },
+              left: { style: 'thin', color: { rgb: 'FDBA74' } },
+              right: { style: 'thin', color: { rgb: 'FDBA74' } },
+            },
+          };
+        } else if (valStr.includes('SUBTOTAL B2B NETO') || valStr.includes('I.V.A.') || valStr.includes('TOTAL COSTO B2B')) {
+          const isTotal = valStr.includes('TOTAL COSTO B2B');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: isTotal ? 'FEF3C7' : 'F8FAFC' } },
+            font: { name: 'Calibri', bold: true, size: isTotal ? 11 : 10, color: { rgb: isTotal ? 'B45309' : '1E293B' } },
+            alignment: { horizontal: 'right', vertical: 'center' },
+            border: {
+              top: { style: isTotal ? 'medium' : 'thin', color: { rgb: 'F59E0B' } },
+              bottom: { style: isTotal ? 'double' : 'thin', color: { rgb: 'B45309' } },
+              left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+              right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+            },
+          };
+        } else if (R > 14) {
+          const isNum = typeof cell.v === 'number';
+          const align = C === 0 || C === 3 || C === 4 ? 'center' : (C >= 5 || isNum ? 'right' : 'left');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: R % 2 === 0 ? 'FAFAFA' : 'FFFFFF' } },
+            font: { name: 'Calibri', size: 9.5, color: { rgb: '0F172A' }, bold: C === 6 },
+            alignment: { horizontal: align, vertical: 'center' },
+            border: thinBorder,
+          };
+          if (typeof cell.v === 'number' && C >= 5) {
+            cell.z = '$#,##0';
+          }
+        }
+      } else if (sheetType === 'pvp') {
+        if (R >= 1 && R <= 5) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'ECFDF5' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '047857' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R === 7) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: '10B981' } },
+            font: { name: 'Calibri', bold: true, size: 10, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: '047857' } },
+              bottom: { style: 'medium', color: { rgb: '047857' } },
+            },
+          };
+        } else if (valStr.includes('SUBTOTAL NETO') || valStr.includes('I.V.A.') || valStr.includes('TOTAL PRESUPUESTO') || valStr.includes('UTILIDAD BRUTA')) {
+          const isTotal = valStr.includes('TOTAL PRESUPUESTO');
+          const isProfit = valStr.includes('UTILIDAD BRUTA');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: isTotal ? 'D1FAE5' : (isProfit ? 'FEF3C7' : 'F8FAFC') } },
+            font: { name: 'Calibri', bold: true, size: isTotal ? 11 : 10, color: { rgb: isTotal ? '047857' : (isProfit ? 'B45309' : '1E293B') } },
+            alignment: { horizontal: 'right', vertical: 'center' },
+            border: {
+              top: { style: isTotal ? 'medium' : 'thin', color: { rgb: '10B981' } },
+              bottom: { style: isTotal ? 'double' : 'thin', color: { rgb: '047857' } },
+              left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+              right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+            },
+          };
+        } else if (R > 7) {
+          const isNum = typeof cell.v === 'number';
+          const align = C === 0 ? 'center' : (C === 3 || isNum ? 'right' : 'left');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: R % 2 === 0 ? 'F8FAFC' : 'FFFFFF' } },
+            font: { name: 'Calibri', size: 9.5, color: { rgb: '0F172A' }, bold: C === 3 },
+            alignment: { horizontal: align, vertical: 'center' },
+            border: thinBorder,
+          };
+          if (typeof cell.v === 'number' && C === 3) {
+            cell.z = '$#,##0';
+          }
+        }
+      }
+    }
+  }
+}
+
 export function exportB2BQuoteExcel(
   quote: DualQuoteCalculation,
   metadata: QuoteExportMetadata
@@ -212,6 +383,7 @@ export function exportB2BQuoteExcel(
   );
 
   const wsB2B = XLSX.utils.aoa_to_sheet(dataB2B);
+  applyB2BQuoteStyles(wsB2B, 'b2b');
   XLSX.utils.book_append_sheet(wb, wsB2B, 'Pedido B2B Fábrica');
 
   // Hoja 2: Cotización Cliente Final (PVP)
@@ -245,6 +417,7 @@ export function exportB2BQuoteExcel(
   );
 
   const wsPVP = XLSX.utils.aoa_to_sheet(dataPVP);
+  applyB2BQuoteStyles(wsPVP, 'pvp');
   XLSX.utils.book_append_sheet(wb, wsPVP, 'Cotización Cliente (PVP)');
 
   XLSX.writeFile(wb, `Cotizacion_Dual_${metadata.projectName.replace(/\s+/g, '_')}.xlsx`);

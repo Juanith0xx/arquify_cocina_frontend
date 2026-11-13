@@ -17,7 +17,8 @@ import {
   Percent,
   Filter,
   Eye,
-  Info
+  Info,
+  Pencil
 } from 'lucide-react';
 import { useAdminStore, CustomTextureItem, ProviderItem } from '../../store/adminStore';
 import { useStore as useClosetStore } from '../../store';
@@ -103,6 +104,7 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
     matchedProvider?.id || currentProviderId || 'all'
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingTextureId, setEditingTextureId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'warning' | 'info'; text: string } | null>(null);
   const [approvalMode, setApprovalMode] = useState<'approved' | 'pending'>(isSuperAdmin ? 'approved' : 'pending');
 
@@ -230,6 +232,38 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
     }
   };
 
+  const handleStartCreate = () => {
+    setEditingTextureId(null);
+    setName('');
+    setCode('');
+    setFinish('Poro Sincronizado');
+    setThicknessMm(18);
+    setSheetWidthM(1.83);
+    setSheetHeightM(2.50);
+    setPriceSheetClp(48000);
+    setStock(30);
+    setPreviewUrl('');
+    setIsFormOpen(true);
+  };
+
+  const handleStartEdit = (tex: CustomTextureItem) => {
+    setEditingTextureId(tex.id);
+    setName(tex.name);
+    setCode(tex.code || '');
+    if (tex.providerId) {
+      setSelectedProviderId(tex.providerId);
+    }
+    setCategory(tex.category);
+    setFinish(tex.finish || 'Poro Sincronizado');
+    setThicknessMm(tex.thicknessMm || 18);
+    setSheetWidthM(tex.sheetWidthM || 1.83);
+    setSheetHeightM(tex.sheetHeightM || 2.50);
+    setPriceSheetClp(tex.priceSheetClp || 48000);
+    setStock(tex.stock ?? 30);
+    setPreviewUrl(tex.previewUrl || tex.url || '');
+    setIsFormOpen(true);
+  };
+
   const handleCreateTexture = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !previewUrl) {
@@ -237,10 +271,79 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
       return;
     }
 
+    const formattedFormat = `${sheetWidthM} x ${sheetHeightM} m`;
+
+    if (editingTextureId) {
+      const existingTex = textures.find((t) => t.id === editingTextureId);
+      const isStone =
+        category === 'piedras_marmoles' ||
+        currentSelectedProvider.name.toLowerCase().includes('qstone') ||
+        currentSelectedProvider.name.toLowerCase().includes('sysprotec') ||
+        name.toLowerCase().includes('qstone');
+
+      updateTexture(editingTextureId, {
+        name: name.trim(),
+        code: code.trim() || existingTex?.code || `PRV-${Math.floor(Math.random() * 9000 + 1000)}`,
+        brand: currentSelectedProvider.name,
+        category,
+        finish,
+        sheetFormat: formattedFormat,
+        thicknessMm: Number(thicknessMm) || 18,
+        sheetWidthM: Number(sheetWidthM),
+        sheetHeightM: Number(sheetHeightM),
+        priceSheetClp: Number(priceSheetClp),
+        priceM2Clp,
+        url: previewUrl,
+        previewUrl: previewUrl,
+        providerId: currentSelectedProvider.id,
+        providerName: currentSelectedProvider.name,
+        commissionPercentage: commissionPct,
+        providerNetPriceClp: providerNetPayoutClp,
+        stock: Math.max(0, Number(stock) || 0)
+      });
+
+      // Sincronizar catálogo 3D activo si está aprobado
+      const currentApprovalStatus = existingTex?.approvalStatus || 'approved';
+      if (currentApprovalStatus === 'approved') {
+        if (!isStone) {
+          const closetStore = useClosetStore.getState();
+          if (closetStore.customTextures) {
+            closetStore.setCustomTextures([
+              ...closetStore.customTextures.filter((t) => t.id !== editingTextureId),
+              { id: editingTextureId, name: name.trim(), url: previewUrl },
+            ]);
+          }
+        } else {
+          const isSintered = name.toLowerCase().includes('sinteriz') || category === 'piedras_marmoles';
+          useKitchenStore.getState().addQstoneCatalogItem({
+            id: editingTextureId,
+            code: code.trim() || 'QS-CUSTOM',
+            name: name.trim(),
+            materialType: isSintered ? 'sinterizado' : 'quarzo',
+            thicknessMm: name.includes('20') ? 20 : (name.includes('18') ? 18 : 12),
+            priceM2Clp: priceM2Clp || Math.round(priceSheetClp / 3.965) || 280000,
+            sheetWidthMm: 3200,
+            sheetHeightMm: 1600,
+            colorHex: previewUrl.startsWith('#') ? previewUrl : '#F5F5F7',
+            textureUrl: previewUrl,
+            finish: finish || 'Pulido Seda',
+            description: `${currentSelectedProvider.name} - Formato Placa`,
+            active: true,
+          });
+        }
+      }
+
+      showToast(`Terminación "${name}" actualizada con éxito.`, 'success');
+      setIsFormOpen(false);
+      setEditingTextureId(null);
+      setName('');
+      setCode('');
+      setPreviewUrl('');
+      return;
+    }
+
     // Si quien crea es un proveedor o superadmin especificando flujo de aprobación:
     const initialApprovalStatus = isSuperAdmin ? approvalMode : 'pending';
-
-    const formattedFormat = `${sheetWidthM} x ${sheetHeightM} m`;
 
     const newId = addTexture({
       name: name.trim(),
@@ -305,6 +408,7 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
     }
 
     setIsFormOpen(false);
+    setEditingTextureId(null);
     setName('');
     setCode('');
     setPreviewUrl('');
@@ -571,7 +675,14 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsFormOpen(!isFormOpen)}
+            onClick={() => {
+              if (isFormOpen) {
+                setIsFormOpen(false);
+                setEditingTextureId(null);
+              } else {
+                handleStartCreate();
+              }
+            }}
             className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-orange-500/20 shrink-0 transition-all cursor-pointer"
           >
             <Plus size={16} /> Cargar Terminación
@@ -590,7 +701,7 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
         </div>
       </div>
 
-      {/* Modal / Formulario de Carga de Terminación */}
+      {/* Modal / Formulario de Carga o Edición de Terminación */}
       {isFormOpen && (
         <form
           onSubmit={handleCreateTexture}
@@ -602,10 +713,21 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
                 <Palette size={18} />
               </div>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                {isSuperAdmin ? 'Cargar Nueva Terminación / Producto' : `Cargar Producto a Mi Catálogo (${matchedProvider?.name || currentProviderName || 'Proveedor'})`}
+                {editingTextureId
+                  ? `Editar Terminación / Decorativo: ${name || 'Sin Nombre'}`
+                  : isSuperAdmin
+                  ? 'Cargar Nueva Terminación / Producto'
+                  : `Cargar Producto a Mi Catálogo (${matchedProvider?.name || currentProviderName || 'Proveedor'})`}
               </h3>
             </div>
-            <button type="button" onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setIsFormOpen(false);
+                setEditingTextureId(null);
+              }}
+              className="text-slate-400 hover:text-white cursor-pointer"
+            >
               <X size={16} />
             </button>
           </div>
@@ -1009,8 +1131,11 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsFormOpen(false)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-semibold rounded-xl"
+                onClick={() => {
+                  setIsFormOpen(false);
+                  setEditingTextureId(null);
+                }}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-semibold rounded-xl cursor-pointer"
               >
                 Cancelar
               </button>
@@ -1018,7 +1143,11 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
                 type="submit"
                 className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer"
               >
-                {isSuperAdmin ? 'Guardar y Publicar en 3D' : 'Enviar a Revisión (VB)'}
+                {editingTextureId
+                  ? 'Guardar Cambios'
+                  : isSuperAdmin
+                  ? 'Guardar y Publicar en 3D'
+                  : 'Enviar a Revisión (VB)'}
               </button>
             </div>
           </div>
@@ -1211,13 +1340,20 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
                 {/* Barra de Acciones y Superadmin VB */}
                 <div className="pt-2 border-t border-zinc-800 flex items-center justify-between gap-2">
                   {isPending && isSuperAdmin ? (
-                    <div className="flex items-center gap-2 w-full">
+                    <div className="flex items-center gap-1.5 w-full">
                       <button
                         onClick={() => handleApprove(tex.id, tex.name)}
                         className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-colors shadow"
                         title="Aprobar y publicar en configurador"
                       >
                         <Check size={14} /> Dar VB
+                      </button>
+                      <button
+                        onClick={() => handleStartEdit(tex)}
+                        className="py-1.5 px-2 bg-zinc-800 hover:bg-orange-500 hover:text-white text-zinc-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1"
+                        title="Editar o cambiar decorativo"
+                      >
+                        <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => handleReject(tex.id, tex.name)}
@@ -1239,6 +1375,13 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
                       </button>
 
                       <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleStartEdit(tex)}
+                          className="px-2 py-1 bg-zinc-800 hover:bg-orange-500 hover:text-white text-zinc-300 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Editar o cambiar decorativo"
+                        >
+                          <Pencil size={11} /> Editar
+                        </button>
                         {isSuperAdmin && !isPending && (
                           <button
                             onClick={() => {

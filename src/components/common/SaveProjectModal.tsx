@@ -372,17 +372,17 @@ export function SaveProjectModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Presupuesto Estimado (CLP)
+                  <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Costo Proyecto (Aquify B2B CLP)</span>
+                    <span className="text-[10px] text-orange-400 font-normal">Calculado por App</span>
                   </label>
                   <div className="relative">
-                    <DollarSign size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <DollarSign size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" />
                     <input
-                      type="number"
-                      value={costClp}
-                      onChange={(e) => setCostClp(Number(e.target.value))}
-                      placeholder="1500000"
-                      className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-white focus:outline-none focus:border-orange-500 transition-colors font-mono"
+                      type="text"
+                      readOnly
+                      value={costClp > 0 ? costClp.toLocaleString('es-CL') : '0'}
+                      className="w-full pl-9 pr-3 py-2 bg-zinc-950/80 border border-orange-500/30 rounded-xl text-xs text-orange-400 font-mono font-bold focus:outline-none cursor-not-allowed"
                     />
                   </div>
                 </div>

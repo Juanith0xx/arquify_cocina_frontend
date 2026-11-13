@@ -21,11 +21,12 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wrench, DollarSign, ChevronDown, ChevronRight, Globe, Ruler, Menu, X, MoreVertical, Download, Camera } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
 import { exportKitchenCommercialPdf } from '../utils/kitchenCommercialPdfGenerator';
+import { calculateKitchenDualQuote } from '../utils/kitchenB2BPricing';
 import { HANDLE_CATALOG } from '../types/handle';
 
 import { DecorationSection } from '../components/kitchen/DecorationSection';
@@ -239,6 +240,23 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const [rightTab, setRightTab] = useState<'module' | 'materials' | 'engineering' | 'mep' | 'decoration'>('module');
   const [activeMobileTab, setActiveMobileTab] = useState<'catalog' | 'module' | 'materials' | 'engineering' | 'mep' | 'scene' | 'decoration'>('catalog');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExportMenuOpen]);
+
   const [showIndividualMaterial, setShowIndividualMaterial] = useState(false);
   const globalState = useStore();
   const currentAreaM2 = calculatePolygonArea(roomConfig?.vertices || []);
@@ -297,7 +315,24 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       try {
         const canvas = document.querySelector('canvas');
         if (canvas) {
-          screenshotUrl = canvas.toDataURL('image/png');
+          const origAspect = canvas.width / canvas.height;
+          if (origAspect > 16 / 9) {
+            const cropW = canvas.height * (16 / 9);
+            const cropH = canvas.height;
+            const cropX = (canvas.width - cropW) / 2;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            const ctx = tempCanvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(canvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+              screenshotUrl = tempCanvas.toDataURL('image/png');
+            } else {
+              screenshotUrl = canvas.toDataURL('image/png');
+            }
+          } else {
+            screenshotUrl = canvas.toDataURL('image/png');
+          }
         }
       } catch (e) {
         console.warn('No se pudo capturar imagen del canvas 3D:', e);
@@ -528,25 +563,46 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       {/* Modal de Confirmación para Reiniciar y Partir de Cero */}
       <ResetConfirmModal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} />
 
-      <nav className={`flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3.5 border-b backdrop-blur-md z-30 transition-colors shrink-0 ${
-        isLight ? 'border-slate-200 bg-white/90 shadow-sm' : 'border-white/10 bg-black/60'
+      <nav className={`flex items-center justify-between px-3 sm:px-4 py-2 border-b backdrop-blur-md z-30 transition-colors shrink-0 ${
+        isLight ? 'border-slate-200 bg-white/95 shadow-xs' : 'border-white/10 bg-black/70'
       }`}>
-        <div className="flex items-center gap-2 sm:gap-4">
+        {/* Zona Izquierda: Logo, Navegación y Contexto de Proyecto */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button 
             onClick={onNavigate} 
-            className={`p-1.5 sm:p-2 rounded-lg transition-colors border cursor-pointer ${
+            className={`p-1.5 rounded-lg transition-colors border cursor-pointer ${
               isLight ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
             }`} 
             title="Volver al Inicio"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={15} />
           </button>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="font-bellota text-xl sm:text-2xl font-bold lowercase text-orange-500 tracking-tight select-none">arquify</span>
-            <span className={`text-[10px] sm:text-xs uppercase tracking-widest border-l pl-2 sm:pl-3 hidden md:inline ${
+          <div className="flex items-center gap-2">
+            <span className="font-bellota text-xl font-bold lowercase text-orange-500 tracking-tight select-none">arquify</span>
+            <span className={`text-[10px] uppercase tracking-widest border-l pl-2 hidden md:inline ${
               isLight ? 'text-slate-400 border-slate-200' : 'text-slate-500 border-white/10'
             }`}>Cocinas</span>
           </div>
+
+          {/* Badge compacto de Área de Habitación */}
+          <button
+            onClick={() => {
+              if (activeCabinetId) setActiveCabinet(null);
+              if (activeArchElementId) setActiveArchElement(null);
+              setRoomPlannerOpen(true);
+            }}
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-semibold transition-all cursor-pointer ${
+              isLight
+                ? 'bg-slate-50 hover:bg-orange-50 border-slate-200 hover:border-orange-300 text-slate-700 hover:text-orange-600'
+                : 'bg-white/5 hover:bg-orange-500/10 border-white/10 hover:border-orange-500/30 text-slate-300 hover:text-orange-400'
+            }`}
+            title="Editar forma y dimensiones de la habitación"
+          >
+            <Maximize2 size={12} className="text-orange-500" />
+            <span>{currentAreaM2.toFixed(1)} m²</span>
+            <span className="opacity-40">·</span>
+            <span className="text-[10px] opacity-75 capitalize">{roomConfig.type === 'rectangular' ? 'Rectangular' : roomConfig.type === 'l_shape' ? 'Forma L' : roomConfig.type === 'five_corners' ? '5 Esquinas' : roomConfig.type === 'u_shape' ? 'Forma U' : 'Libre'}</span>
+          </button>
         </div>
 
         {/* Acciones para Móvil / Tablet (< lg) */}
@@ -566,7 +622,6 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
               3D
             </button>
           </div>
-
 
           {/* Undo / Redo */}
           <div className="flex items-center gap-1">
@@ -613,149 +668,242 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
           </button>
         </div>
 
-        {/* Acceso directo a Área de Cocina, Vistas y Reinicio (Desktop >= lg) */}
-        <div className="hidden lg:flex items-center gap-3">
-          <button
-            onClick={() => {
-              if (activeCabinetId) setActiveCabinet(null);
-              if (activeArchElementId) setActiveArchElement(null);
-              setRoomPlannerOpen(true);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 border rounded-lg transition-all text-xs font-bold uppercase tracking-wider shadow-sm group ${
-              isLight
-                ? 'bg-orange-50 hover:bg-orange-100 border-orange-200 hover:border-orange-400 text-orange-600 hover:text-orange-700'
-                : 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 hover:border-orange-500 text-orange-400 hover:text-orange-300'
-            }`}
-          >
-            <Maximize2 size={14} className="text-orange-500 group-hover:scale-110 transition-transform" />
-            <span>Área de cocina: <span className={`font-mono underline decoration-orange-500/50 underline-offset-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>{roomConfig.type === 'rectangular' ? 'Rectangular' : roomConfig.type === 'l_shape' ? 'Forma L' : roomConfig.type === 'five_corners' ? '5 Esquinas' : roomConfig.type === 'u_shape' ? 'Forma U' : 'Diseño Libre'}</span> ({currentAreaM2.toFixed(2)} m²)</span>
-          </button>
-
-          <div className={`flex p-1 rounded-lg border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-black/50 border-white/10'}`}>
+        {/* Zona Central: Switch 2D/3D + Undo/Redo + Tema (Desktop >= lg) */}
+        <div className="hidden lg:flex items-center gap-2">
+          {/* Toggle 2D / 3D */}
+          <div className={`flex p-0.5 rounded-lg border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-black/50 border-white/10'}`}>
             <button
               onClick={() => setViewMode('2d')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${viewMode === '2d' ? 'bg-orange-500 text-black' : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                viewMode === '2d'
+                  ? 'bg-orange-500 text-black shadow-xs'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              Plano 2D
+              2D
             </button>
             <button
               onClick={() => setViewMode('3d')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${viewMode === '3d' ? 'bg-orange-500 text-black' : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                viewMode === '3d'
+                  ? 'bg-orange-500 text-black shadow-xs'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              Vista 3D
+              3D
             </button>
           </div>
 
+          <div className={`h-4 w-px mx-1 ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
 
-          {/* Botones Deshacer y Rehacer (Undo / Redo) */}
-          <div className="flex items-center gap-1.5">
+          {/* Deshacer / Rehacer */}
+          <div className="flex items-center gap-0.5">
             <button
               onClick={undo}
               disabled={!canUndo()}
-              className={`flex items-center justify-center p-2 rounded-lg border transition-all shadow-sm ${
+              className={`p-1.5 rounded-md border transition-all ${
                 canUndo()
                   ? isLight
-                    ? 'bg-orange-50 hover:bg-orange-100 border-orange-400 text-orange-600 cursor-pointer active:scale-95 shadow-orange-500/10'
-                    : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/60 text-orange-400 hover:text-orange-300 cursor-pointer active:scale-95 shadow-[0_0_10px_rgba(249,115,22,0.25)]'
-                  : isLight
-                    ? 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed opacity-50'
-                    : 'bg-white/5 border-white/5 text-slate-600 cursor-not-allowed opacity-40'
+                    ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 cursor-pointer active:scale-95'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200 cursor-pointer active:scale-95'
+                  : 'opacity-30 cursor-not-allowed border-transparent text-slate-500'
               }`}
-              title={canUndo() ? 'Deshacer última acción (Ctrl+Z)' : 'Sin acciones para deshacer'}
+              title={canUndo() ? 'Deshacer (Ctrl+Z)' : 'Sin acciones para deshacer'}
               aria-label="Deshacer"
             >
-              <Undo2 size={16} strokeWidth={2.5} />
+              <Undo2 size={14} />
             </button>
 
             <button
               onClick={redo}
               disabled={!canRedo()}
-              className={`flex items-center justify-center p-2 rounded-lg border transition-all shadow-sm ${
+              className={`p-1.5 rounded-md border transition-all ${
                 canRedo()
                   ? isLight
-                    ? 'bg-orange-50 hover:bg-orange-100 border-orange-400 text-orange-600 cursor-pointer active:scale-95 shadow-orange-500/10'
-                    : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/60 text-orange-400 hover:text-orange-300 cursor-pointer active:scale-95 shadow-[0_0_10px_rgba(249,115,22,0.25)]'
-                  : isLight
-                    ? 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed opacity-50'
-                    : 'bg-white/5 border-white/5 text-slate-600 cursor-not-allowed opacity-40'
+                    ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 cursor-pointer active:scale-95'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200 cursor-pointer active:scale-95'
+                  : 'opacity-30 cursor-not-allowed border-transparent text-slate-500'
               }`}
-              title={canRedo() ? 'Rehacer acción (Ctrl+Y / Ctrl+Shift+Z)' : 'Sin acciones para rehacer'}
+              title={canRedo() ? 'Rehacer (Ctrl+Y / Ctrl+Shift+Z)' : 'Sin acciones para rehacer'}
               aria-label="Rehacer"
             >
-              <Redo2 size={16} strokeWidth={2.5} />
+              <Redo2 size={14} />
             </button>
           </div>
 
-          {/* Botón selector de Modo Claro / Oscuro */}
+          <div className={`h-4 w-px mx-1 ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+
+          {/* Selector de Modo Claro / Oscuro */}
           <button
             onClick={toggleTheme}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            className={`p-1.5 rounded-md border transition-all cursor-pointer ${
               theme === 'dark'
-                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-amber-400 hover:text-amber-300'
-                : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700 hover:text-slate-900 shadow-sm'
+                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-amber-400'
+                : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 shadow-xs'
             }`}
             title={theme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+            aria-label="Modo Claro / Oscuro"
           >
-            {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-700" />}
-            <span className="hidden md:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
+        </div>
 
-          {canAccessIndustrialOutputs && (
+        {/* Zona Derecha: Exportar / Cotizar Dropdown + Guardar + Toggle Paneles + Reset */}
+        <div className="hidden lg:flex items-center gap-2">
+          {/* Menú Desplegable Agrupado de Cotizaciones y Exportación */}
+          <div className="relative" ref={exportMenuRef}>
             <button
-              onClick={() => setIsB2BQuoteOpen(true)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 border rounded-lg transition-all text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer ${
-                isLight
-                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
-                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-400 hover:text-amber-300'
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                isExportMenuOpen
+                  ? isLight ? 'bg-slate-200 border-slate-400 text-slate-900' : 'bg-white/20 border-white/30 text-white'
+                  : isLight
+                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 shadow-xs'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
               }`}
-              title="Cotización Comercial Dual (Costo Fábrica B2B vs Venta Cliente Final)"
+              title="Opciones de cotización comercial, B2B, planos y OpenBIM"
             >
-              <DollarSign size={14} className="text-amber-500" />
-              <span>Cotización B2B</span>
+              <Download size={14} className="text-orange-500" />
+              <span>Exportar / Cotizar</span>
+              <ChevronDown size={13} className={`transition-transform duration-200 ${isExportMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-          )}
 
-          {/* Descarga directa de Cotización Comercial PDF con Vistas 3D sin tener que salir */}
-          <button
-            onClick={handleDirectCommercialPdfDownload}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-lg transition-all text-xs font-bold uppercase tracking-wider shadow-md shadow-orange-500/20 cursor-pointer"
-            title="Descargar Cotización y Ficha Comercial en PDF con Vistas 3D"
-          >
-            <Download size={14} />
-            <span>Cotización PDF</span>
-          </button>
+            {isExportMenuOpen && (
+              <div className={`absolute right-0 mt-1.5 w-64 rounded-xl border shadow-2xl p-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in duration-150 ${
+                isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-zinc-900 border-white/15 text-slate-200'
+              }`}>
+                {/* Cotización PDF Comercial */}
+                <button
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    handleDirectCommercialPdfDownload();
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                    isLight ? 'hover:bg-orange-50 hover:text-orange-600' : 'hover:bg-white/10 hover:text-orange-400'
+                  }`}
+                >
+                  <Download size={15} className="text-orange-500 shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Cotización PDF Comercial</span>
+                    <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Ficha con renders 3D y presupuesto cliente</span>
+                  </div>
+                </button>
 
-          {canAccessIndustrialOutputs && (
-            <button
-              onClick={() => setIsBimModalOpen(true)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 border rounded-lg transition-all text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer ${
-                isLight
-                  ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-300 text-indigo-900'
-                  : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/40 text-indigo-400 hover:text-indigo-300'
-              }`}
-              title="Descargar paquete de modelado 3D y OpenBIM (.OBJ, .IFC, .DXF 3D, .ZIP) para Revit, SketchUp, Archicad y Blender"
-            >
-              <Box size={14} className="text-indigo-500" />
-              <span>Exportar 3D / BIM</span>
-            </button>
-          )}
+                {/* Cotización B2B */}
+                {canAccessIndustrialOutputs && (
+                  <button
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      setIsB2BQuoteOpen(true);
+                    }}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                      isLight ? 'hover:bg-amber-50 hover:text-amber-800' : 'hover:bg-white/10 hover:text-amber-400'
+                    }`}
+                  >
+                    <DollarSign size={15} className="text-amber-500 shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold">Cotización B2B Fábrica</span>
+                      <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Margen industrial vs PVP sugerido</span>
+                    </div>
+                  </button>
+                )}
 
+                {/* Exportar 3D / BIM */}
+                {canAccessIndustrialOutputs && (
+                  <button
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      setIsBimModalOpen(true);
+                    }}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                      isLight ? 'hover:bg-indigo-50 hover:text-indigo-800' : 'hover:bg-white/10 hover:text-indigo-400'
+                    }`}
+                  >
+                    <Box size={15} className="text-indigo-500 shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold">Exportar 3D / BIM</span>
+                      <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>.OBJ, .IFC, .DXF para Revit y SketchUp</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* Planos y Despiece CAD/CAM */}
+                {canAccessIndustrialOutputs && (
+                  <button
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      globalState.setIsPrinting(true);
+                    }}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                      isLight ? 'hover:bg-orange-50 hover:text-orange-600' : 'hover:bg-white/10 hover:text-orange-400'
+                    }`}
+                  >
+                    <FileText size={15} className="text-orange-500 shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold">Planos y Despiece (CAD)</span>
+                      <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Láminas técnicas 2D y etiquetas</span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Botón Principal Guardar Proyecto */}
           <button
             onClick={() => setIsSaveModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-all text-xs font-bold uppercase tracking-wider shadow-md shadow-orange-600/20 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-all text-xs font-bold shadow-xs shadow-orange-600/20 cursor-pointer"
             title="Guardar diseño actual en el Backoffice"
           >
             <Save size={14} />
-            <span>Guardar Proyecto</span>
+            <span>Guardar</span>
           </button>
 
+          <div className={`h-4 w-px mx-0.5 ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+
+          {/* Controles para Ocultar / Mostrar Paneles Laterales (Maximizar Espacio 3D) */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsLeftSidebarCollapsed(!isLeftSidebarCollapsed)}
+              className={`p-1.5 rounded-md border transition-all cursor-pointer ${
+                isLeftSidebarCollapsed
+                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-500'
+                  : isLight ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-600' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+              }`}
+              title={isLeftSidebarCollapsed ? 'Mostrar catálogo de módulos' : 'Ocultar catálogo de módulos (ampliar visor 3D)'}
+              aria-label="Toggle panel izquierdo"
+            >
+              <PanelLeft size={14} />
+            </button>
+
+            <button
+              onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+              className={`p-1.5 rounded-md border transition-all cursor-pointer ${
+                isRightSidebarCollapsed
+                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-500'
+                  : isLight ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-600' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+              }`}
+              title={isRightSidebarCollapsed ? 'Mostrar panel de propiedades' : 'Ocultar panel de propiedades (ampliar visor 3D)'}
+              aria-label="Toggle panel derecho"
+            >
+              <PanelRight size={14} />
+            </button>
+          </div>
+
+          <div className={`h-4 w-px mx-0.5 ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+
+          {/* Partir de Cero (Discreto) */}
           <button
             onClick={() => setIsResetModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500 text-red-400 hover:text-red-300 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
-            title="Borrar todo y partir de cero"
+            className={`p-1.5 rounded-md border transition-all cursor-pointer ${
+              isLight
+                ? 'bg-white hover:bg-red-50 border-slate-300 hover:border-red-300 text-slate-400 hover:text-red-600'
+                : 'bg-white/5 hover:bg-red-500/15 border-white/10 hover:border-red-500/40 text-slate-400 hover:text-red-400'
+            }`}
+            title="Borrar diseño y partir de cero"
+            aria-label="Partir de Cero"
           >
             <RotateCcw size={14} />
-            <span>Partir de Cero</span>
           </button>
         </div>
       </nav>
@@ -861,22 +1009,35 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       )}
 
       <main className="flex flex-col lg:flex-row flex-1 overflow-hidden relative">
-         <div className={`${(activeMobileTab === 'catalog' || activeMobileTab === 'scene') ? 'flex' : 'hidden lg:flex'} flex-col z-10 transition-colors shadow-2xl order-3 lg:order-1 flex-1 lg:flex-none w-full lg:w-72 min-h-0 h-auto lg:h-full border-t lg:border-t-0 lg:border-r ${isLight ? 'bg-white border-slate-200 shadow-slate-200' : 'bg-zinc-900 border-white/10'}`}>
-            <div className={`p-4 border-b hidden lg:block ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
-               <h3 className={`text-[10px] uppercase tracking-widest font-bold mb-3 ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Herramientas</h3>
-               <div className="flex flex-col gap-2">
+         <div className={`${isLeftSidebarCollapsed ? 'hidden' : ((activeMobileTab === 'catalog' || activeMobileTab === 'scene') ? 'flex' : 'hidden lg:flex')} flex-col z-10 transition-colors shadow-2xl order-3 lg:order-1 flex-1 lg:flex-none w-full lg:w-60 xl:w-64 min-h-0 h-auto lg:h-full border-t lg:border-t-0 lg:border-r ${isLight ? 'bg-white border-slate-200 shadow-slate-200' : 'bg-zinc-900 border-white/10'}`}>
+            <div className={`p-3 border-b hidden lg:block ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
+               <div className="flex items-center justify-between mb-2">
+                 <h3 className={`text-[10px] uppercase tracking-widest font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Herramientas</h3>
+                 <button
+                   onClick={() => setIsLeftSidebarCollapsed(true)}
+                   className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors cursor-pointer`}
+                   title="Ocultar Catálogo (Ampliar 3D)"
+                 >
+                   <ChevronLeft size={14} />
+                 </button>
+               </div>
+               <div className="flex flex-col gap-1.5">
                   <button
                     onClick={() => {
                       if (activeCabinetId) setActiveCabinet(null);
                       if (activeArchElementId) setActiveArchElement(null);
                       setRoomPlannerOpen(true);
                     }}
-                    className="flex items-center gap-3 p-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition-all bg-[#FACC15] text-black hover:bg-[#eab308] shadow-[0_0_15px_rgba(250,204,21,0.25)]"
+                    className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+                      isLight
+                        ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 shadow-xs'
+                        : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-400'
+                    }`}
                   >
-                    <Layers size={16} />
+                    <Layers size={15} className="text-amber-500 shrink-0" />
                     <div className="flex flex-col text-left">
                       <span>Área de Cocina</span>
-                      <span className="text-[9px] text-zinc-800 font-normal font-mono">{currentAreaM2.toFixed(2)} m² • Muros y Cotas</span>
+                      <span className={`text-[9px] font-normal font-mono ${isLight ? 'text-amber-800' : 'text-zinc-400'}`}>{currentAreaM2.toFixed(1)} m² • Muros & Cotas</span>
                     </div>
                   </button>
 
@@ -886,20 +1047,20 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       if (activeArchElementId) setActiveArchElement(null);
                       setIsCountertopModalOpen(true);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition-all border cursor-pointer ${
+                    className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
                       countertopConfig.enabled
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-xs'
                         : isLight
-                          ? 'bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200 shadow-sm'
+                          ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                           : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                     }`}
                   >
-                    <Sparkles size={16} className="text-amber-400 shrink-0" />
+                    <Sparkles size={15} className="text-amber-400 shrink-0" />
                     <div className="flex flex-col text-left">
                       <div className="flex items-center gap-1.5">
-                        <span>Cubiertas</span>
+                        <span>Cubiertas Qstone</span>
                         {countertopConfig.enabled && (
-                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                         )}
                       </div>
                     </div>
@@ -911,15 +1072,14 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       if (activeArchElementId) setActiveArchElement(null);
                       setIsNanoBananaModalOpen(true);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition-all border cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-md shadow-orange-500/20`}
+                    className="flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-xs shadow-orange-500/10"
                   >
-                    <Camera size={16} className="shrink-0" />
+                    <Camera size={15} className="shrink-0" />
                     <div className="flex flex-col text-left">
                       <div className="flex items-center gap-1.5 font-black">
                         <span>Render NanoBanana</span>
-                        <span className="text-[9px] px-1.5 py-0.2 bg-black/20 text-black rounded font-mono uppercase">AI</span>
+                        <span className="text-[9px] px-1 py-0.1 bg-black/20 text-black rounded font-mono uppercase">AI</span>
                       </div>
-                      <span className="text-[9px] text-zinc-900 font-semibold">Fotorrealismo & Personas</span>
                     </div>
                   </button>
 
@@ -930,25 +1090,24 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                         if (activeArchElementId) setActiveArchElement(null);
                         setIsStudioRenderModalOpen(true);
                       }}
-                      className={`flex items-center gap-3 p-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition-all border cursor-pointer ${
+                      className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
                         isLight
-                          ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-900 shadow-sm'
-                          : 'bg-zinc-800/90 hover:bg-zinc-800 border-white/10 text-white shadow-md'
+                          ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                          : 'bg-zinc-800/90 hover:bg-zinc-800 border-white/10 text-white'
                       }`}
                       title="Generar render fotográfico nítido en alta resolución (FHD, 2K, 4K) usando Three.js puro sin IA"
                     >
-                      <Camera size={16} className="text-orange-500 shrink-0" />
+                      <Camera size={15} className="text-orange-500 shrink-0" />
                       <div className="flex flex-col text-left">
-                        <div className="flex items-center gap-1.5 font-black">
+                        <div className="flex items-center gap-1.5 font-bold">
                           <span>Render Estudio 3D</span>
-                          <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 rounded font-mono uppercase border border-emerald-500/30">GPU</span>
+                          <span className="text-[9px] px-1 py-0.1 bg-emerald-500/20 text-emerald-400 rounded font-mono uppercase border border-emerald-500/30">GPU</span>
                         </div>
-                        <span className={`text-[9px] font-semibold ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>Three.js HD • Ollas & Escala</span>
                       </div>
                     </button>
                   )}
 
-                  <ToolButton isLight={isLight} active={toolMode === 'draw_wall'} onClick={() => { if (activeCabinetId) setActiveCabinet(null); if (activeArchElementId) setActiveArchElement(null); setToolMode('draw_wall'); setViewMode('2d'); }} icon={<PenTool size={16}/>} label="Dibujar Tramo Muro" />
+                  <ToolButton isLight={isLight} active={toolMode === 'draw_wall'} onClick={() => { if (activeCabinetId) setActiveCabinet(null); if (activeArchElementId) setActiveArchElement(null); setToolMode('draw_wall'); setViewMode('2d'); }} icon={<PenTool size={15}/>} label="Dibujar Tramo Muro" />
                </div>
             </div>
 
@@ -1294,6 +1453,38 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             </div>
          </div>
           <div className={`w-full lg:flex-1 h-[45vh] sm:h-[48vh] lg:h-full shrink-0 min-w-0 relative transition-colors order-1 lg:order-2 ${isLight ? 'bg-[#e2e8f0]' : 'bg-[#111]'}`}>
+            {/* Botón flotante para reabrir Catálogo cuando está colapsado en Desktop */}
+            {isLeftSidebarCollapsed && (
+              <button
+                onClick={() => setIsLeftSidebarCollapsed(false)}
+                className={`hidden lg:flex absolute top-3 left-3 z-20 items-center gap-1.5 px-3 py-1.5 rounded-lg border shadow-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-white/95 hover:bg-white border-slate-300 hover:border-orange-500 text-slate-800 shadow-slate-200'
+                    : 'bg-zinc-900/90 hover:bg-zinc-900 border-white/20 hover:border-orange-500 text-white shadow-black/50'
+                }`}
+                title="Mostrar Catálogo de Módulos"
+              >
+                <PanelLeft size={14} className="text-orange-500" />
+                <span>Catálogo</span>
+              </button>
+            )}
+
+            {/* Botón flotante para reabrir Propiedades cuando está colapsado en Desktop */}
+            {isRightSidebarCollapsed && (
+              <button
+                onClick={() => setIsRightSidebarCollapsed(false)}
+                className={`hidden lg:flex absolute top-3 right-3 z-20 items-center gap-1.5 px-3 py-1.5 rounded-lg border shadow-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-white/95 hover:bg-white border-slate-300 hover:border-orange-500 text-slate-800 shadow-slate-200'
+                    : 'bg-zinc-900/90 hover:bg-zinc-900 border-white/20 hover:border-orange-500 text-white shadow-black/50'
+                }`}
+                title="Mostrar Panel de Propiedades y Acabados"
+              >
+                <span>Propiedades</span>
+                <PanelRight size={14} className="text-orange-500" />
+              </button>
+            )}
+
             <KitchenScene theme={theme} />
 
 
@@ -1416,15 +1607,15 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
            </button>
          </div>
       
-    <aside className={`${(activeMobileTab !== 'catalog' && activeMobileTab !== 'scene') ? 'flex' : 'hidden lg:flex'} flex-col relative z-20 order-3 lg:order-3 flex-1 lg:flex-none w-full lg:w-96 min-h-0 backdrop-blur-xl border-t lg:border-t-0 lg:border-l h-auto lg:h-full pointer-events-auto transition-colors shadow-2xl ${
+    <aside className={`${isRightSidebarCollapsed ? 'hidden' : ((activeMobileTab !== 'catalog' && activeMobileTab !== 'scene') ? 'flex' : 'hidden lg:flex')} flex-col relative z-20 order-3 lg:order-3 flex-1 lg:flex-none w-full lg:w-80 xl:w-84 2xl:w-96 min-h-0 backdrop-blur-xl border-t lg:border-t-0 lg:border-l h-auto lg:h-full pointer-events-auto transition-colors shadow-2xl ${
       isLight ? 'bg-white/95 border-slate-200 shadow-slate-200 text-slate-800' : 'bg-black/70 border-white/10 text-slate-200'
     }`}>
       {/* Selector de Pestañas Superior (Desktop >= lg - Stitch Style) */}
-      <header className={`hidden lg:block border-b shrink-0 transition-colors ${
+      <header className={`hidden lg:flex items-center justify-between border-b shrink-0 transition-colors ${
         isLight ? 'border-slate-200 bg-white' : 'border-white/10 bg-zinc-900'
       }`}>
-        <nav className="p-2 overflow-x-auto no-scrollbar">
-          <div className="grid grid-cols-5 gap-1.5 min-w-max">
+        <nav className="p-1.5 overflow-x-auto no-scrollbar flex-1">
+          <div className="grid grid-cols-5 gap-1 min-w-max">
             <button
               onClick={() => setRightTab('module')}
               className={`relative flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -1529,6 +1720,13 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             </button>
           </div>
         </nav>
+        <button
+          onClick={() => setIsRightSidebarCollapsed(true)}
+          className={`p-1.5 mr-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors cursor-pointer shrink-0`}
+          title="Ocultar Propiedades (Ampliar 3D)"
+        >
+          <ChevronRight size={15} />
+        </button>
       </header>
 
       {/* Contenido Scrollable según Pestaña */}
@@ -2895,7 +3093,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
      onClose={() => setIsSaveModalOpen(false)}
      projectType="kitchen"
      defaultName="Proyecto Cocina Arquify"
-     estimatedCost={3800000}
+     estimatedCost={calculateKitchenDualQuote().totalB2BBrutoClp || 1800000}
      projectData={{
        cabinets,
        roomConfig,
