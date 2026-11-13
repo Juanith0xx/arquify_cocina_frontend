@@ -948,7 +948,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
               className="flex items-center gap-3 p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
             >
               <Sparkles size={16} />
-              <span>Cubiertas Qstone {countertopConfig.enabled ? '(Activada)' : ''}</span>
+              <span>Cubiertas {countertopConfig.enabled ? '(Activada)' : ''}</span>
             </button>
 
             {canAccessIndustrialOutputs && (
@@ -1058,7 +1058,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                     <Sparkles size={15} className="text-amber-400 shrink-0" />
                     <div className="flex flex-col text-left">
                       <div className="flex items-center gap-1.5">
-                        <span>Cubiertas Qstone</span>
+                        <span>Cubiertas</span>
                         {countertopConfig.enabled && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                         )}

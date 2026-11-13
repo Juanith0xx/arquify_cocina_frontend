@@ -825,6 +825,14 @@ export function KitchenModuleContextMenu({
   const interactiveElements = getElementsList();
   const hasInteractiveElements = !isDecoration && interactiveElements.length > 0;
   const anyElementOpen = interactiveElements.some(el => isElementOpen(el.id));
+  const swingDoors = interactiveElements.filter(el =>
+    el.type === 'door' &&
+    !el.label.toLowerCase().includes('elevable') &&
+    !el.id.includes('lift') &&
+    !isLiftUp &&
+    !isLiftUpDouble &&
+    activeCabinet.hasDoors !== false
+  );
 
   const isTextureSelected = (url: string) => {
     if (!url || !activeCabinet) return false;
@@ -1417,68 +1425,170 @@ export function KitchenModuleContextMenu({
             isLight={isLight}
           >
 
-            {activeCabinet.variant === '1_door' &&
-              activeCabinet.hasDoors !== false && (
+            {swingDoors.length === 1 && (() => {
+              const singleDoor = swingDoors[0];
+              const currentSide = activeCabinet.doorHingeSides?.[singleDoor.id] ?? activeCabinet.hingeSide;
+              return (
+                <div className={`mb-3 rounded-xl border p-3 ${
+                  isLight
+                    ? 'border-slate-200 bg-slate-50'
+                    : 'border-white/10 bg-black/30'
+                }`}>
+                  <p className="mb-1 text-xs font-semibold">
+                    Sentido de apertura de la puerta
+                  </p>
+
+                  <p className={`mb-3 text-[11px] ${
+                    isLight ? 'text-slate-500' : 'text-zinc-400'
+                  }`}>
+                    Selecciona dónde se instalarán las bisagras.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['left', 'right'] as const).map(side => (
+                      <button
+                        key={side}
+                        type="button"
+                        aria-pressed={currentSide === side}
+                        onClick={() => updateCabinet(
+                          activeCabinet.id,
+                          {
+                            hingeSide: side,
+                            doorHingeSides: {
+                              ...(activeCabinet.doorHingeSides || {}),
+                              [singleDoor.id]: side,
+                            },
+                          }
+                        )}
+                        className={`rounded-lg border p-2 text-xs font-medium transition-colors ${
+                          currentSide === side
+                            ? 'border-emerald-500 bg-emerald-600 text-white'
+                            : isLight
+                              ? 'border-slate-300 bg-white text-slate-700'
+                              : 'border-white/20 bg-zinc-800 text-zinc-200'
+                        }`}
+                      >
+                        {side === 'left'
+                          ? 'Bisagras izquierda'
+                          : 'Bisagras derecha'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className={`mt-2 text-[11px] ${
+                    isLight ? 'text-slate-500' : 'text-zinc-400'
+                  }`}>
+                    {currentSide
+                      ? 'Apertura configurada para este gabinete.'
+                      : 'Orientación aún no confirmada para CNC.'}
+                  </p>
+
+                  {currentSide && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSides = { ...(activeCabinet.doorHingeSides || {}) };
+                        delete newSides[singleDoor.id];
+                        updateCabinet(
+                          activeCabinet.id,
+                          {
+                            hingeSide: undefined,
+                            doorHingeSides: newSides,
+                          }
+                        );
+                      }}
+                      className="mt-2 text-[11px] text-emerald-500 hover:underline"
+                    >
+                      Quitar confirmación
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {swingDoors.length > 1 && (
               <div className={`mb-3 rounded-xl border p-3 ${
                 isLight
                   ? 'border-slate-200 bg-slate-50'
                   : 'border-white/10 bg-black/30'
               }`}>
                 <p className="mb-1 text-xs font-semibold">
-                  Sentido de apertura de la puerta
+                  Sentido de apertura de las puertas
                 </p>
 
                 <p className={`mb-3 text-[11px] ${
                   isLight ? 'text-slate-500' : 'text-zinc-400'
                 }`}>
-                  Selecciona dónde se instalarán las bisagras.
+                  Selecciona dónde se instalarán las bisagras para cada puerta.
                 </p>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {(['left', 'right'] as const).map(side => (
-                    <button
-                      key={side}
-                      type="button"
-                      aria-pressed={activeCabinet.hingeSide === side}
-                      onClick={() => updateCabinet(
-                        activeCabinet.id,
-                        { hingeSide: side }
-                      )}
-                      className={`rounded-lg border p-2 text-xs font-medium transition-colors ${
-                        activeCabinet.hingeSide === side
-                          ? 'border-emerald-500 bg-emerald-600 text-white'
-                          : isLight
-                            ? 'border-slate-300 bg-white text-slate-700'
-                            : 'border-white/20 bg-zinc-800 text-zinc-200'
-                      }`}
-                    >
-                      {side === 'left'
-                        ? 'Bisagras izquierda'
-                        : 'Bisagras derecha'}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-2.5">
+                  {swingDoors.map(door => {
+                    const currentSide = activeCabinet.doorHingeSides?.[door.id];
+                    return (
+                      <div
+                        key={`swing-door-${door.id}`}
+                        className={`rounded-lg border p-2.5 transition-colors ${
+                          isLight
+                            ? 'border-slate-200 bg-white'
+                            : 'border-white/5 bg-zinc-900/60'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-semibold">
+                            {door.label}
+                          </span>
+                          {currentSide && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newSides = { ...(activeCabinet.doorHingeSides || {}) };
+                                delete newSides[door.id];
+                                updateCabinet(activeCabinet.id, { doorHingeSides: newSides });
+                              }}
+                              className="text-[10px] text-emerald-500 hover:underline"
+                            >
+                              Quitar confirmación
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['left', 'right'] as const).map(side => (
+                            <button
+                              key={side}
+                              type="button"
+                              aria-pressed={currentSide === side}
+                              onClick={() => updateCabinet(activeCabinet.id, {
+                                doorHingeSides: {
+                                  ...(activeCabinet.doorHingeSides || {}),
+                                  [door.id]: side,
+                                },
+                              })}
+                              className={`rounded-lg border p-1.5 text-xs font-medium transition-colors ${
+                                currentSide === side
+                                  ? 'border-emerald-500 bg-emerald-600 text-white'
+                                  : isLight
+                                    ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                    : 'border-white/20 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+                              }`}
+                            >
+                              {side === 'left' ? 'Bisagras izquierda' : 'Bisagras derecha'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <p className={`mt-1.5 text-[10px] ${
+                          isLight ? 'text-slate-500' : 'text-zinc-400'
+                        }`}>
+                          {currentSide
+                            ? `Confirmada con bisagras a la ${currentSide === 'left' ? 'izquierda' : 'derecha'}.`
+                            : 'Orientación aún no confirmada para CNC.'}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <p className={`mt-2 text-[11px] ${
-                  isLight ? 'text-slate-500' : 'text-zinc-400'
-                }`}>
-                  {activeCabinet.hingeSide
-                    ? 'Apertura configurada para este gabinete.'
-                    : 'Orientación aún no confirmada para CNC.'}
-                </p>
-
-                {activeCabinet.hingeSide && (
-                  <button
-                    type="button"
-                    onClick={() => updateCabinet(
-                      activeCabinet.id,
-                      { hingeSide: undefined }
-                    )}
-                    className="mt-2 text-[11px] text-emerald-500 hover:underline"
-                  >
-                    Quitar confirmación
-                  </button>
-                )}
               </div>
             )}
 
