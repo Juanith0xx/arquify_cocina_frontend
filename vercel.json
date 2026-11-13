@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://arquifycocinabackend-staging.up.railway.app/api/v1/:path*"
+      "destination": "https://arquifycocinabackend-production.up.railway.app/api/v1/:path*"
     }
   ]
 }
