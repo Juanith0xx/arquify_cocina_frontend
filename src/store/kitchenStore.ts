@@ -164,6 +164,7 @@ export interface CabinetType {
   // Orientación confirmada por el usuario.
   // undefined: no confirmada para fabricación.
   hingeSide?: 'left' | 'right';
+  doorHingeSides?: Record<string, 'left' | 'right'>;
   innerDrawers?: boolean;
   handleConfig?: KitchenHandleConfig;
   leftCoverPanel?: CoverPanelConfig;
