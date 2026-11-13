@@ -53,7 +53,24 @@ export function KitchenBlueprint() {
       try {
         const canvas = document.querySelector('canvas');
         if (canvas) {
-          setSnapshot3D(canvas.toDataURL('image/png'));
+          const origAspect = canvas.width / canvas.height;
+          if (origAspect > 16 / 9) {
+            const cropW = canvas.height * (16 / 9);
+            const cropH = canvas.height;
+            const cropX = (canvas.width - cropW) / 2;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            const ctx = tempCanvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(canvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+              setSnapshot3D(tempCanvas.toDataURL('image/png'));
+            } else {
+              setSnapshot3D(canvas.toDataURL('image/png'));
+            }
+          } else {
+            setSnapshot3D(canvas.toDataURL('image/png'));
+          }
         }
       } catch (e) {
         console.warn('No se pudo capturar snapshot 3D del configurador:', e);
@@ -1369,7 +1386,7 @@ export function KitchenBlueprint() {
     let golaCY_lat = Math.round(bodyH * 0.35);
     const drH_2pot = Math.round(golaAvailH / 2);
     const drH_4dr = Math.round(golaAvailH / 4);
-    const drH_1d1dr = Math.min(145, Math.round(bodyH * 0.22));
+    const drH_1d1dr = drH_4dr;
 
     if (cab.variant === '2_pot_drawers' || cab.variant === 'sink_u_drawer') {
       golaCY_lat = Math.round(35 + drH_2pot + 20);
@@ -1598,11 +1615,16 @@ export function KitchenBlueprint() {
                     })()}
                   </g>
                 ) : (
-                  <g>
-                    <line x1={0} y1={150} x2={cabW} y2={150} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
-                    <text x={cabW / 2} y={90} fontSize={Math.max(15, fSizeElev * 0.45)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón 1</text>
-                    <path d={`M 0 150 L ${cabW} ${(150 + bodyH) / 2} L 0 ${bodyH}`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
-                  </g>
+                  (() => {
+                    const drwH = Math.round((bodyH - 15) / 4);
+                    return (
+                      <g>
+                        <line x1={0} y1={drwH} x2={cabW} y2={drwH} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                        <text x={cabW / 2} y={drwH * 0.6} fontSize={Math.max(15, fSizeElev * 0.45)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón 1</text>
+                        <path d={`M 0 ${drwH} L ${cabW} ${(drwH + bodyH) / 2} L 0 ${bodyH}`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
+                      </g>
+                    );
+                  })()
                 )
               ) : cab.variant === 'spice_rack' ? (
                 <g>
@@ -1777,11 +1799,12 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 } else if (cab.variant === '1_door_1_drawer') {
+                  const drwH = Math.round((bodyH - 15) / 4);
                   return (
                     <g key="front-handles">
                       <rect
                         x={cabW / 2 - hLen / 2}
-                        y={150 * 0.35 - hThick / 2}
+                        y={drwH * 0.35 - hThick / 2}
                         width={hLen}
                         height={hThick}
                         rx={2}
@@ -1791,7 +1814,7 @@ export function KitchenBlueprint() {
                       />
                       <rect
                         x={cabW - 45 - hThick}
-                        y={150 + 45}
+                        y={drwH + 45}
                         width={hThick}
                         height={hLen}
                         rx={2}
@@ -2675,7 +2698,7 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 } else if (cab.variant === '1_door_1_drawer') {
-                  const drwH = Math.min(bodyH * 0.25, 150 * elevScale);
+                  const drwH = (isGolaActive ? Math.round((bodyH - 75) / 4) : Math.round((bodyH - 15) / 4)) * elevScale;
                   const doorTop = cTopY + drwH;
                   const doorMidY = (doorTop + bodyBottomY) / 2;
                   const handleX = handleOnLeft

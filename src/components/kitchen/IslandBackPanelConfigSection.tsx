@@ -178,7 +178,7 @@ export function IslandBackPanelConfigSection({ isLight = false }: { isLight?: bo
       >
         <Info size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <p>
-          Esta placa de revestimiento aplica <strong class="font-semibold">exclusivamente a módulos tipo Isla</strong> para ocultar uniones y patas por detrás. No afecta a muebles adosados a muro o aéreos.
+          Esta placa de revestimiento aplica <strong className="font-semibold">exclusivamente a módulos tipo Isla</strong> para ocultar uniones y patas por detrás. No afecta a muebles adosados a muro o aéreos.
         </p>
       </aside>
 

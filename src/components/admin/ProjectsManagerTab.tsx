@@ -35,11 +35,15 @@ import { useSupabaseAuthStore } from '../../store/supabaseAuthStore';
 import { useTenantDataStore } from '../../store/tenantDataStore';
 import { exportProjectToPdf } from '../../utils/pdfGenerator';
 import { exportKitchenCommercialPdf } from '../../utils/kitchenCommercialPdfGenerator';
+import { exportKitchenB2BPricingPdf } from '../../utils/kitchenB2BPricingPdf';
 import * as XLSX from 'xlsx-js-style';
 import { useKitchenStore } from '../../store/kitchenStore';
 import { useStore as useClosetStore } from '../../store';
 import { useSpecialFurnitureStore } from '../../store/specialFurnitureStore';
 import { useOfficeStore } from '../../store/officeStore';
+import { calculateKitchenDualQuote } from '../../utils/kitchenB2BPricing';
+import { generateKitchenPartsList, generateKitchenHardwareList } from '../../utils/kitchenManufacturing';
+import { getFriendlyColorName } from '../../utils/colorNames';
 
 interface ProjectsManagerTabProps {
   onLoadProjectToModule: (route: 'kitchen' | 'closet' | 'special' | 'hpl-bathroom' | 'office' | 'chair') => void;
@@ -187,11 +191,23 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
     matchesDateFilter(log.timestamp, logDatePreset, logDateStart, logDateEnd)
   );
 
+  const getProjectCalculatedCost = (proj: ProjectItem): number => {
+    if (proj.type === 'kitchen' && proj.data?.cabinets && Array.isArray(proj.data.cabinets) && proj.data.cabinets.length > 0) {
+      try {
+        const quote = calculateKitchenDualQuote(undefined, undefined, proj.data.cabinets);
+        if (quote.totalB2BBrutoClp > 0) return quote.totalB2BBrutoClp;
+      } catch (e) {
+        console.warn('Error calculando costo B2B de proyecto:', e);
+      }
+    }
+    return proj.totalCostEstimateClp || 0;
+  };
+
   // Métricas rápidas de pipeline
   const totalProjectsCount = scopedProjects.length;
   const soldProjects = scopedProjects.filter((p) => p.status === 'sold' || p.status === 'in_production');
-  const soldVolumeClp = soldProjects.reduce((acc, p) => acc + (p.finalSalePriceClp || p.totalCostEstimateClp || 0), 0);
-  const totalDesignedVolumeClp = scopedProjects.reduce((acc, p) => acc + (p.totalCostEstimateClp || 0), 0);
+  const soldVolumeClp = soldProjects.reduce((acc, p) => acc + (p.finalSalePriceClp || getProjectCalculatedCost(p) || 0), 0);
+  const totalDesignedVolumeClp = scopedProjects.reduce((acc, p) => acc + (getProjectCalculatedCost(p) || 0), 0);
   const conversionRate = totalProjectsCount > 0 ? Math.round((soldProjects.length / totalProjectsCount) * 100) : 0;
 
   const handleOpenSaleModal = (proj: ProjectItem) => {
@@ -412,6 +428,26 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
     }
   };
 
+  const handleDownloadB2BDetailedPdf = (proj: ProjectItem) => {
+    try {
+      const kState = useKitchenStore.getState();
+      const cabinets = proj.data?.cabinets || kState.cabinets || [];
+      exportKitchenB2BPricingPdf({
+        projectName: proj.name,
+        clientName: proj.client || proj.userName || 'Cliente Particular',
+        clientEmail: proj.userEmail || currentUser?.email,
+        clientPhone: proj.userPhone || currentUser?.phone,
+        projectType: proj.type,
+        cabinets,
+        screenshotUrl: proj.thumbnail,
+      });
+      showNotification(`PDF con cálculo detallado de cotización B2B generado para "${proj.name}".`);
+    } catch (err) {
+      console.error('Error al generar PDF de cotización B2B:', err);
+      alert('No se pudo generar el PDF de cotización B2B.');
+    }
+  };
+
   const handleRequestPurchase = (proj: ProjectItem) => {
     updateProject(proj.id, {
       status: 'quoted',
@@ -443,7 +479,7 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
         cabinets: current.cabinets,
         thickness: 18,
       };
-      estimatedCost = 4500000;
+      estimatedCost = calculateKitchenDualQuote().totalB2BBrutoClp || 2200000;
     } else if (newType === 'closet') {
       const current = useClosetStore.getState();
       initialData = {
@@ -1254,7 +1290,7 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                           {proj.date}
                         </span>
                         <span className="text-orange-500 font-mono font-semibold">
-                          Est. ${proj.totalCostEstimateClp?.toLocaleString('es-CL') || '0'} CLP
+                          Est. ${getProjectCalculatedCost(proj).toLocaleString('es-CL')} CLP
                         </span>
 
                         {/* Superadmin: Trazabilidad de quién diseñó este proyecto */}
@@ -1380,6 +1416,19 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                         title="Descargar Ficha y Cotización Comercial en PDF"
                       >
                         <FileText size={14} className={isLight ? 'text-orange-600' : 'text-orange-400'} /> PDF Comercial
+                      </button>
+
+                      {/* Detailed B2B Quote PDF (Placas, Herrajes, m² CNC, Módulos, Tapacantos y Margen) */}
+                      <button
+                        onClick={() => handleDownloadB2BDetailedPdf(proj)}
+                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                          isLight
+                            ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-300 text-indigo-700'
+                            : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300'
+                        }`}
+                        title="Descargar PDF con Detalle de Cálculo B2B (Placas, Quincallería, m² CNC, Módulos, Tapacantos y Margen de Ganancia)"
+                      >
+                        <FileSpreadsheet size={14} className={isLight ? 'text-indigo-600' : 'text-indigo-400'} /> Detalle B2B (Margen)
                       </button>
 
                       {/* Technical Factory PDF Download */}
@@ -1528,28 +1577,422 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
   );
 }
 
+function safeStringifyValue(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v !== 'object') return String(v);
+  const seen = new Set();
+  try {
+    return JSON.stringify(v, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return '[Circular]';
+        seen.add(value);
+      }
+      return value;
+    });
+  } catch (e) {
+    return String(v);
+  }
+}
+
+function downloadWorkbook(wb: any, filename: string) {
+  try {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+  } catch (err) {
+    console.error('Fallback XLSX download error, trying XLSX.writeFile:', err);
+    XLSX.writeFile(wb, filename);
+  }
+}
+
+function formatTechnicalParam(key: string, value: any, customTextures?: any[]): { label: string; displayValue: string } | null {
+  const k = key.toLowerCase();
+
+  // Omitir variables internas de motor 3D / canvas sin valor para el usuario o fábrica
+  if (k.includes('mesh') || k.includes('camera') || k.includes('position') || k.includes('rotation') || k.includes('vertex') || k.includes('vertices')) {
+    return null;
+  }
+
+  if (key === 'cabinets') {
+    if (!Array.isArray(value) || value.length === 0) {
+      return { label: 'Composición de Módulos', displayValue: '0 módulos configurados' };
+    }
+    const summaryList = value.map((c: any, i: number) => {
+      const name = c.name || c.variant || 'Módulo';
+      const w = c.width || 60;
+      const h = c.height || 80;
+      const d = c.depth || 60;
+      return `${i + 1}. ${name} (${w} x ${h} x ${d} cm)`;
+    }).join(' | ');
+    return { label: 'Composición de Módulos', displayValue: `${value.length} Módulo(s): ${summaryList}` };
+  }
+
+  if (key === 'roomConfig') {
+    if (!value || typeof value !== 'object') return null;
+    const typeStr = value.type === 'l_shape' ? 'Forma en L' : (value.type === 'u_shape' ? 'Forma en U' : 'Rectangular');
+    const h = value.wallHeight ? `${value.wallHeight} cm` : '250 cm';
+    const th = value.wallThickness ? `${value.wallThickness} cm` : '20 cm';
+    return { label: 'Geometría del Ambiente', displayValue: `Ambiente ${typeStr} (Altura Muros: ${h}, Espesor Muros: ${th})` };
+  }
+
+  if (key === 'doorColor') {
+    const name = getFriendlyColorName(value, customTextures);
+    return { label: 'Color / Melamina Frentes y Puertas', displayValue: `${name} (${value})` };
+  }
+
+  if (key === 'structureColor') {
+    const name = getFriendlyColorName(value, customTextures);
+    return { label: 'Color / Melamina Estructura e Interiores', displayValue: `${name} (${value})` };
+  }
+
+  if (key === 'thickness') {
+    const num = Number(value);
+    const mm = !isNaN(num) ? (num >= 1.2 ? Math.round(num * 10) : 18) : 18;
+    return { label: 'Espesor Base Tablero', displayValue: `${mm} mm` };
+  }
+
+  if (key === 'showSocle') {
+    return { label: 'Zócalo de Piso', displayValue: value ? 'Incluido (Aluminio Satinado 10 cm)' : 'Sin Zócalo (Patas libres / a la vista)' };
+  }
+
+  if (key === 'socleHeight') {
+    return { label: 'Altura de Zócalo', displayValue: `${value} cm` };
+  }
+
+  if (key === 'socleFinish') {
+    return { label: 'Acabado de Zócalo', displayValue: value === 'black' ? 'Negro Mate' : 'Aluminio Satinado' };
+  }
+
+  if (key === 'golaSystem') {
+    return { label: 'Sistema de Apertura Gola', displayValue: value === 'aluminum' ? 'Perfil Gola Aluminio' : (value === 'black' ? 'Perfil Gola Negro Mate' : 'Tiradores / Manillas Sobrepuestas') };
+  }
+
+  if (key === 'drawerHardware') {
+    return { label: 'Marca Herrajes de Cajón', displayValue: String(value) };
+  }
+
+  if (key === 'assemblyType') {
+    return { label: 'Sistema de Ensamble', displayValue: value === 'minifix' ? 'Minifix Perno + Excéntrica (Desarmable)' : 'Tornillo Soberbio / Spax' };
+  }
+
+  // Traducción genérica de claves camelCase
+  const prettyKey = key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase());
+
+  const formattedVal = typeof value === 'object' ? safeStringifyValue(value) : String(value);
+  return { label: prettyKey, displayValue: formattedVal };
+}
+
+function applySheetStyles(ws: any, sheetType: 'b2b' | 'parts' | 'summary', colWidths: number[]) {
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const totalCols = range.e.c;
+  const totalRows = range.e.r;
+
+  ws['!cols'] = colWidths.map((w) => ({ wch: w }));
+
+  const thinBorder = {
+    top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+    right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+  };
+
+  for (let R = 0; R <= totalRows; ++R) {
+    for (let C = 0; C <= totalCols; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ c: C, r: R });
+      if (!ws[cellAddress]) {
+        ws[cellAddress] = { v: '', t: 's' };
+      }
+      const cell = ws[cellAddress];
+      const valStr = String(cell.v ?? '');
+
+      if (R === 0) {
+        cell.s = {
+          fill: { patternType: 'solid', fgColor: { rgb: '1E293B' } },
+          font: { name: 'Calibri', bold: true, size: 12, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'left', vertical: 'center' },
+        };
+      } else if (sheetType === 'b2b') {
+        if (R === 6 || R === 13) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+            font: { name: 'Calibri', bold: true, size: 10.5, color: { rgb: '0F172A' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: 'CBD5E1' } },
+              bottom: { style: 'medium', color: { rgb: 'CBD5E1' } },
+            },
+          };
+        } else if (R >= 1 && R <= 4) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '475569' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else if (C === 1) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R >= 7 && R <= 11) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 9.5, color: { rgb: '334155' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else if (C === 1) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 9.5, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R === 14) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: 'F97316' } },
+            font: { name: 'Calibri', bold: true, size: 10, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: 'EA580C' } },
+              bottom: { style: 'medium', color: { rgb: 'EA580C' } },
+              left: { style: 'thin', color: { rgb: 'FDBA74' } },
+              right: { style: 'thin', color: { rgb: 'FDBA74' } },
+            },
+          };
+        } else if (valStr.includes('SUBTOTAL B2B NETO') || valStr.includes('I.V.A.') || valStr.includes('TOTAL COSTO B2B')) {
+          const isTotal = valStr.includes('TOTAL COSTO B2B');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: isTotal ? 'FEF3C7' : 'F8FAFC' } },
+            font: { name: 'Calibri', bold: true, size: isTotal ? 11 : 10, color: { rgb: isTotal ? 'B45309' : '1E293B' } },
+            alignment: { horizontal: 'right', vertical: 'center' },
+            border: {
+              top: { style: isTotal ? 'medium' : 'thin', color: { rgb: 'F59E0B' } },
+              bottom: { style: isTotal ? 'double' : 'thin', color: { rgb: 'B45309' } },
+              left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+              right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+            },
+          };
+        } else if (R > 14) {
+          const isNum = typeof cell.v === 'number';
+          const align = C === 0 || C === 3 || C === 4 ? 'center' : (C >= 5 || isNum ? 'right' : 'left');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: R % 2 === 0 ? 'FAFAFA' : 'FFFFFF' } },
+            font: { name: 'Calibri', size: 9.5, color: { rgb: '0F172A' }, bold: C === 6 },
+            alignment: { horizontal: align, vertical: 'center' },
+            border: thinBorder,
+          };
+          if (typeof cell.v === 'number' && C >= 5) {
+            cell.z = '$#,##0';
+          }
+        }
+      } else if (sheetType === 'parts') {
+        if (R === 1) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: '1E293B' } },
+            font: { name: 'Calibri', bold: true, size: 10, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: '0F172A' } },
+              bottom: { style: 'medium', color: { rgb: '0F172A' } },
+              left: { style: 'thin', color: { rgb: '475569' } },
+              right: { style: 'thin', color: { rgb: '475569' } },
+            },
+          };
+        } else if (R > 1) {
+          const isNum = typeof cell.v === 'number';
+          const align = C === 0 || C === 5 || C === 6 || C === 7 ? 'center' : (isNum ? 'right' : 'left');
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: R % 2 === 0 ? 'F8FAFC' : 'FFFFFF' } },
+            font: { name: 'Calibri', size: 9.5, color: { rgb: '0F172A' }, bold: C === 1 || C === 5 },
+            alignment: { horizontal: align, vertical: 'center' },
+            border: thinBorder,
+          };
+          if (typeof cell.v === 'number' && (C === 2 || C === 3 || C === 4)) {
+            cell.z = '#,##0.0';
+          }
+        }
+      } else if (sheetType === 'summary') {
+        if (R === 7) {
+          cell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+            font: { name: 'Calibri', bold: true, size: 10.5, color: { rgb: '0F172A' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: 'CBD5E1' } },
+              bottom: { style: 'medium', color: { rgb: 'CBD5E1' } },
+            },
+          };
+        } else if (R >= 1 && R <= 5) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '475569' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', bold: true, size: 10, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          }
+        } else if (R > 7) {
+          if (C === 0) {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } },
+              font: { name: 'Calibri', bold: true, size: 9.5, color: { rgb: '334155' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: thinBorder,
+            };
+          } else {
+            cell.s = {
+              fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+              font: { name: 'Calibri', size: 9.5, color: { rgb: '0F172A' } },
+              alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+              border: thinBorder,
+            };
+          }
+        }
+      }
+    }
+  }
+}
+
 function generateProjectExcel(project: ProjectItem) {
   const wb = XLSX.utils.book_new();
 
-  // Generar planilla de materiales para Mobiliario (Cocina, Clóset, Especial, Oficina, etc.)
-  const rows = [
-    ['MUEBLESTUDIO 3D - PLANILLA DE FABRICACIÓN'],
+  const cabinets = (project.data?.cabinets && Array.isArray(project.data.cabinets) && project.data.cabinets.length > 0)
+    ? project.data.cabinets
+    : useKitchenStore.getState().cabinets;
+
+  // 1. Hoja B2B Fábrica y Cotización Industrial
+  try {
+    const quote = calculateKitchenDualQuote(35, 0, cabinets);
+    const dataB2B: any[] = [
+      ['ORDEN DE COMPRA & PLANILLA B2B - FÁBRICA DE MOBILIARIO ARQUIFY'],
+      ['PROYECTO:', project.name],
+      ['CLIENTE:', project.client || 'Cliente Registrado'],
+      ['TIPO:', project.type.toUpperCase()],
+      ['FECHA:', project.date || new Date().toLocaleDateString('es-CL')],
+      [],
+      ['MÉTRICAS INDUSTRIALES DE PRODUCCIÓN:'],
+      ['Módulos Totales:', quote.cabinetsCount],
+      ['Piezas de Producción:', quote.partsCount],
+      ['Superficie Neta de Paneles (sin mermas):', `${quote.netPanelsAreaM2.toFixed(2)} m²`],
+      ['Tarifa de Manufactura CNC:', `$${quote.manufacturingRatePerM2.toLocaleString('es-CL')} CLP / m²`],
+      ['Metros Totales de Tapacanto PVC:', `${quote.edgeBandingTotalMeters} m`],
+      [],
+      ['DESGLOSE DETALLADO DE MATERIALES E INSUMOS B2B:'],
+      ['Categoría', 'Concepto / Insumo', 'Detalle Técnico', 'Cantidad', 'Unidad', 'Costo Unit. CLP', 'Subtotal CLP'],
+    ];
+
+    quote.b2bItems.forEach((item) => {
+      dataB2B.push([
+        item.category.toUpperCase(),
+        item.name,
+        item.detail,
+        item.qty,
+        item.unit,
+        item.unitCostClp,
+        item.totalCostClp,
+      ]);
+    });
+
+    dataB2B.push(
+      [],
+      ['', '', '', '', '', 'SUBTOTAL B2B NETO:', quote.totalB2BNetoClp],
+      ['', '', '', '', '', 'I.V.A. (19%):', quote.ivaB2BClp],
+      ['', '', '', '', '', 'TOTAL COSTO B2B BRUTO CLP:', quote.totalB2BBrutoClp]
+    );
+
+    const wsB2B = XLSX.utils.aoa_to_sheet(dataB2B);
+    applySheetStyles(wsB2B, 'b2b', [18, 38, 42, 12, 14, 18, 20]);
+    XLSX.utils.book_append_sheet(wb, wsB2B, 'Pedido B2B Fábrica');
+  } catch (e) {
+    console.warn('Could not generate B2B quote sheet in Excel:', e);
+  }
+
+  // 2. Hoja de Despiece de Piezas para Taller
+  try {
+    const parts = generateKitchenPartsList(cabinets);
+    if (parts && parts.length > 0) {
+      const partsRows: any[] = [
+        ['DESPIECE TÉCNICO DE PIEZAS Y CANTEADO PARA TALLER'],
+        ['N°', 'Pieza', 'Largo (mm)', 'Ancho (mm)', 'Espesor (mm)', 'Cant.', 'Cantos Largos', 'Cantos Anchos', 'Material / Tono', 'Notas / Módulo'],
+      ];
+
+      parts.forEach((p, idx) => {
+        const matName = getFriendlyColorName(p.material, useClosetStore.getState().customTextures);
+        partsRows.push([
+          idx + 1,
+          p.name,
+          p.length,
+          p.width,
+          p.thickness,
+          p.qty,
+          `${p.edgeL1 ? 'L1 ' : ''}${p.edgeL2 ? 'L2' : ''}`.trim() || 'Sin canto',
+          `${p.edgeW1 ? 'W1 ' : ''}${p.edgeW2 ? 'W2' : ''}`.trim() || 'Sin canto',
+          matName || 'Melamina 18mm',
+          p.notes || `Módulo ${(p.moduleIndex || 0) + 1}`,
+        ]);
+      });
+
+      const wsParts = XLSX.utils.aoa_to_sheet(partsRows);
+      applySheetStyles(wsParts, 'parts', [8, 26, 14, 14, 14, 10, 16, 16, 28, 28]);
+      XLSX.utils.book_append_sheet(wb, wsParts, 'Despiece de Piezas');
+    }
+  } catch (e) {
+    console.warn('Could not generate parts cut list in Excel:', e);
+  }
+
+  // 3. Hoja de Datos del Proyecto (Ficha Técnica Formateada)
+  const technicalParamsRows: any[] = [];
+  if (project.data) {
+    Object.entries(project.data).forEach(([k, v]) => {
+      const formatted = formatTechnicalParam(k, v);
+      if (formatted) {
+        technicalParamsRows.push([formatted.label, formatted.displayValue]);
+      }
+    });
+  }
+
+  const summaryRows = [
+    ['ARQUIFY 3D - FICHA TÉCNICA Y PARÁMETROS DEL PROYECTO'],
     ['Proyecto:', project.name],
-    ['Cliente:', project.client],
+    ['Cliente:', project.client || 'Cliente Particular'],
     ['Tipo:', project.type.toUpperCase()],
-    ['Fecha:', project.date],
-    ['Presupuesto Estimado CLP:', project.totalCostEstimateClp],
+    ['Fecha de Registro:', project.date],
+    ['Presupuesto B2B Estimado CLP:', `$${(project.totalCostEstimateClp || 0).toLocaleString('es-CL')}`],
     [''],
-    ['PARÁMETROS TÉCNICOS CONFIGURADOS'],
-    ...Object.entries(project.data || {}).map(([k, v]) => [
-      k,
-      typeof v === 'object' ? JSON.stringify(v) : String(v),
-    ]),
+    ['ESPECIFICACIONES TÉCNICAS CONFIGURADAS:'],
+    ...technicalParamsRows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  XLSX.utils.book_append_sheet(wb, ws, 'Datos Fabricación');
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  applySheetStyles(wsSummary, 'summary', [38, 70]);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Ficha Técnica');
 
-  const filename = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_materiales.xlsx`;
-  XLSX.writeFile(wb, filename);
+  const filename = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_materiales_b2b.xlsx`;
+  downloadWorkbook(wb, filename);
 }

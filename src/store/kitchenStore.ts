@@ -161,6 +161,9 @@ export interface CabinetType {
   drawersCount?: number;
   hasHanger?: boolean;
   hasDoors?: boolean;
+  // Orientación confirmada por el usuario.
+  // undefined: no confirmada para fabricación.
+  hingeSide?: 'left' | 'right';
   innerDrawers?: boolean;
   handleConfig?: KitchenHandleConfig;
   leftCoverPanel?: CoverPanelConfig;
@@ -322,6 +325,7 @@ interface KitchenState {
   setActiveWall: (id: string | null) => void;
   setWalls: (walls: WallType[]) => void;
   addCabinet: (cabinet: CabinetType) => void;
+  duplicateCabinet: (id: string) => void;
   removeCabinet: (id: string) => void;
   setActiveCabinet: (id: string | null) => void;
   addArchitecturalElement: (el: ArchitecturalElement) => void;
@@ -973,6 +977,64 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         }
       }
       return { history, cabinets: newCabList };
+    }),
+  duplicateCabinet: (id) =>
+    set((state) => {
+      const targetCab = state.cabinets.find((c) => c.id === id);
+      if (!targetCab) return state;
+      const history = saveSnapshot(state);
+      const newId = `cab_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+      const walls = state.walls || [];
+      const roomPoly = state.roomConfig?.vertices?.map((v) => [v.x, v.y] as [number, number]) || [];
+
+      const posX = Array.isArray(targetCab.position) ? targetCab.position[0] : 0;
+      const posY = Array.isArray(targetCab.position) ? targetCab.position[1] : (targetCab.height / 2);
+      const posZ = Array.isArray(targetCab.position) ? targetCab.position[2] : 0;
+
+      const widthInCm = targetCab.width || 60;
+      const rot = targetCab.rotation || 0;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const stepDist = widthInCm + 2;
+
+      const rawPos: [number, number, number] = [
+        posX + cos * stepDist,
+        posY,
+        posZ + sin * stepDist,
+      ];
+
+      const constrainedPos = constrainInsideRoomAndWalls(
+        rawPos,
+        rot,
+        targetCab.width,
+        targetCab.depth,
+        targetCab.height,
+        walls,
+        roomPoly,
+        state.architecturalElements
+      );
+
+      const duplicatedCab: CabinetType = {
+        ...JSON.parse(JSON.stringify(targetCab)),
+        id: newId,
+        position: constrainedPos,
+      };
+
+      const newCabList = [...state.cabinets, duplicatedCab];
+      for (const cab of newCabList) {
+        if (cab.variant?.startsWith('corner_blind') || cab.variant === 'corner_blind' || cab.variant?.startsWith('wall_corner_blind')) {
+          const perp = findPerpendicularCabinetForCorner(cab, newCabList);
+          if (perp && perp.depth > 0) {
+            cab.blindWidth = perp.depth;
+          }
+        }
+      }
+      return {
+        history,
+        cabinets: newCabList,
+        activeCabinetId: newId,
+      };
     }),
   removeCabinet: (id) =>
     set((state) => {
