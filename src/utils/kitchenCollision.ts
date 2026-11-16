@@ -1654,6 +1654,7 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     else if (v === 'open') { variant = 'wall_open'; w = 60; h = 70; name = 'Aéreo Repisas a la Vista'; }
     else if (v === 'corner_blind') { variant = 'wall_corner_blind_right'; w = 70; h = 70; name = 'Aéreo Esquinero Ciego'; }
     else if (v === 'wine_rack') { variant = 'wall_wine_rack'; w = 20; h = 70; name = 'Aéreo Botellero'; }
+    else if (v === 'hood_new_flow' || v === 'hood_neu_flow') { variant = 'wall_hood_new_flow'; w = 60; h = 70; d = 35; name = 'New Flow 60'; }
     return { type: 'wall', variant, name, width: w, height: h, depth: d };
   }
 
