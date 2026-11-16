@@ -579,7 +579,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
 
     // 3.1 Barras de Refuerzo Traseras (únicamente si el material de la trasera es Durolac)
     if (isDurolacBack && cab.type !== 'closet') {
-      if (cab.type === 'base' || cab.type === 'island' || cab.type === 'wall') {
+      if (cab.variant === 'wall_hood_new_flow') {
         parts.push({
           name: `Barra Refuerzo Trasera Superior ${cabName}`,
           moduleId: cab.id,
@@ -590,7 +590,32 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
           thickness: thickness * 10,
           material: cab.structureColor || state.structureColor,
           edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-          notes: 'Amarre posterior de refuerzo para trasera Durolac (superior)'
+          notes: 'Amarre posterior de refuerzo para trasera Durolac (superior, bajo techo)'
+        });
+        parts.push({
+          name: `Barra Refuerzo Trasera Inferior ${cabName}`,
+          moduleId: cab.id,
+          moduleIndex: index,
+          qty: 1,
+          length: innerW * 10,
+          width: 10 * 10,
+          thickness: thickness * 10,
+          material: cab.structureColor || state.structureColor,
+          edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+          notes: 'Amarre posterior de refuerzo para trasera Durolac (sobre repisa campana a 176mm)'
+        });
+      } else if (cab.type === 'base' || cab.type === 'island' || cab.type === 'wall') {
+        parts.push({
+          name: `Barra Refuerzo Trasera Superior ${cabName}`,
+          moduleId: cab.id,
+          moduleIndex: index,
+          qty: 1,
+          length: innerW * 10,
+          width: 10 * 10,
+          thickness: thickness * 10,
+          material: cab.structureColor || state.structureColor,
+          edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+          notes: cab.type === 'wall' ? 'Amarre posterior de refuerzo para trasera Durolac (superior, bajo techo)' : 'Amarre posterior de refuerzo para trasera Durolac (superior)'
         });
         parts.push({
           name: `Barra Refuerzo Trasera Inferior ${cabName}`,
@@ -681,18 +706,35 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
           notes: isDurolacBack ? 'Placa Durolac 3mm despensa superior' : `Trasera Melamina ${backThickMm}mm despensa superior`
         });
       }
-    } else {
+    } else if (cab.variant === 'wall_hood_new_flow') {
+      const hoodShelfH = 17.6;
+      const durolacOpeningH = Math.max(5, cabH - hoodShelfH - thickness * 2);
+      const groovePenetrationMm = isDurolacBack ? 16 : 0;
       parts.push({
         name: `Fondo Trasera ${cabName}`,
         moduleId: cab.id,
         moduleIndex: index,
         qty: 1,
-        length: innerW * 10,
-        width: innerH * 10,
+        length: Math.round(innerW * 10 + groovePenetrationMm),
+        width: Math.round(durolacOpeningH * 10 + groovePenetrationMm),
         thickness: backThickMm,
         material: backMaterialName,
         edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
-        notes: isDurolacBack ? 'Placa Durolac 3mm ranurada/clavada' : `Trasera Melamina ${backThickMm}mm`
+        notes: isDurolacBack ? 'Placa Durolac 3mm para ranurado de 4x8mm en laterales, techo y repisa campana (+16mm)' : `Trasera Melamina ${backThickMm}mm sobre repisa campana`
+      });
+    } else {
+      const groovePenetrationMm = isDurolacBack ? 16 : 0;
+      parts.push({
+        name: `Fondo Trasera ${cabName}`,
+        moduleId: cab.id,
+        moduleIndex: index,
+        qty: 1,
+        length: Math.round(innerW * 10 + groovePenetrationMm),
+        width: Math.round(innerH * 10 + groovePenetrationMm),
+        thickness: backThickMm,
+        material: backMaterialName,
+        edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
+        notes: isDurolacBack ? 'Placa Durolac 3mm ranurada (+16mm penetración 4x8mm)' : `Trasera Melamina ${backThickMm}mm`
       });
     }
 

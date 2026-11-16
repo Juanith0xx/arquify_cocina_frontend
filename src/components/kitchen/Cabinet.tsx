@@ -206,12 +206,15 @@ export function AssemblyJoint({
                   <meshStandardMaterial color="#888888" metalness={0.9} roughness={0.5} />
                 </mesh>
                 {/* Caja Excéntrica 15mm Zamak */}
-                <mesh position={[1.7, -thickness/2 + 0.25, 0]}>
+                <mesh 
+                  position={axis === 'y' ? [1.7, 0, -thickness/2 + 0.25] : [1.7, -thickness/2 + 0.25, 0]}
+                  rotation={axis === 'y' ? [Math.PI/2, 0, 0] : [0, 0, 0]}
+                >
                   <cylinderGeometry args={[0.75, 0.75, 0.5, 16]} />
                   <meshStandardMaterial color="#aaaaaa" metalness={0.5} roughness={0.5} />
                 </mesh>
                 {/* Tarugo de Madera Estriada 8x30 */}
-                <mesh position={[0.5, 0, 2.5]} rotation={[0, 0, -Math.PI/2]}>
+                <mesh position={axis === 'y' ? [0.5, 3.2, 0] : [0.5, 0, 2.5]} rotation={[0, 0, -Math.PI/2]}>
                    <cylinderGeometry args={[0.4, 0.4, 3, 8]} />
                    <meshStandardMaterial color="#d4a373" roughness={0.9} />
                 </mesh>
@@ -4061,9 +4064,24 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                            )}
                         </>
                      ) : effectiveVariant === 'wall_hood_new_flow' ? (
-                        <Board position={[0, legsHeight + 17.6 + (cabH - 17.6)/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[innerW, Math.max(5, cabH - 17.6 - thickness), realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
+                        (() => {
+                           // Ranurado perimetral 4x8mm (+1.6cm penetración en laterales, techo y repisa campana)
+                           const durolacW = isDurolacBack ? (innerW + 1.6) : innerW;
+                           const durolacH = Math.max(5, cabH - 17.6 - thickness * 2) + (isDurolacBack ? 1.6 : 0);
+                           const durolacY = legsHeight + (cabH + 17.6) / 2;
+                           return (
+                              <Board position={[0, durolacY, -depth/2 + thickness + realBackThicknessCm/2]} args={[durolacW, durolacH, realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
+                           );
+                        })()
                      ) : (
-                        <Board position={[0, legsHeight + cabH/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[innerW, cabH - thickness*2, realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
+                        (() => {
+                           // Ranurado perimetral estándar 4x8mm (+1.6cm penetración en laterales, techo y base)
+                           const durolacW = isDurolacBack ? (innerW + 1.6) : innerW;
+                           const durolacH = (cabH - thickness * 2) + (isDurolacBack ? 1.6 : 0);
+                           return (
+                              <Board position={[0, legsHeight + cabH/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[durolacW, durolacH, realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
+                           );
+                        })()
                      )}
                      
                      {/* Uniones estructurales de Base a Laterales */}
@@ -4132,30 +4150,38 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                const railsY: number[] = [];
                const backRailZ = -depth / 2 + thickness / 2;
 
-               if (type === 'base' || type === 'island' || type === 'wall') {
-                  // 2 barras de refuerzo posterior: superior e inferior
+               if (effectiveVariant === 'wall_hood_new_flow') {
+                  // Mueble aéreo campana New Flow 60:
+                  // 1) Barra superior: bajo el techo (para no sobreponerse con la tapa superior)
+                  railsY.push(legsHeight + cabH - thickness - 5);
+                  // 2) Barra inferior: sobre la repisa de la campana (17.6 cm), NUNCA en el nicho abierto de la campana
+                  railsY.push(legsHeight + 17.6 + thickness + 5);
+               } else if (type === 'base' || type === 'island') {
+                  // Muebles bajos e islas: amarres posteriores
                   railsY.push(legsHeight + cabH - 5);
                   railsY.push(legsHeight + thickness + 5);
+               } else if (type === 'wall') {
+                  // Muebles aéreos estándar: barra superior bajo techo (sin solapamiento) e inferior sobre piso
+                  railsY.push(legsHeight + cabH - thickness - 5);
+                  railsY.push(legsHeight + thickness + 5);
                } else if (type === 'tall') {
+                  const topRail = legsHeight + cabH - thickness - 5;
                   if (variant === 'tall_oven_vent') {
-                     // 4 barras: superior, inferior, y justo arriba/abajo de la perforación de ventilación (70cm y 168cm)
                      railsY.push(legsHeight + thickness + 5);
                      railsY.push(legsHeight + 70 - 5);
-                     if (legsHeight + 168 + 5 < legsHeight + cabH - 2) {
+                     if (legsHeight + 168 + 5 < topRail - 5) {
                         railsY.push(legsHeight + 168 + 5);
                      }
-                     railsY.push(legsHeight + cabH - 5);
+                     railsY.push(topRail);
                   } else if (cabH < 150) {
-                     // 3 barras de refuerzo uniforme si la despensa mide menos de 150 cm
                      railsY.push(legsHeight + thickness + 5);
                      railsY.push(legsHeight + cabH / 2);
-                     railsY.push(legsHeight + cabH - 5);
+                     railsY.push(topRail);
                   } else {
-                     // 4 barras de refuerzo uniforme para despensas estándar (>= 150 cm)
                      railsY.push(legsHeight + thickness + 5);
                      railsY.push(legsHeight + cabH * (1 / 3));
                      railsY.push(legsHeight + cabH * (2 / 3));
-                     railsY.push(legsHeight + cabH - 5);
+                     railsY.push(topRail);
                   }
                }
 

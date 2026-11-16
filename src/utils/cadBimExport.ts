@@ -276,8 +276,12 @@ export function extractKitchen3dElements(
     }
 
     // Fondo / Trasera de Durolac
-    const backH = (v === 'wall_hood_new_flow') ? Math.max(10, cabH - 17.6 - th) : (cabH - th);
-    const backY = (v === 'wall_hood_new_flow') ? (legsH + 17.6 + th + backH / 2) : (legsH + cabH / 2);
+    const backH = (v === 'wall_hood_new_flow')
+      ? (Math.max(5, cabH - 17.6 - 2 * th) + 1.6)
+      : (cabH - 2 * th + 1.6);
+    const backY = (v === 'wall_hood_new_flow')
+      ? (legsH + (cabH + 17.6) / 2)
+      : (legsH + cabH / 2);
     addLocalBox(
       'Fondo_Trasera_Durolac',
       'carcass',
@@ -286,7 +290,7 @@ export function extractKitchen3dElements(
       0,
       backY,
       -depth / 2 + 0.3 / 2 + 1.2,
-      width - 2 * th,
+      (width - 2 * th) + 1.6,
       backH,
       0.3
     );
