@@ -160,6 +160,7 @@ export function isCabinetWithDoors(cab: CabinetType): boolean {
     v === 'tall_microwave_niche' ||
     v === 'wall_1_door' ||
     v === 'wall_2_doors' ||
+    v === 'wall_hood_new_flow' ||
     v === 'closet_2_doors' ||
     v === 'closet_inner_drawers' ||
     (cab.type === 'closet' && Boolean(cab.hasDoors)) ||
@@ -2032,6 +2033,56 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false
             });
         }
+    } else if (cab.variant === 'wall_hood_new_flow') {
+        const hoodH = 17.6;
+        const visorH = 4.0; // Visera frontal inferior visible
+        const doorH = Math.max(15, cabH - visorH - gap * 2);
+        const doorW = (w - gap * 3) / 2;
+
+        // Base / Piso de soporte de campana (17.6 cm) para fijación con 4 tornillos desde el interior
+        parts.push({
+            name: `Piso Soporte Campana ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 1,
+            length: (innerW - 0.2) * 10,
+            width: Number((effectiveDepth * 10).toFixed(1)),
+            thickness: thickness * 10,
+            material: cab.shelfColor || state.structureColor,
+            edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+            notes: 'Piso estructural a 17.6cm para fijación de Campana New Flow con 4 tornillos'
+        });
+
+        // 2 Puertas Batientes (cubren la campana dejando visible solo la visera inferior de 40mm)
+        parts.push({
+            name: `Puerta Batiente ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 2,
+            length: Number((doorH * 10).toFixed(1)),
+            width: Number((doorW * 10).toFixed(1)),
+            thickness: thickness * 10,
+            material: frontMat,
+            edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+            notes: '2 Puertas batientes que cubren la campana dejando solo visera inferior de 40mm'
+        });
+
+        // Repisa superior si la altura es suficiente
+        const topH = cabH - hoodH;
+        if (topH > 40) {
+            parts.push({
+                name: `Repisa Interior Superior ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: (innerW - 0.2) * 10,
+                width: stdShelfDepthMm,
+                thickness: thickness * 10,
+                material: cab.shelfColor || state.structureColor,
+                edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                notes: 'Repisa móvil intermedia superior'
+            });
+        }
     } else if (cab.variant === 'wall_open') {
         parts.push({
             name: `Repisas a la Vista ${cabName}`,
@@ -2453,6 +2504,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
     let stoveFd90Count = 0;
     let fridgeSBSCount = 0;
     let hoodConic90Count = 0;
+    let neuFlowHoodsCount = 0;
     let plantDecoCount = 0;
     let dishwasherCount = 0;
     let wallCabinetsCount = 0;
@@ -2514,6 +2566,13 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         } else if (cab.variant === 'wall_microwave_niche') {
             liftUpPistonsCount += 2;
             portableMicrowavesCount += 1;
+        } else if (cab.variant === 'wall_hood_new_flow') {
+            const hoodH = 17.6;
+            const topH = Math.max(15, cabBodyH - hoodH - gap * 2);
+            const topDoorHMm = Math.round((topH - gap * 2) * 10);
+            const leaves = 2;
+            totalHinges += leaves * getHingesCountByHeight(topDoorHMm);
+            neuFlowHoodsCount += 1;
         } else if (cab.variant === 'tall_1_door') {
             const leaves = 1;
             totalHinges += leaves * stdHingesPerLeaf;
@@ -2861,6 +2920,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
     if (fridgeSBSCount > 0) hardware.push({ Categoria: 'Equipamiento', Item: 'Refrigerador FDV SBS SIGNATURE 2.0 513L (Dark Inox)', Cantidad: fridgeSBSCount, Unidad: 'Unidades', Detalles: 'SAP 16692' });
     if (dishwasherCount > 0) hardware.push({ Categoria: 'Equipamiento', Item: 'Lavavajillas FDV Active 12C Silver (12 Cubiertos - Libre Instalación / Bajo Cubierta)', Cantidad: dishwasherCount, Unidad: 'Unidades', Detalles: 'SAP 15598 (Alto 845mm / 820mm sin tapa, Ancho 598mm, Fondo 600mm)' });
     if (hoodConic90Count > 0) hardware.push({ Categoria: 'Equipamiento', Item: 'Campana FDV New Conic 90 (Acero Inox - 780 m3/h - 3 Velocidades)', Cantidad: hoodConic90Count, Unidad: 'Unidades', Detalles: 'SAP 16309 (Ancho 898mm, Fondo 500mm, Iluminación LED 2x2W)' });
+    if (neuFlowHoodsCount > 0) hardware.push({ Categoria: 'Equipamiento', Item: 'Campana Kubli Neu Flow 60 (Acero Inox - Extraíble Telescópica 210 m3/h)', Cantidad: neuFlowHoodsCount, Unidad: 'Unidades', Detalles: 'SAP 14641 (Ancho 598mm, Alto 176mm, Fondo 300/493mm, 2 Filtros Aluminio + LED)' });
     if (plantDecoCount > 0) hardware.push({ Categoria: 'Decoración', Item: 'Planta Decorativa Interior con Macetero y Soporte de Madera', Cantidad: plantDecoCount, Unidad: 'Unidades', Detalles: 'Ambientación 3D' });
 
     // 6.1 BARRAS DE COLGAR CLÓSET Y ACCESORIOS
@@ -2967,7 +3027,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         if (v === '1_door' || v === 'spice_rack' || v === 'sink_1_door' || v === 'wall_1_door' || v === 'tall_1_door' || v === 'wall_lift_up' || v === 'wall_microwave_niche' || v === 'corner_l' || v === 'wall_corner_l' || v?.startsWith('corner_blind') || v === 'corner_blind' || v?.startsWith('wall_corner_blind')) {
             return 1;
         }
-        if (v === '2_doors' || v === '1_door_1_drawer' || v === '2_drawers' || v === 'sink_2_doors' || v === 'sink_2_drawers_u' || v === 'wall_2_doors' || v === 'wall_lift_up_double' || v === 'tall_2_doors' || v === 'tall_split_2_doors' || v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_microwave_niche') {
+        if (v === '2_doors' || v === '1_door_1_drawer' || v === '2_drawers' || v === 'sink_2_doors' || v === 'sink_2_drawers_u' || v === 'wall_2_doors' || v === 'wall_hood_new_flow' || v === 'wall_lift_up_double' || v === 'tall_2_doors' || v === 'tall_split_2_doors' || v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_microwave_niche') {
             return 2;
         }
         if (v === '3_drawers' || v === '1_drawer_2_pot_drawers') {

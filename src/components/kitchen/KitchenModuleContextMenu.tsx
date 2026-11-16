@@ -756,7 +756,11 @@ export function KitchenModuleContextMenu({
 
   const getElementsList = () => {
     const elements: { id: string; label: string; type: 'door' | 'drawer' }[] = [];
-    if (is2Doors) {
+    if (variant === 'wall_hood_new_flow') {
+      elements.push({ id: 'door-0', label: 'Puerta Superior Izq.', type: 'door' });
+      elements.push({ id: 'door-1', label: 'Puerta Superior Der.', type: 'door' });
+      elements.push({ id: 'hood-visor', label: 'Visera Telescópica Campana', type: 'drawer' });
+    } else if (is2Doors) {
       elements.push({ id: 'door-0', label: 'Puerta Izquierda', type: 'door' });
       elements.push({ id: 'door-1', label: 'Puerta Derecha', type: 'door' });
     } else if (is1Door || isCornerBlind) {
@@ -825,6 +829,14 @@ export function KitchenModuleContextMenu({
   const interactiveElements = getElementsList();
   const hasInteractiveElements = !isDecoration && interactiveElements.length > 0;
   const anyElementOpen = interactiveElements.some(el => isElementOpen(el.id));
+  const swingDoors = interactiveElements.filter(el =>
+    el.type === 'door' &&
+    !el.label.toLowerCase().includes('elevable') &&
+    !el.id.includes('lift') &&
+    !isLiftUp &&
+    !isLiftUpDouble &&
+    activeCabinet.hasDoors !== false
+  );
 
   const isTextureSelected = (url: string) => {
     if (!url || !activeCabinet) return false;
@@ -1027,6 +1039,7 @@ export function KitchenModuleContextMenu({
     if (activeCabinet.variant === 'wall_lift_up_double') return 'Aéreo Doble Puerta Elevable';
     if (activeCabinet.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro + Puerta';
     if (activeCabinet.variant === 'wall_open') return 'Aéreo Repisas a la Vista';
+    if (activeCabinet.variant === 'wall_hood_new_flow') return 'New Flow 60';
     if (activeCabinet.variant === 'closet_hanger') return 'Clóset Barra + Maletero';
     if (activeCabinet.variant === 'closet_mixed') return 'Clóset Mixto (Barra + Cajones)';
     if (activeCabinet.variant === 'closet_shelves') return 'Clóset Lencero (Repisas)';
@@ -1290,6 +1303,7 @@ export function KitchenModuleContextMenu({
               }
               valueCm={activeCabinet.width}
               minCm={
+                activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
                 activeCabinet.variant === "spice_rack" ? 15 : 
                 activeCabinet.variant === 'tall_terminal_shelves' ? 40 :
                 activeCabinet.variant?.includes('wine_rack') ? 15 :
@@ -1297,6 +1311,7 @@ export function KitchenModuleContextMenu({
                 (activeCabinet.variant?.startsWith('corner_blind') ? 80 : 30)
               }
               maxCm={
+                activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
                 activeCabinet.variant === "spice_rack" ? 30 :
                 activeCabinet.variant === 'tall_terminal_shelves' ? 120 :
                 activeCabinet.variant?.includes('wine_rack') ? 65 :
@@ -1330,8 +1345,8 @@ export function KitchenModuleContextMenu({
               isLight={isLight}
               label="Alto Total"
               valueCm={activeCabinet.height}
-              minCm={activeCabinet.type === 'closet' || activeCabinet.type === 'tall' ? 140 : (activeCabinet.type === 'base' ? 70 : 30)}
-              maxCm={activeCabinet.type === 'closet' ? 260 : (activeCabinet.type === 'tall' ? 240 : (activeCabinet.type === 'wall' ? 120 : 100))}
+              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 55 : (activeCabinet.type === 'closet' || activeCabinet.type === 'tall' ? 140 : (activeCabinet.type === 'base' ? 70 : 30))}
+              maxCm={activeCabinet.variant === 'wall_hood_new_flow' ? 95 : (activeCabinet.type === 'closet' ? 260 : (activeCabinet.type === 'tall' ? 240 : (activeCabinet.type === 'wall' ? 120 : 100)))}
               stepMm={1}
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { height: val })}
             />
@@ -1341,12 +1356,30 @@ export function KitchenModuleContextMenu({
               isLight={isLight}
               label={activeCabinet.variant === 'tall_terminal_shelves' ? 'Profundidad de Repisas (Saliente)' : 'Profundidad'}
               valueCm={activeCabinet.depth}
-              minCm={activeCabinet.variant === 'tall_terminal_shelves' ? 15 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25))}
-              maxCm={activeCabinet.variant === 'tall_terminal_shelves' ? 50 : (activeCabinet.type === 'closet' ? 80 : (activeCabinet.type === 'island' ? 120 : 80))}
+              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 32 : (activeCabinet.variant === 'tall_terminal_shelves' ? 15 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25)))}
+              maxCm={activeCabinet.variant === 'wall_hood_new_flow' ? 40 : (activeCabinet.variant === 'tall_terminal_shelves' ? 50 : (activeCabinet.type === 'closet' ? 80 : (activeCabinet.type === 'island' ? 120 : 80)))}
               stepMm={1}
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { depth: val })}
             />
           </div>
+
+          {/* INFO ESPECÍFICA CAMPANA INTEGRADA NEW FLOW 60 */}
+          {activeCabinet.variant === 'wall_hood_new_flow' && (
+            <div className={`p-2.5 rounded-xl border text-xs ${isLight ? 'bg-sky-50 border-sky-200 text-sky-950' : 'bg-sky-950/20 border-sky-500/30 text-sky-200'}`}>
+              <div className="font-bold mb-1 flex items-center justify-between">
+                <span>Campana Kubli Neu Flow 60 (SAP: 14641):</span>
+                <span className="text-sky-500 font-extrabold">{activeCabinet.width} × {activeCabinet.depth} cm</span>
+              </div>
+              <div className="text-[11px] opacity-90 leading-relaxed space-y-1">
+                <div>• <strong>Ancho normativo:</strong> 60 cm (Cuerpo campana 59.8 cm, encastre interior 55 cm).</div>
+                <div>• <strong>Fondo recomendado:</strong> 32 - 38 cm (Campana 30 cm cerrada / 49.3 cm extendida).</div>
+                <div>• <strong>Alto recomendado:</strong> 60 - 90 cm (Campana 17.6 cm + 2 puertas superiores).</div>
+                <div className="pt-1 border-t border-sky-200/50 dark:border-sky-700/50">
+                  • <strong>Distancia a Encimera:</strong> Gas 65 - 75 cm | Eléctrica/Inducción 60 - 70 cm.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* INFO ESPECÍFICA TORRE TERMINAL REPISAS */}
           {activeCabinet.variant === 'tall_terminal_shelves' && (
@@ -1417,68 +1450,170 @@ export function KitchenModuleContextMenu({
             isLight={isLight}
           >
 
-            {activeCabinet.variant === '1_door' &&
-              activeCabinet.hasDoors !== false && (
+            {swingDoors.length === 1 && (() => {
+              const singleDoor = swingDoors[0];
+              const currentSide = activeCabinet.doorHingeSides?.[singleDoor.id] ?? activeCabinet.hingeSide;
+              return (
+                <div className={`mb-3 rounded-xl border p-3 ${
+                  isLight
+                    ? 'border-slate-200 bg-slate-50'
+                    : 'border-white/10 bg-black/30'
+                }`}>
+                  <p className="mb-1 text-xs font-semibold">
+                    Sentido de apertura de la puerta
+                  </p>
+
+                  <p className={`mb-3 text-[11px] ${
+                    isLight ? 'text-slate-500' : 'text-zinc-400'
+                  }`}>
+                    Selecciona dónde se instalarán las bisagras.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['left', 'right'] as const).map(side => (
+                      <button
+                        key={side}
+                        type="button"
+                        aria-pressed={currentSide === side}
+                        onClick={() => updateCabinet(
+                          activeCabinet.id,
+                          {
+                            hingeSide: side,
+                            doorHingeSides: {
+                              ...(activeCabinet.doorHingeSides || {}),
+                              [singleDoor.id]: side,
+                            },
+                          }
+                        )}
+                        className={`rounded-lg border p-2 text-xs font-medium transition-colors ${
+                          currentSide === side
+                            ? 'border-emerald-500 bg-emerald-600 text-white'
+                            : isLight
+                              ? 'border-slate-300 bg-white text-slate-700'
+                              : 'border-white/20 bg-zinc-800 text-zinc-200'
+                        }`}
+                      >
+                        {side === 'left'
+                          ? 'Bisagras izquierda'
+                          : 'Bisagras derecha'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className={`mt-2 text-[11px] ${
+                    isLight ? 'text-slate-500' : 'text-zinc-400'
+                  }`}>
+                    {currentSide
+                      ? 'Apertura configurada para este gabinete.'
+                      : 'Orientación aún no confirmada para CNC.'}
+                  </p>
+
+                  {currentSide && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSides = { ...(activeCabinet.doorHingeSides || {}) };
+                        delete newSides[singleDoor.id];
+                        updateCabinet(
+                          activeCabinet.id,
+                          {
+                            hingeSide: undefined,
+                            doorHingeSides: newSides,
+                          }
+                        );
+                      }}
+                      className="mt-2 text-[11px] text-emerald-500 hover:underline"
+                    >
+                      Quitar confirmación
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {swingDoors.length > 1 && (
               <div className={`mb-3 rounded-xl border p-3 ${
                 isLight
                   ? 'border-slate-200 bg-slate-50'
                   : 'border-white/10 bg-black/30'
               }`}>
                 <p className="mb-1 text-xs font-semibold">
-                  Sentido de apertura de la puerta
+                  Sentido de apertura de las puertas
                 </p>
 
                 <p className={`mb-3 text-[11px] ${
                   isLight ? 'text-slate-500' : 'text-zinc-400'
                 }`}>
-                  Selecciona dónde se instalarán las bisagras.
+                  Selecciona dónde se instalarán las bisagras para cada puerta.
                 </p>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {(['left', 'right'] as const).map(side => (
-                    <button
-                      key={side}
-                      type="button"
-                      aria-pressed={activeCabinet.hingeSide === side}
-                      onClick={() => updateCabinet(
-                        activeCabinet.id,
-                        { hingeSide: side }
-                      )}
-                      className={`rounded-lg border p-2 text-xs font-medium transition-colors ${
-                        activeCabinet.hingeSide === side
-                          ? 'border-emerald-500 bg-emerald-600 text-white'
-                          : isLight
-                            ? 'border-slate-300 bg-white text-slate-700'
-                            : 'border-white/20 bg-zinc-800 text-zinc-200'
-                      }`}
-                    >
-                      {side === 'left'
-                        ? 'Bisagras izquierda'
-                        : 'Bisagras derecha'}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-2.5">
+                  {swingDoors.map(door => {
+                    const currentSide = activeCabinet.doorHingeSides?.[door.id];
+                    return (
+                      <div
+                        key={`swing-door-${door.id}`}
+                        className={`rounded-lg border p-2.5 transition-colors ${
+                          isLight
+                            ? 'border-slate-200 bg-white'
+                            : 'border-white/5 bg-zinc-900/60'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-semibold">
+                            {door.label}
+                          </span>
+                          {currentSide && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newSides = { ...(activeCabinet.doorHingeSides || {}) };
+                                delete newSides[door.id];
+                                updateCabinet(activeCabinet.id, { doorHingeSides: newSides });
+                              }}
+                              className="text-[10px] text-emerald-500 hover:underline"
+                            >
+                              Quitar confirmación
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['left', 'right'] as const).map(side => (
+                            <button
+                              key={side}
+                              type="button"
+                              aria-pressed={currentSide === side}
+                              onClick={() => updateCabinet(activeCabinet.id, {
+                                doorHingeSides: {
+                                  ...(activeCabinet.doorHingeSides || {}),
+                                  [door.id]: side,
+                                },
+                              })}
+                              className={`rounded-lg border p-1.5 text-xs font-medium transition-colors ${
+                                currentSide === side
+                                  ? 'border-emerald-500 bg-emerald-600 text-white'
+                                  : isLight
+                                    ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                    : 'border-white/20 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+                              }`}
+                            >
+                              {side === 'left' ? 'Bisagras izquierda' : 'Bisagras derecha'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <p className={`mt-1.5 text-[10px] ${
+                          isLight ? 'text-slate-500' : 'text-zinc-400'
+                        }`}>
+                          {currentSide
+                            ? `Confirmada con bisagras a la ${currentSide === 'left' ? 'izquierda' : 'derecha'}.`
+                            : 'Orientación aún no confirmada para CNC.'}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <p className={`mt-2 text-[11px] ${
-                  isLight ? 'text-slate-500' : 'text-zinc-400'
-                }`}>
-                  {activeCabinet.hingeSide
-                    ? 'Apertura configurada para este gabinete.'
-                    : 'Orientación aún no confirmada para CNC.'}
-                </p>
-
-                {activeCabinet.hingeSide && (
-                  <button
-                    type="button"
-                    onClick={() => updateCabinet(
-                      activeCabinet.id,
-                      { hingeSide: undefined }
-                    )}
-                    className="mt-2 text-[11px] text-emerald-500 hover:underline"
-                  >
-                    Quitar confirmación
-                  </button>
-                )}
               </div>
             )}
 

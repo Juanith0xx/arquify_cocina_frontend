@@ -53,6 +53,7 @@ export type ToolMode =
   | 'place_wall_open'
   | 'place_wall_corner_blind'
   | 'place_wall_wine_rack'
+  | 'place_wall_hood_new_flow'
   | 'place_tall' 
   | 'place_tall_1_door'
   | 'place_tall_split_2_doors'
@@ -164,6 +165,7 @@ export interface CabinetType {
   // Orientación confirmada por el usuario.
   // undefined: no confirmada para fabricación.
   hingeSide?: 'left' | 'right';
+  doorHingeSides?: Record<string, 'left' | 'right'>;
   innerDrawers?: boolean;
   handleConfig?: KitchenHandleConfig;
   leftCoverPanel?: CoverPanelConfig;
@@ -225,6 +227,7 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'wall_lift_up_double') return 'Aéreo Doble Elevable';
   if (cab.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro';
   if (cab.variant === 'wall_open') return 'Aéreo Abierto Repisas';
+  if (cab.variant === 'wall_hood_new_flow') return 'New Flow 60';
   if (cab.variant === '1_door_1_drawer') return 'Base 1 Pta + 1 Cajón';
   if (cab.variant === '4_drawers') return 'Base 4 Cajones';
   if (cab.variant === '2_drawers_1_pot') return 'Base 2 Cajones + 1 Ollero';

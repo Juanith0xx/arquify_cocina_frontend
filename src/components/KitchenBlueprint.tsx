@@ -1630,6 +1630,25 @@ export function KitchenBlueprint() {
                 <g>
                   <text x={cabW / 2} y={bodyH / 2} fontSize={Math.max(12, fSizeElev * 0.35)} fill="#ea580c" fontWeight="bold" textAnchor="middle" fontFamily="monospace" transform={`rotate(-90 ${cabW / 2} ${bodyH / 2})`}>ESPECIERO EXTRAÍBLE</text>
                 </g>
+              ) : cab.variant === 'wall_hood_new_flow' ? (
+                (() => {
+                  const visorH = 40;
+                  const yLipTop = bodyH - visorH;
+                  const yDoorMid = yLipTop / 2;
+                  return (
+                    <g>
+                      {/* Visera frontal inferior de acero inoxidable de 40mm */}
+                      <rect x={0} y={yLipTop} width={cabW} height={visorH} fill="#cbd5e1" stroke="#0f172a" strokeWidth={strokeElev * 0.9} />
+                      <line x1={cabW * 0.15} y1={yLipTop + 10} x2={cabW * 0.85} y2={yLipTop + 10} stroke="#475569" strokeWidth={strokeElev * 0.7} strokeDasharray="6,3" />
+                      <text x={cabW / 2} y={yLipTop + 26} fontSize={Math.max(12, fSizeElev * 0.35)} fill="#334155" fontWeight="bold" textAnchor="middle" fontFamily="monospace">CAMPANA NEW FLOW 60</text>
+                      
+                      {/* 2 Puertas Batientes (cubren la campana desde arriba hasta la visera inferior de 40mm) */}
+                      <line x1={cabW / 2} y1={0} x2={cabW / 2} y2={yLipTop} stroke="#0f172a" strokeWidth={strokeElev} />
+                      <path d={`M 0 0 L ${cabW / 2} ${yDoorMid} L 0 ${yLipTop}`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
+                      <path d={`M ${cabW} 0 L ${cabW / 2} ${yDoorMid} L ${cabW} ${yLipTop}`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
+                    </g>
+                  );
+                })()
               ) : cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' ? (
                 (() => {
                   const yDoorT = isBaseGola ? 35 : 0;
@@ -1758,7 +1777,7 @@ export function KitchenBlueprint() {
                 const hThick = 14;
                 const hColor = hConfig.color === 'black' ? '#09090b' : (hConfig.color === 'gold' ? '#b45309' : '#334155');
                 const isUpperCab = cab.type === 'wall';
-                const vHandleY = isUpperCab ? (bodyH - 45 - hLen) : 45;
+                const vHandleY = cab.variant === 'wall_hood_new_flow' ? (bodyH - 40 - 45 - hLen) : (isUpperCab ? (bodyH - 45 - hLen) : 45);
 
                 if (cab.variant === '4_drawers') {
                   const dH = bodyH / 4;
@@ -1824,7 +1843,7 @@ export function KitchenBlueprint() {
                       />
                     </g>
                   );
-                } else if (cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors') {
+                } else if (cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow') {
                   return (
                     <g key="front-handles">
                       <rect
@@ -2727,6 +2746,49 @@ export function KitchenBlueprint() {
                           <rect
                             x={handleX}
                             y={doorTop + handleEdgeOffset}
+                            width={hThick}
+                            height={hLen}
+                            rx={0.5}
+                            fill={hColor}
+                            stroke="#0f172a"
+                            strokeWidth="0.3"
+                          />
+                        </>
+                      )}
+                    </g>
+                  );
+                } else if (cab.variant === 'wall_hood_new_flow') {
+                  const centerSplit = cLeftX + cW / 2;
+                  const gapSplit = Math.max(1.2, 20 * elevScale);
+                  const lipH = 40 * elevScale;
+                  const lipTopY = bodyBottomY - lipH;
+                  const doorMidY = (cTopY + lipTopY) / 2;
+                  const hoodHandleY = lipTopY - Math.max(8 * elevScale, 3) - hLen;
+                  return (
+                    <g>
+                      {/* Visera frontal inferior de acero inoxidable de 40mm */}
+                      <rect x={cLeftX} y={lipTopY} width={cW} height={lipH} fill="#cbd5e1" stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.6"} />
+                      <text x={centerSplit} y={lipTopY + lipH * 0.7} fontSize={Math.max(6, 11 * elevScale)} fill="#334155" fontWeight="bold" textAnchor="middle" fontFamily="monospace">NEW FLOW 60</text>
+                      
+                      {/* 2 Puertas batientes que cubren la campana */}
+                      <line x1={centerSplit} y1={cTopY} x2={centerSplit} y2={lipTopY} stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                      <path d={`M ${cLeftX} ${cTopY} L ${centerSplit} ${doorMidY} L ${cLeftX} ${lipTopY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                      <path d={`M ${cLeftX + cW} ${cTopY} L ${centerSplit} ${doorMidY} L ${cLeftX + cW} ${lipTopY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                      {showHandles && (
+                        <>
+                          <rect
+                            x={centerSplit - gapSplit - hThick}
+                            y={hoodHandleY}
+                            width={hThick}
+                            height={hLen}
+                            rx={0.5}
+                            fill={hColor}
+                            stroke="#0f172a"
+                            strokeWidth="0.3"
+                          />
+                          <rect
+                            x={centerSplit + gapSplit}
+                            y={hoodHandleY}
                             width={hThick}
                             height={hLen}
                             rx={0.5}
@@ -4045,7 +4107,7 @@ export function KitchenBlueprint() {
                                   })()}
                                 </g>
                               )}
-                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors') && (
+                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow') && (
                                 <g stroke="#0f172a" strokeWidth="0.7">
                                   {(() => {
                                     const midZ = (z0 + z1) / 2;
@@ -4060,7 +4122,7 @@ export function KitchenBlueprint() {
                               {showHandle && (
                                 <g stroke="#0f172a" strokeWidth="1.2">
                                   {(() => {
-                                    const hY = isWall ? (yBodyBottom + 12) : isTall ? (yBodyBottom + 85) : (yTop - 12);
+                                    const hY = cab.variant === 'wall_hood_new_flow' ? (yBodyBottom + 4.0 + 6) : isWall ? (yBodyBottom + 12) : isTall ? (yBodyBottom + 85) : (yTop - 12);
                                     const hz = z1 - 6;
                                     const ph1 = toIsoSvg(x0, hY - 3, hz);
                                     const ph2 = toIsoSvg(x0, hY + 3, hz);
