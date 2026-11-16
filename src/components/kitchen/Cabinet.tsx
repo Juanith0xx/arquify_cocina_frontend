@@ -3189,7 +3189,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                         width={width}
                         depth={depth}
                         isTelescopicOpen={isHoodVisorOpen}
-                        onClickAction={() => setOpenElement(id, 'hood-visor', !isHoodVisorOpen)}
                      />
                   </group>
 
@@ -3206,7 +3205,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      forceOpen={isElementOpen('door-0')}
                      globalPosition={[position[0] + leftDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
-                     onClickAction={() => setOpenElement(id, 'door-0', !isElementOpen('door-0'))}
                   />
 
                   {/* Puerta Derecha (cubre la campana dejando visible solo la visera inferior de 4cm) */}
@@ -3222,7 +3220,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      forceOpen={isElementOpen('door-1')}
                      globalPosition={[position[0] + rightDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
-                     onClickAction={() => setOpenElement(id, 'door-1', !isElementOpen('door-1'))}
                   />
 
                   {/* Repisa interior superior intermedia si la altura lo amerita */}
