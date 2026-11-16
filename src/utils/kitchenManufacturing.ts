@@ -2035,9 +2035,9 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
         }
     } else if (cab.variant === 'wall_hood_new_flow') {
         const hoodH = 17.6;
-        const topH = Math.max(15, cabH - hoodH - gap * 2);
-        const topDoorH = topH - gap * 2;
-        const topDoorW = (w - gap * 3) / 2;
+        const visorH = 4.0; // Visera frontal inferior visible
+        const doorH = Math.max(15, cabH - visorH - gap * 2);
+        const doorW = (w - gap * 3) / 2;
 
         // Base / Piso de soporte de campana (17.6 cm) para fijación con 4 tornillos desde el interior
         parts.push({
@@ -2053,21 +2053,22 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             notes: 'Piso estructural a 17.6cm para fijación de Campana New Flow con 4 tornillos'
         });
 
-        // 2 Puertas Superiores Batientes
+        // 2 Puertas Batientes (cubren la campana dejando visible solo la visera inferior de 40mm)
         parts.push({
-            name: `Puerta Superior Batiente ${cabName}`,
+            name: `Puerta Batiente ${cabName}`,
             moduleId: cab.id,
             moduleIndex: index,
             qty: 2,
-            length: Number((topDoorH * 10).toFixed(1)),
-            width: Number((topDoorW * 10).toFixed(1)),
+            length: Number((doorH * 10).toFixed(1)),
+            width: Number((doorW * 10).toFixed(1)),
             thickness: thickness * 10,
             material: frontMat,
             edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
-            notes: '2 Puertas superiores batientes sobre campana New Flow'
+            notes: '2 Puertas batientes que cubren la campana dejando solo visera inferior de 40mm'
         });
 
         // Repisa superior si la altura es suficiente
+        const topH = cabH - hoodH;
         if (topH > 40) {
             parts.push({
                 name: `Repisa Interior Superior ${cabName}`,

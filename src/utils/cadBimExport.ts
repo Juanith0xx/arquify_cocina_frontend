@@ -520,15 +520,15 @@ export function extractKitchen3dElements(
 
     } else if (v === 'wall_hood_new_flow') {
       // 1. Campana NEU FLOW 60 (Kubli SAP: 14641) empotrada
-      addLocalBox('Campana_Visor_Inox', 'appliance', 'Electrodomestico_Inox', '#94a3b8', 0, legsH + 2.0, frontZ - 1.0, width - 0.2, 4.0, 30.0);
-      addLocalBox('Campana_Cuerpo_Empotrado', 'appliance', 'Electrodomestico_Inox', '#64748b', 0, legsH + 4.0 + 13.6 / 2, 0, 55.0, 13.6, 28.0);
-      addLocalBox('Campana_Filtros_Aluminio', 'appliance', 'Electrodomestico_Inox', '#cbd5e1', 0, legsH + 0.5, 0, 50.0, 1.0, 26.0);
+      addLocalBox('Campana_Visor_Inox', 'appliance', 'Electrodomestico_Inox', '#cbd5e1', 0, legsH + 2.0, frontZ - 1.0, width - 0.2, 4.0, 30.0);
+      addLocalBox('Campana_Cuerpo_Empotrado', 'appliance', 'Electrodomestico_Inox', '#94a3b8', 0, legsH + 4.0 + 13.6 / 2, 0, 55.0, 13.6, 28.0);
+      addLocalBox('Campana_Filtros_Aluminio', 'appliance', 'Electrodomestico_Inox', '#e2e8f0', 0, legsH + 0.5, 0, 50.0, 1.0, 26.0);
 
-      // 2. Dos puertas superiores batientes
-      const topH = cabH - 17.6;
+      // 2. Dos puertas batientes (cubren la campana dejando visible solo la visera inferior de 40mm)
+      const visorH = 4.0;
       const doorW = (width - gap * 3) / 2;
-      const doorH = Math.max(10, topH - gap * 2);
-      const doorY = legsH + 17.6 + gap + doorH / 2;
+      const doorH = Math.max(10, cabH - visorH - gap * 2);
+      const doorY = legsH + visorH + gap + doorH / 2;
       const leftDoorX = -width / 4;
       const rightDoorX = width / 4;
 
@@ -537,13 +537,14 @@ export function extractKitchen3dElements(
       addDoorHinges('PtaIzq', doorY, doorH, false);
       addDoorHinges('PtaDer', doorY, doorH, true);
 
-      const handleY = isPestana ? (doorY - doorH / 2) : (legsH + 17.6 + 8);
+      const handleY = isPestana ? (doorY - doorH / 2) : (legsH + visorH + 8);
       const hxLeft = isPestana ? (-doorW / 2 + 1.2) : -2.5;
       const hxRight = isPestana ? (doorW / 2 - 1.2) : 2.5;
       addDetailedHandle3D('PtaIzq', hxLeft, handleY, frontZ + th / 2, !isPestana);
       addDetailedHandle3D('PtaDer', hxRight, handleY, frontZ + th / 2, !isPestana);
 
       // 3. Repisa superior si la altura es generosa (> 40cm)
+      const topH = cabH - 17.6;
       if (topH > 40) {
         addLocalBox('Repisa_Superior', 'shelf', 'Melamina_Estructura', colorStructure, 0, legsH + 17.6 + th + (topH - th) / 2, 0, width - 2 * th, th, depth - 2);
       }

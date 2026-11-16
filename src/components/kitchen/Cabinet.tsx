@@ -999,19 +999,19 @@ export function HoodNeuFlow60({
       {/* 1. Caja superior de empotramiento / encastre (13.6 cm alto x 55 cm ancho) */}
       <mesh position={[0, lipH + upperBodyH / 2, -depth / 2 + upperBodyD / 2 + 1.5]} castShadow receiveShadow>
         <boxGeometry args={[upperBodyW, upperBodyH, upperBodyD]} />
-        <meshStandardMaterial color="#94a3b8" metalness={0.75} roughness={0.35} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.4} />
       </mesh>
 
       {/* Salida superior de humos / collarín de ducto Ø 120 mm */}
       <mesh position={[0, lipH + upperBodyH + 1.2, -depth / 2 + upperBodyD / 2 + 1.5]} castShadow>
         <cylinderGeometry args={[6.0, 6.0, 2.4, 24]} />
-        <meshStandardMaterial color="#64748b" metalness={0.8} roughness={0.3} />
+        <meshStandardMaterial color="#94a3b8" metalness={0.25} roughness={0.35} />
       </mesh>
 
       {/* 2. Cuerpo base fijo inferior (al ras de la campana) */}
       <mesh position={[0, lipH / 2, -depth / 2 + closedD / 2 + 1.5]} castShadow receiveShadow>
         <boxGeometry args={[hoodW - 0.2, lipH - 0.2, closedD - 0.4]} />
-        <meshStandardMaterial color="#64748b" metalness={0.7} roughness={0.3} />
+        <meshStandardMaterial color="#d1d5db" metalness={0.25} roughness={0.35} />
       </mesh>
 
       {/* 3. Bandeja frontal telescópica deslizable (con visera de acero inox de 40mm) */}
@@ -1021,26 +1021,26 @@ export function HoodNeuFlow60({
           {/* Frente principal de acero inoxidable satinado */}
           <mesh castShadow receiveShadow>
             <boxGeometry args={[hoodW, lipH, 2.0]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.22} />
+            <meshStandardMaterial color="#d8dee9" metalness={0.25} roughness={0.32} />
           </mesh>
 
           {/* Bisel / Rebaje inferior que conforma la agarradera / tirador integrado */}
           <mesh position={[0, -lipH / 2 + 0.35, -0.2]}>
             <boxGeometry args={[hoodW - 0.4, 0.7, 1.8]} />
-            <meshStandardMaterial color="#94a3b8" metalness={0.88} roughness={0.2} />
+            <meshStandardMaterial color="#c5cbd5" metalness={0.25} roughness={0.35} />
           </mesh>
 
           {/* Ranura frontal de recirculación técnica */}
           <mesh position={[0, lipH / 2 - 0.6, 1.02]}>
             <planeGeometry args={[hoodW * 0.75, 0.4]} />
-            <meshStandardMaterial color="#334155" roughness={0.8} />
+            <meshStandardMaterial color="#64748b" roughness={0.7} />
           </mesh>
 
           {/* Logotipo KUBLI sutil grabado en acero */}
           <Text
             position={[hoodW / 2 - 4.5, 0, 1.02]}
             fontSize={0.75}
-            color="#475569"
+            color="#64748b"
             anchorX="center"
             anchorY="middle"
           >
@@ -1053,17 +1053,17 @@ export function HoodNeuFlow60({
           {/* Marco de aluminio del filtro */}
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[hoodW * 0.82, closedD * 0.38]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.25} />
+            <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.3} />
           </mesh>
           {/* Malla multicapa microperforada de aluminio */}
           <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[hoodW * 0.76, closedD * 0.32]} />
-            <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.35} />
+            <meshStandardMaterial color="#94a3b8" metalness={0.3} roughness={0.4} />
           </mesh>
           {/* Pestillo de desenganche rápido del filtro */}
           <mesh position={[0, -0.1, closedD * 0.12]}>
             <boxGeometry args={[2.8, 0.3, 1.2]} />
-            <meshStandardMaterial color="#1e293b" roughness={0.6} />
+            <meshStandardMaterial color="#64748b" roughness={0.5} />
           </mesh>
         </group>
       </group>
@@ -1072,15 +1072,15 @@ export function HoodNeuFlow60({
       <group position={[0, 0.2, -depth / 2 + closedD * 0.4 + 1.5]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[hoodW * 0.82, closedD * 0.38]} />
-          <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.25} />
+          <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.3} />
         </mesh>
         <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[hoodW * 0.76, closedD * 0.32]} />
-          <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.35} />
+          <meshStandardMaterial color="#94a3b8" metalness={0.3} roughness={0.4} />
         </mesh>
         <mesh position={[0, -0.1, -closedD * 0.12]}>
           <boxGeometry args={[2.8, 0.3, 1.2]} />
-          <meshStandardMaterial color="#1e293b" roughness={0.6} />
+          <meshStandardMaterial color="#64748b" roughness={0.5} />
         </mesh>
       </group>
 
@@ -3169,13 +3169,14 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
 
          if (effectiveVariant === 'wall_hood_new_flow') {
             const hoodH = 17.6;
-            const topH = Math.max(15, cabH - hoodH - gap * 2);
-            const topDoorH = topH - gap * 2;
-            const topDoorW = (width - gap * 3) / 2;
-            const topDoorY = legsHeight + hoodH + gap + topDoorH / 2;
+            const visorH = 4.0; // Visera frontal inferior visible de 40mm
+            const doorH = Math.max(15, cabH - visorH - gap * 2);
+            const doorW = (width - gap * 3) / 2;
+            const doorY = legsHeight + visorH + gap + doorH / 2;
             const leftDoorX = -width / 4;
             const rightDoorX = width / 4;
             const isHoodVisorOpen = isElementOpen('hood-visor');
+            const topH = cabH - hoodH;
 
             return (
                <>
@@ -3189,34 +3190,34 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      />
                   </group>
 
-                  {/* Puerta Superior Izquierda */}
+                  {/* Puerta Izquierda (cubre la campana dejando visible solo la visera inferior de 4cm) */}
                   <AnimatedDoor
                      key="door-left"
-                     position={[leftDoorX, topDoorY, frontZ]}
-                     doorW={topDoorW}
-                     doorH={topDoorH}
+                     position={[leftDoorX, doorY, frontZ]}
+                     doorW={doorW}
+                     doorH={doorH}
                      thickness={thickness}
                      isRightHinge={getDoorHinge('door-0', 'left')}
                      isUpper={true}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-0')}
                      forceOpen={isElementOpen('door-0')}
-                     globalPosition={[position[0] + leftDoorX, position[1] + topDoorY, position[2] + frontZ]}
+                     globalPosition={[position[0] + leftDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
                      onClickAction={() => setOpenElement(id, 'door-0', !isElementOpen('door-0'))}
                   />
 
-                  {/* Puerta Superior Derecha */}
+                  {/* Puerta Derecha (cubre la campana dejando visible solo la visera inferior de 4cm) */}
                   <AnimatedDoor
                      key="door-right"
-                     position={[rightDoorX, topDoorY, frontZ]}
-                     doorW={topDoorW}
-                     doorH={topDoorH}
+                     position={[rightDoorX, doorY, frontZ]}
+                     doorW={doorW}
+                     doorH={doorH}
                      thickness={thickness}
                      isRightHinge={getDoorHinge('door-1', 'right')}
                      isUpper={true}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-1')}
                      forceOpen={isElementOpen('door-1')}
-                     globalPosition={[position[0] + rightDoorX, position[1] + topDoorY, position[2] + frontZ]}
+                     globalPosition={[position[0] + rightDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
                      onClickAction={() => setOpenElement(id, 'door-1', !isElementOpen('door-1'))}
                   />
