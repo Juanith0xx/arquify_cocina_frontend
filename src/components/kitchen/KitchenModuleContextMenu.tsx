@@ -756,7 +756,11 @@ export function KitchenModuleContextMenu({
 
   const getElementsList = () => {
     const elements: { id: string; label: string; type: 'door' | 'drawer' }[] = [];
-    if (is2Doors) {
+    if (variant === 'wall_hood_new_flow') {
+      elements.push({ id: 'door-0', label: 'Puerta Superior Izq.', type: 'door' });
+      elements.push({ id: 'door-1', label: 'Puerta Superior Der.', type: 'door' });
+      elements.push({ id: 'hood-visor', label: 'Visera Telescópica Campana', type: 'drawer' });
+    } else if (is2Doors) {
       elements.push({ id: 'door-0', label: 'Puerta Izquierda', type: 'door' });
       elements.push({ id: 'door-1', label: 'Puerta Derecha', type: 'door' });
     } else if (is1Door || isCornerBlind) {
@@ -1035,6 +1039,7 @@ export function KitchenModuleContextMenu({
     if (activeCabinet.variant === 'wall_lift_up_double') return 'Aéreo Doble Puerta Elevable';
     if (activeCabinet.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro + Puerta';
     if (activeCabinet.variant === 'wall_open') return 'Aéreo Repisas a la Vista';
+    if (activeCabinet.variant === 'wall_hood_new_flow') return 'New Flow 60';
     if (activeCabinet.variant === 'closet_hanger') return 'Clóset Barra + Maletero';
     if (activeCabinet.variant === 'closet_mixed') return 'Clóset Mixto (Barra + Cajones)';
     if (activeCabinet.variant === 'closet_shelves') return 'Clóset Lencero (Repisas)';
@@ -1298,6 +1303,7 @@ export function KitchenModuleContextMenu({
               }
               valueCm={activeCabinet.width}
               minCm={
+                activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
                 activeCabinet.variant === "spice_rack" ? 15 : 
                 activeCabinet.variant === 'tall_terminal_shelves' ? 40 :
                 activeCabinet.variant?.includes('wine_rack') ? 15 :
@@ -1305,6 +1311,7 @@ export function KitchenModuleContextMenu({
                 (activeCabinet.variant?.startsWith('corner_blind') ? 80 : 30)
               }
               maxCm={
+                activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
                 activeCabinet.variant === "spice_rack" ? 30 :
                 activeCabinet.variant === 'tall_terminal_shelves' ? 120 :
                 activeCabinet.variant?.includes('wine_rack') ? 65 :
@@ -1338,8 +1345,8 @@ export function KitchenModuleContextMenu({
               isLight={isLight}
               label="Alto Total"
               valueCm={activeCabinet.height}
-              minCm={activeCabinet.type === 'closet' || activeCabinet.type === 'tall' ? 140 : (activeCabinet.type === 'base' ? 70 : 30)}
-              maxCm={activeCabinet.type === 'closet' ? 260 : (activeCabinet.type === 'tall' ? 240 : (activeCabinet.type === 'wall' ? 120 : 100))}
+              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 55 : (activeCabinet.type === 'closet' || activeCabinet.type === 'tall' ? 140 : (activeCabinet.type === 'base' ? 70 : 30))}
+              maxCm={activeCabinet.variant === 'wall_hood_new_flow' ? 95 : (activeCabinet.type === 'closet' ? 260 : (activeCabinet.type === 'tall' ? 240 : (activeCabinet.type === 'wall' ? 120 : 100)))}
               stepMm={1}
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { height: val })}
             />
@@ -1349,12 +1356,30 @@ export function KitchenModuleContextMenu({
               isLight={isLight}
               label={activeCabinet.variant === 'tall_terminal_shelves' ? 'Profundidad de Repisas (Saliente)' : 'Profundidad'}
               valueCm={activeCabinet.depth}
-              minCm={activeCabinet.variant === 'tall_terminal_shelves' ? 15 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25))}
-              maxCm={activeCabinet.variant === 'tall_terminal_shelves' ? 50 : (activeCabinet.type === 'closet' ? 80 : (activeCabinet.type === 'island' ? 120 : 80))}
+              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 32 : (activeCabinet.variant === 'tall_terminal_shelves' ? 15 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25)))}
+              maxCm={activeCabinet.variant === 'wall_hood_new_flow' ? 40 : (activeCabinet.variant === 'tall_terminal_shelves' ? 50 : (activeCabinet.type === 'closet' ? 80 : (activeCabinet.type === 'island' ? 120 : 80)))}
               stepMm={1}
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { depth: val })}
             />
           </div>
+
+          {/* INFO ESPECÍFICA CAMPANA INTEGRADA NEW FLOW 60 */}
+          {activeCabinet.variant === 'wall_hood_new_flow' && (
+            <div className={`p-2.5 rounded-xl border text-xs ${isLight ? 'bg-sky-50 border-sky-200 text-sky-950' : 'bg-sky-950/20 border-sky-500/30 text-sky-200'}`}>
+              <div className="font-bold mb-1 flex items-center justify-between">
+                <span>Campana Kubli Neu Flow 60 (SAP: 14641):</span>
+                <span className="text-sky-500 font-extrabold">{activeCabinet.width} × {activeCabinet.depth} cm</span>
+              </div>
+              <div className="text-[11px] opacity-90 leading-relaxed space-y-1">
+                <div>• <strong>Ancho normativo:</strong> 60 cm (Cuerpo campana 59.8 cm, encastre interior 55 cm).</div>
+                <div>• <strong>Fondo recomendado:</strong> 32 - 38 cm (Campana 30 cm cerrada / 49.3 cm extendida).</div>
+                <div>• <strong>Alto recomendado:</strong> 60 - 90 cm (Campana 17.6 cm + 2 puertas superiores).</div>
+                <div className="pt-1 border-t border-sky-200/50 dark:border-sky-700/50">
+                  • <strong>Distancia a Encimera:</strong> Gas 65 - 75 cm | Eléctrica/Inducción 60 - 70 cm.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* INFO ESPECÍFICA TORRE TERMINAL REPISAS */}
           {activeCabinet.variant === 'tall_terminal_shelves' && (

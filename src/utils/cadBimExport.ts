@@ -83,6 +83,7 @@ export function extractKitchen3dElements(
     const legsH = isBaseOrTall ? socleH : 0;
     const cabH = height - legsH;
     const gap = 0.3; // Cantería estándar de 3mm
+    const v = cab.variant || (width > 60 ? '2_doors' : '1_door');
 
     // Cota base de suelo normalizada:
     // Muebles de piso (base, torre, isla) nacen en Y = 0 (el suelo).
@@ -217,13 +218,14 @@ export function extractKitchen3dElements(
     );
 
     // Piso (Base interior)
+    const floorY = (v === 'wall_hood_new_flow') ? (legsH + 17.6 + th / 2) : (legsH + th / 2);
     addLocalBox(
-      'Piso_Gabinete',
+      v === 'wall_hood_new_flow' ? 'Repisa_Soporte_Campana' : 'Piso_Gabinete',
       'carcass',
       'Melamina_Estructura',
       colorStructure,
       0,
-      legsH + th / 2,
+      floorY,
       0,
       width - 2 * th,
       th,
@@ -274,16 +276,18 @@ export function extractKitchen3dElements(
     }
 
     // Fondo / Trasera de Durolac
+    const backH = (v === 'wall_hood_new_flow') ? Math.max(10, cabH - 17.6 - th) : (cabH - th);
+    const backY = (v === 'wall_hood_new_flow') ? (legsH + 17.6 + th + backH / 2) : (legsH + cabH / 2);
     addLocalBox(
       'Fondo_Trasera_Durolac',
       'carcass',
       'Durolac_Blanco_3mm',
       '#ffffff',
       0,
-      legsH + cabH / 2,
+      backY,
       -depth / 2 + 0.3 / 2 + 1.2,
       width - 2 * th,
-      cabH - th,
+      backH,
       0.3
     );
 
@@ -293,9 +297,10 @@ export function extractKitchen3dElements(
     const addCabinetAssemblyScrews = () => {
       const colorScrew = '#64748b';
       // Pernos / tornillos Spax fijando piso a laterales
+      const floorScrewY = (v === 'wall_hood_new_flow') ? (legsH + 17.6 + th / 2) : (legsH + th / 2);
       [-depth / 2 + 6, depth / 2 - 6].forEach((sz, sIdx) => {
-        addLocalBox(`Tornillo_Piso_Izq_${sIdx + 1}`, 'hardware', 'Herraje_Tornillo_Spax', colorScrew, -width / 2 + 0.1, legsH + th / 2, sz, 0.4, 0.4, 3.5);
-        addLocalBox(`Tornillo_Piso_Der_${sIdx + 1}`, 'hardware', 'Herraje_Tornillo_Spax', colorScrew, width / 2 - 0.1, legsH + th / 2, sz, 0.4, 0.4, 3.5);
+        addLocalBox(`Tornillo_Piso_Izq_${sIdx + 1}`, 'hardware', 'Herraje_Tornillo_Spax', colorScrew, -width / 2 + 0.1, floorScrewY, sz, 0.4, 0.4, 3.5);
+        addLocalBox(`Tornillo_Piso_Der_${sIdx + 1}`, 'hardware', 'Herraje_Tornillo_Spax', colorScrew, width / 2 - 0.1, floorScrewY, sz, 0.4, 0.4, 3.5);
       });
       // Tornillos fijando amarres o techo
       if (!isWall && cab.type !== 'tall' && !isCloset) {
@@ -470,7 +475,6 @@ export function extractKitchen3dElements(
     // ----------------------------------------------------
     // 5. FRENTES REALES: RETÍCULA HOMOLOGADA CON CABINET.TSX
     // ----------------------------------------------------
-    const v = cab.variant || (width > 60 ? '2_doors' : '1_door');
     const isBaseOrIsland = cab.type === 'base' || cab.type === 'island';
     const rawRegruesoCm = isBaseOrIsland
       ? (cab.type === 'island'
@@ -513,6 +517,36 @@ export function extractKitchen3dElements(
       const hxRight = isPestana ? (doorW / 2 - 1.2) : 2.5;
       addDetailedHandle3D('PtaIzq', hxLeft, handleY, frontZ + th / 2, !isPestana);
       addDetailedHandle3D('PtaDer', hxRight, handleY, frontZ + th / 2, !isPestana);
+
+    } else if (v === 'wall_hood_new_flow') {
+      // 1. Campana NEU FLOW 60 (Kubli SAP: 14641) empotrada
+      addLocalBox('Campana_Visor_Inox', 'appliance', 'Electrodomestico_Inox', '#94a3b8', 0, legsH + 2.0, frontZ - 1.0, width - 0.2, 4.0, 30.0);
+      addLocalBox('Campana_Cuerpo_Empotrado', 'appliance', 'Electrodomestico_Inox', '#64748b', 0, legsH + 4.0 + 13.6 / 2, 0, 55.0, 13.6, 28.0);
+      addLocalBox('Campana_Filtros_Aluminio', 'appliance', 'Electrodomestico_Inox', '#cbd5e1', 0, legsH + 0.5, 0, 50.0, 1.0, 26.0);
+
+      // 2. Dos puertas superiores batientes
+      const topH = cabH - 17.6;
+      const doorW = (width - gap * 3) / 2;
+      const doorH = Math.max(10, topH - gap * 2);
+      const doorY = legsH + 17.6 + gap + doorH / 2;
+      const leftDoorX = -width / 4;
+      const rightDoorX = width / 4;
+
+      addLocalBox('Puerta_Izquierda', 'door', 'Melamina_Frente', colorDoors, leftDoorX, doorY, frontZ, doorW, doorH, th);
+      addLocalBox('Puerta_Derecha', 'door', 'Melamina_Frente', colorDoors, rightDoorX, doorY, frontZ, doorW, doorH, th);
+      addDoorHinges('PtaIzq', doorY, doorH, false);
+      addDoorHinges('PtaDer', doorY, doorH, true);
+
+      const handleY = isPestana ? (doorY - doorH / 2) : (legsH + 17.6 + 8);
+      const hxLeft = isPestana ? (-doorW / 2 + 1.2) : -2.5;
+      const hxRight = isPestana ? (doorW / 2 - 1.2) : 2.5;
+      addDetailedHandle3D('PtaIzq', hxLeft, handleY, frontZ + th / 2, !isPestana);
+      addDetailedHandle3D('PtaDer', hxRight, handleY, frontZ + th / 2, !isPestana);
+
+      // 3. Repisa superior si la altura es generosa (> 40cm)
+      if (topH > 40) {
+        addLocalBox('Repisa_Superior', 'shelf', 'Melamina_Estructura', colorStructure, 0, legsH + 17.6 + th + (topH - th) / 2, 0, width - 2 * th, th, depth - 2);
+      }
 
     } else if (v === '2_drawers' || v === '2_pot_drawers') {
       const drW = width - gap * 2;
@@ -932,7 +966,7 @@ export function extractKitchen3dElements(
     // ----------------------------------------------------
     // 4. REPISAS INTERIORES
     // ----------------------------------------------------
-    if (isCabinetWithDoors(cab) && !isCloset) {
+    if (isCabinetWithDoors(cab) && !isCloset && cab.variant !== 'wall_hood_new_flow') {
       const shelfElevs = getResolvedCabinetShelfElevations(cab, th);
       shelfElevs.forEach((elev, sIdx) => {
         addLocalBox(

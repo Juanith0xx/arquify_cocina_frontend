@@ -21,7 +21,7 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
@@ -1201,11 +1201,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                     <ModuleCategoryAccordion
                       id="murales"
                       title="3. Murales & Aéreos"
-                      count={8}
+                      count={9}
                       icon={<Square size={14} />}
                       isOpen={!!moduleAccordions.murales}
                       onToggle={() => toggleModuleAccordion('murales')}
-                      hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack'].includes(toolMode)}
+                      hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow'].includes(toolMode)}
                       isLight={isLight}
                     >
                       <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />
@@ -1216,6 +1216,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       <ToolButton isLight={isLight} active={toolMode === 'place_wall_open'} onClick={() => handleInsertModule('place_wall_open')} icon={<Square size={14}/>} label="6. Repisas a la Vista" />
                       <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />
                       <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />
+                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} icon={<Wind size={14}/>} label="9. New Flow 60" />
                     </ModuleCategoryAccordion>
 
                     {/* 4. Isla */}
