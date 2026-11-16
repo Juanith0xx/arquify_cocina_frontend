@@ -971,6 +971,166 @@ export function HoodFDVConic90({ width = 89.8, height = 70, depth = 50 }: { widt
   );
 }
 
+export function HoodNeuFlow60({
+  width = 60,
+  depth = 35,
+  isTelescopicOpen = false,
+  onClickAction,
+}: {
+  width?: number;
+  depth?: number;
+  isTelescopicOpen?: boolean;
+  onClickAction?: () => void;
+}) {
+  // Dimensiones según Ficha Técnica Campana NEU FLOW (KUBLI, SAP: 14641):
+  // Dimensión de Producto: 176 mm alto x 598 mm ancho x 300 mm fondo (493 mm extendida)
+  // Dimensión de Encastre caja superior: 136 mm alto x 550 mm ancho x ~280-300 mm fondo
+  // Visera frontal de acero inoxidable: 40 mm alto x 598 mm ancho
+  const hoodW = Math.min(width, 59.8);
+  const upperBodyW = 55.0;
+  const upperBodyH = 13.6;
+  const upperBodyD = Math.min(29.0, depth - 2);
+  const lipH = 4.0;
+  const closedD = 30.0;
+  const pullExtension = isTelescopicOpen ? 14.0 : 0; // Desplazamiento telescópico animado
+
+  return (
+    <group position={[0, 0, 0]} onClick={onClickAction}>
+      {/* 1. Caja superior de empotramiento / encastre (13.6 cm alto x 55 cm ancho) */}
+      <mesh position={[0, lipH + upperBodyH / 2, -depth / 2 + upperBodyD / 2 + 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[upperBodyW, upperBodyH, upperBodyD]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.4} />
+      </mesh>
+
+      {/* Salida superior de humos / collarín de ducto Ø 120 mm */}
+      <mesh position={[0, lipH + upperBodyH + 1.2, -depth / 2 + upperBodyD / 2 + 1.5]} castShadow>
+        <cylinderGeometry args={[6.0, 6.0, 2.4, 24]} />
+        <meshStandardMaterial color="#94a3b8" metalness={0.25} roughness={0.35} />
+      </mesh>
+
+      {/* 2. Cuerpo base fijo inferior (al ras de la campana) */}
+      <mesh position={[0, lipH / 2, -depth / 2 + closedD / 2 + 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[hoodW - 0.2, lipH - 0.2, closedD - 0.4]} />
+        <meshStandardMaterial color="#d1d5db" metalness={0.25} roughness={0.35} />
+      </mesh>
+
+      {/* 3. Bandeja frontal telescópica deslizable (con visera de acero inox de 40mm) */}
+      <group position={[0, 0, pullExtension]}>
+        {/* Visera frontal de Acero Inoxidable (40 mm alto x 598 mm ancho) */}
+        <group position={[0, lipH / 2, depth / 2 - 1.0]}>
+          {/* Frente principal de acero inoxidable satinado */}
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[hoodW, lipH, 2.0]} />
+            <meshStandardMaterial color="#d8dee9" metalness={0.25} roughness={0.32} />
+          </mesh>
+
+          {/* Bisel / Rebaje inferior que conforma la agarradera / tirador integrado */}
+          <mesh position={[0, -lipH / 2 + 0.35, -0.2]}>
+            <boxGeometry args={[hoodW - 0.4, 0.7, 1.8]} />
+            <meshStandardMaterial color="#c5cbd5" metalness={0.25} roughness={0.35} />
+          </mesh>
+
+          {/* Ranura frontal de recirculación técnica */}
+          <mesh position={[0, lipH / 2 - 0.6, 1.02]}>
+            <planeGeometry args={[hoodW * 0.75, 0.4]} />
+            <meshStandardMaterial color="#64748b" roughness={0.7} />
+          </mesh>
+
+          {/* Logotipo KUBLI sutil grabado en acero */}
+          <Text
+            position={[hoodW / 2 - 4.5, 0, 1.02]}
+            fontSize={0.75}
+            color="#64748b"
+            anchorX="center"
+            anchorY="middle"
+          >
+            KUBLI
+          </Text>
+        </group>
+
+        {/* Filtro de aluminio frontal (en la bandeja deslizable) */}
+        <group position={[0, 0.2, depth / 2 - closedD / 4 - 1.0]}>
+          {/* Marco de aluminio del filtro */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[hoodW * 0.82, closedD * 0.38]} />
+            <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.3} />
+          </mesh>
+          {/* Malla multicapa microperforada de aluminio */}
+          <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[hoodW * 0.76, closedD * 0.32]} />
+            <meshStandardMaterial color="#94a3b8" metalness={0.3} roughness={0.4} />
+          </mesh>
+          {/* Pestillo de desenganche rápido del filtro */}
+          <mesh position={[0, -0.1, closedD * 0.12]}>
+            <boxGeometry args={[2.8, 0.3, 1.2]} />
+            <meshStandardMaterial color="#64748b" roughness={0.5} />
+          </mesh>
+        </group>
+      </group>
+
+      {/* 4. Filtro de aluminio posterior (fijo en la base) */}
+      <group position={[0, 0.2, -depth / 2 + closedD * 0.4 + 1.5]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[hoodW * 0.82, closedD * 0.38]} />
+          <meshStandardMaterial color="#cbd5e1" metalness={0.25} roughness={0.3} />
+        </mesh>
+        <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[hoodW * 0.76, closedD * 0.32]} />
+          <meshStandardMaterial color="#94a3b8" metalness={0.3} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, -0.1, -closedD * 0.12]}>
+          <boxGeometry args={[2.8, 0.3, 1.2]} />
+          <meshStandardMaterial color="#64748b" roughness={0.5} />
+        </mesh>
+      </group>
+
+      {/* 5. Iluminación LED Inferior (2 x LED DC 12V 2W) */}
+      {[-hoodW * 0.28, hoodW * 0.28].map((lx, idx) => (
+        <group key={`hood-led-${idx}`} position={[lx, 0.1, -depth / 2 + 5.0]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[1.6, 1.6, 0.25, 20]} />
+            <meshStandardMaterial color="#cbd5e1" metalness={0.88} roughness={0.2} />
+          </mesh>
+          <mesh position={[0, -0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[1.2, 20]} />
+            <meshStandardMaterial
+              color="#fffbeb"
+              emissive="#fef08a"
+              emissiveIntensity={0.95}
+              roughness={0.2}
+            />
+          </mesh>
+        </group>
+      ))}
+
+      {/* 6. Mandos Mecánicos (Interruptores basculantes laterales según manual de uso) */}
+      {/* Interruptor de luz a la izquierda */}
+      <group position={[-hoodW / 2 + 1.2, lipH / 2, depth / 2 - 3.5]}>
+        <mesh position={[0, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+          <boxGeometry args={[1.6, 1.2, 0.3]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.8} />
+        </mesh>
+        <mesh position={[-0.2, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+          <boxGeometry args={[1.0, 0.7, 0.4]} />
+          <meshStandardMaterial color="#e2e8f0" metalness={0.5} roughness={0.3} />
+        </mesh>
+      </group>
+
+      {/* Interruptor de 2 velocidades a la derecha */}
+      <group position={[hoodW / 2 - 1.2, lipH / 2, depth / 2 - 3.5]}>
+        <mesh position={[0, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <boxGeometry args={[1.8, 1.2, 0.3]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.8} />
+        </mesh>
+        <mesh position={[0.2, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <boxGeometry args={[1.2, 0.7, 0.4]} />
+          <meshStandardMaterial color="#e2e8f0" metalness={0.5} roughness={0.3} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 export function BuiltInOven({ width, height, depth }: { width: number; height: number; depth: number }) {
   return (
     <group position={[0, 0, depth / 2]}>
@@ -3007,6 +3167,67 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             );
          }
 
+         if (effectiveVariant === 'wall_hood_new_flow') {
+            const hoodH = 17.6;
+            const visorH = 4.0; // Visera frontal inferior visible de 40mm
+            const doorH = Math.max(15, cabH - visorH - gap * 2);
+            const doorW = (width - gap * 3) / 2;
+            const doorY = legsHeight + visorH + gap + doorH / 2;
+            const leftDoorX = -width / 4;
+            const rightDoorX = width / 4;
+            const isHoodVisorOpen = isElementOpen('hood-visor');
+            const topH = cabH - hoodH;
+
+            return (
+               <>
+                  {/* Campana Extractora Integrada Kubli Neu Flow 60 (SAP: 14641) */}
+                  <group position={[0, legsHeight, 0]}>
+                     <HoodNeuFlow60
+                        width={width}
+                        depth={depth}
+                        isTelescopicOpen={isHoodVisorOpen}
+                        onClickAction={() => setOpenElement(id, 'hood-visor', !isHoodVisorOpen)}
+                     />
+                  </group>
+
+                  {/* Puerta Izquierda (cubre la campana dejando visible solo la visera inferior de 4cm) */}
+                  <AnimatedDoor
+                     key="door-left"
+                     position={[leftDoorX, doorY, frontZ]}
+                     doorW={doorW}
+                     doorH={doorH}
+                     thickness={thickness}
+                     isRightHinge={getDoorHinge('door-0', 'left')}
+                     isUpper={true}
+                     colorProps={parseColor(cDoors, doorMaterial, 'door-0')}
+                     forceOpen={isElementOpen('door-0')}
+                     globalPosition={[position[0] + leftDoorX, position[1] + doorY, position[2] + frontZ]}
+                     handleConfig={handleConfig}
+                     onClickAction={() => setOpenElement(id, 'door-0', !isElementOpen('door-0'))}
+                  />
+
+                  {/* Puerta Derecha (cubre la campana dejando visible solo la visera inferior de 4cm) */}
+                  <AnimatedDoor
+                     key="door-right"
+                     position={[rightDoorX, doorY, frontZ]}
+                     doorW={doorW}
+                     doorH={doorH}
+                     thickness={thickness}
+                     isRightHinge={getDoorHinge('door-1', 'right')}
+                     isUpper={true}
+                     colorProps={parseColor(cDoors, doorMaterial, 'door-1')}
+                     forceOpen={isElementOpen('door-1')}
+                     globalPosition={[position[0] + rightDoorX, position[1] + doorY, position[2] + frontZ]}
+                     handleConfig={handleConfig}
+                     onClickAction={() => setOpenElement(id, 'door-1', !isElementOpen('door-1'))}
+                  />
+
+                  {/* Repisa interior superior intermedia si la altura lo amerita */}
+                  {topH > 40 && renderShelfWithJoints(legsHeight + hoodH + topH / 2, 'hood_upper_shelf')}
+               </>
+            );
+         }
+
          if (effectiveVariant === 'corner_l') {
             // Módulo esquinero en L articulado (900x900 mm)
             // Puertas bi-fold articuladas a 90°
@@ -3829,7 +4050,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                const botZ = isWineRack ? 0 : bodyCenterZ;
                return (
                   <>
-                     <Board position={[0, legsHeight + thickness/2, botZ]} args={[innerW, thickness, botDepth]} {...parseColor(cStructure, structureMaterial, 'bottom')} />
+                     <Board position={[0, legsHeight + (effectiveVariant === 'wall_hood_new_flow' ? 17.6 : 0) + thickness/2, botZ]} args={[innerW, thickness, botDepth]} {...parseColor(cStructure, structureMaterial, 'bottom')} />
                      {effectiveVariant === 'tall_oven_vent' ? (
                         <>
                            {/* Trasera despensa inferior (ranurada) */}
@@ -3839,13 +4060,15 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                               <Board position={[0, legsHeight + 168 + (cabH - 168 - thickness)/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[innerW, Math.max(5, cabH - 168 - thickness), realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
                            )}
                         </>
+                     ) : effectiveVariant === 'wall_hood_new_flow' ? (
+                        <Board position={[0, legsHeight + 17.6 + (cabH - 17.6)/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[innerW, Math.max(5, cabH - 17.6 - thickness), realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
                      ) : (
                         <Board position={[0, legsHeight + cabH/2, -depth/2 + thickness + realBackThicknessCm/2]} args={[innerW, cabH - thickness*2, realBackThicknessCm]} {...parseColor(cBack, backMaterial === 'durolac' ? 'melamina' : backMaterial, 'back')} />
                      )}
                      
                      {/* Uniones estructurales de Base a Laterales */}
-                     <AssemblyJoint position={[-innerW/2, legsHeight + thickness/2, botZ]} length={botDepth} axis="z" pointing="right" thickness={thickness} count={2} />
-                     <AssemblyJoint position={[innerW/2, legsHeight + thickness/2, botZ]} length={botDepth} axis="z" pointing="left" thickness={thickness} count={2} />
+                     <AssemblyJoint position={[-innerW/2, legsHeight + (effectiveVariant === 'wall_hood_new_flow' ? 17.6 : 0) + thickness/2, botZ]} length={botDepth} axis="z" pointing="right" thickness={thickness} count={2} />
+                     <AssemblyJoint position={[innerW/2, legsHeight + (effectiveVariant === 'wall_hood_new_flow' ? 17.6 : 0) + thickness/2, botZ]} length={botDepth} axis="z" pointing="left" thickness={thickness} count={2} />
                   </>
                );
             })()}
