@@ -4743,68 +4743,66 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             ))}
           </group>
 
-          {/* 4. Tooltip Flotante Moderno "MÓDULO ACTIVO" (Glassmorphism + Caret + Badge) */}
+          {/* 4. Tooltip Flotante Moderno "MÓDULO ACTIVO" (Fondo Claro, Tamaño Agrandado y Alta Legibilidad) */}
           {cabinetIndex >= 0 && (
-            <group position={[0, height / 2 + 5, 0]} renderOrder={1005}>
+            <group position={[0, height / 2 + 7, 0]} renderOrder={1005}>
               <Html
                 center
-                distanceFactor={75}
                 zIndexRange={[100, 0]}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
                 {(() => {
                   const cabLabel = getCabinetLabel({ type, variant, width, height, depth }, cabinetIndex);
-                  const tagBg = isDecoration ? '#38bdf8' : '#f97316';
-                  const checkBg = isDecoration ? 'rgba(56, 189, 248, 0.2)' : 'rgba(249, 115, 22, 0.2)';
+                  const tagBg = isDecoration ? '#0284c7' : '#f97316';
+                  const checkBg = isDecoration ? '#f0f9ff' : '#fff7ed';
                   const checkBorder = isDecoration ? '#38bdf8' : '#f97316';
-                  const checkColor = isDecoration ? '#38bdf8' : '#fb923c';
+                  const checkColor = isDecoration ? '#0284c7' : '#ea580c';
 
                   return (
                     <div className="relative flex flex-col items-center select-none filter drop-shadow-xl">
-                      {/* Card principal estilo glassmorphism */}
+                      {/* Card principal estilo claro moderno con alto contraste */}
                       <div
-                        className="flex flex-col gap-1.5 px-3.5 py-2 rounded-2xl border select-none whitespace-nowrap"
+                        className="flex flex-col gap-2 px-4 py-2.5 rounded-2xl border select-none whitespace-nowrap"
                         style={{
-                          background: 'linear-gradient(180deg, rgba(45, 52, 68, 0.95) 0%, rgba(24, 29, 40, 0.98) 100%)',
-                          borderColor: 'rgba(255, 255, 255, 0.16)',
-                          boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
-                          backdropFilter: 'blur(8px)',
-                          minWidth: '180px',
+                          background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+                          borderColor: '#cbd5e1',
+                          boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.2), 0 4px 10px -2px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1)',
+                          minWidth: '220px',
                         }}
                       >
                         {/* Fila superior: Tag MOD + Nombre + Check */}
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-3.5">
+                          <div className="flex items-center gap-2.5">
                             {/* Tag Píldora MOD */}
                             <span
-                              className="font-extrabold text-[11px] px-2 py-0.5 rounded-[6px] tracking-tight text-slate-950 leading-tight"
+                              className="font-black text-[12px] px-2.5 py-1 rounded-[7px] tracking-wide text-white leading-none shadow-xs flex items-center"
                               style={{ backgroundColor: tagBg }}
                             >
                               MOD {cabinetIndex + 1}
                             </span>
                             {/* Nombre del Módulo */}
-                            <span className="text-white font-semibold text-[13px] tracking-tight leading-tight">
+                            <span className="text-slate-900 font-bold text-[15px] tracking-tight leading-none">
                               {cabLabel}
                             </span>
                           </div>
 
                           {/* Icono de verificación circular */}
                           <div
-                            className="w-[18px] h-[18px] rounded-full flex items-center justify-center shrink-0 border"
+                            className="w-[20px] h-[20px] rounded-full flex items-center justify-center shrink-0 border shadow-xs"
                             style={{
                               backgroundColor: checkBg,
                               borderColor: checkBorder,
                               color: checkColor,
                             }}
                           >
-                            <Check size={11} strokeWidth={3} />
+                            <Check size={12} strokeWidth={3} />
                           </div>
                         </div>
 
                         {/* Fila inferior: Icono de dimensiones + Medidas */}
-                        <div className="flex items-center gap-1.5 text-slate-300">
-                          <Maximize2 size={11} className="text-slate-400 shrink-0" />
-                          <span className="text-[11px] font-mono tracking-tight text-slate-300 leading-tight">
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                          <Maximize2 size={13} className="text-slate-400 shrink-0" />
+                          <span className="text-[12px] font-mono font-semibold tracking-tight text-slate-700 leading-none">
                             {width.toFixed(0)} × {height.toFixed(0)} × {depth.toFixed(0)} cm
                           </span>
                         </div>
@@ -4814,10 +4812,11 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                       <div
                         className="w-0 h-0"
                         style={{
-                          borderLeft: '7px solid transparent',
-                          borderRight: '7px solid transparent',
-                          borderTop: '7px solid rgba(24, 29, 40, 0.98)',
+                          borderLeft: '8px solid transparent',
+                          borderRight: '8px solid transparent',
+                          borderTop: '8px solid #f8fafc',
                           marginTop: '-1px',
+                          filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.12))',
                         }}
                       />
                     </div>
