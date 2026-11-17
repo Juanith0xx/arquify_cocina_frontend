@@ -123,24 +123,50 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
    - Property context: ${propertyType || 'Casa Residencial moderna'}.
   `.trim();
 
-  const cleanImageBase64 = imageBase64.replace(/^data:image\/(png|jpeg|webp);base64,/, '');
+  let mimeType = 'image/jpeg';
+  const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+  if (mimeMatch) {
+    mimeType = mimeMatch[1];
+  }
+  const cleanImageBase64 = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.1-flash-lite-image',
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: cleanImageBase64,
-            mimeType: 'image/png',
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: 'gemini-nano-banana-2.1',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanImageBase64,
+              mimeType,
+            },
           },
-        },
-        {
-          text: structuredPrompt,
-        },
-      ],
-    },
-  });
+          {
+            text: structuredPrompt,
+          },
+        ],
+      },
+    });
+  } catch (nanoError: any) {
+    console.warn('Fallback a gemini-3.1-flash-lite-image por:', nanoError?.message);
+    response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite-image',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanImageBase64,
+              mimeType,
+            },
+          },
+          {
+            text: structuredPrompt,
+          },
+        ],
+      },
+    });
+  }
 
   let generatedImageUrl = '';
   for (const part of response.candidates?.[0]?.content?.parts ?? []) {

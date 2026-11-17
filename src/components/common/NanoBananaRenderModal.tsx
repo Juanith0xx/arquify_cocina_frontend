@@ -101,7 +101,29 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
     try {
       const canvas = document.querySelector('canvas');
       if (canvas) {
-        canvasDataUrl = canvas.toDataURL('image/png');
+        // Redimensionar y optimizar la imagen para mantener alta fidelidad visual sin exceder los límites de tokens
+        const maxDim = 1280;
+        let w = canvas.width;
+        let h = canvas.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w;
+        tempCanvas.height = h;
+        const ctx = tempCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, 0, w, h);
+          canvasDataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
+        } else {
+          canvasDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        }
       }
     } catch (err) {
       console.warn('Advertencia al capturar canvas 3D:', err);
