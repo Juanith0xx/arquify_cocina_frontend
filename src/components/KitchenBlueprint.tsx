@@ -488,12 +488,17 @@ export function KitchenBlueprint() {
    * Calibrado para que la pieza y cotas ocupen ~80% del recuadro disponible con tipografías legibles (mínimo 9-11pt).
    */
   const renderUnifiedPartSVG = (part: Part, cab: CabinetType) => {
-    const isFrenteCajon = part.name.includes("Frente Cajón");
-    // En despiece industrial estándar, length es la dimensión longitudinal (ancho del frente de cajón) y width es la altura
+    const isContrafrente = part.name.toLowerCase().includes("contrafrente");
+    const isFrenteCajon = (part.name.includes("Frente Cajón") || part.name.includes("Frente")) && !isContrafrente;
+    // En despiece industrial estándar, length es la dimensión longitudinal (ancho del frente o contrafrente de cajón) y width es la altura
     // Para visualización técnica horizontal en plano: pw debe ser la dimensión horizontal y pl la vertical
-    const pw = Math.round(isFrenteCajon && part.length > part.width ? part.length : part.width);
-    const pl = Math.round(isFrenteCajon && part.length > part.width ? part.width : part.length);
+    const pw = Math.round((isFrenteCajon || isContrafrente) && part.length > part.width ? part.length : part.width);
+    const pl = Math.round((isFrenteCajon || isContrafrente) && part.length > part.width ? part.width : part.length);
     const baseDim = Math.max(pw, pl, 200);
+
+    const isVeggieCab = cab ? (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') : false;
+    const isVeggieFront = isFrenteCajon && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
+    const isVeggieContrafrente = isContrafrente && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('calado ovalado') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
 
     const isLateral = part.name.includes("Lateral") && !part.name.includes("Cajón");
     const isPiso = part.name.includes("Piso") || (part.name.includes("Base") && !part.name.includes("Soporte Horno"));
@@ -506,8 +511,8 @@ export function KitchenBlueprint() {
     const isMinifix = state.assemblyType === 'minifix';
 
     // Detección de mecanizados por cara para cálculo de paddings
-    const hasTopMachining = isLateral || isFrenteCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
-    const hasLeftMachining = isPuerta || isLateral || isFrenteCajon || isLateralCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
+    const hasTopMachining = isLateral || isFrenteCajon || isContrafrente || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
+    const hasLeftMachining = isPuerta || isLateral || isFrenteCajon || isContrafrente || isLateralCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
 
     const vMax = Math.max(pw, pl, 300);
 
@@ -1218,11 +1223,11 @@ export function KitchenBlueprint() {
             <line x1={-padL * 0.50} y1={35} x2={15} y2={35} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
             <text x={-padL * 0.62} y={18 + fSizeSm * 0.35} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">35</text>
 
-            {/* Perforaciones de Tirador Paramétrico */}
+            {/* Perforaciones de Tirador Paramétrico (Omitido en verdulero ya que el calado ovalado actúa como tirador) */}
             {(() => {
               const hConf = kState.handleConfig;
               const isGola = kState.golaSystem !== 'none';
-              if (isGola || !hConf || hConf.model === 'none') return null;
+              if (isGola || !hConf || hConf.model === 'none' || isVeggieFront) return null;
 
               const isSingleHole = hConf.model === 'balin' || hConf.model === 'berlin';
               const isRearPestana = hConf.model === 'ce' || hConf.model === 'oslo';
@@ -1265,6 +1270,177 @@ export function KitchenBlueprint() {
                   <line x1={cx2} y1={cy - 24} x2={cx2} y2={cy} stroke="#2563eb" strokeWidth={strokeThin} />
                   <text x={pw / 2} y={cy - 22} fontSize={Math.round(fSizeSm * 0.85)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{hLen}</text>
                   <text x={pw / 2} y={cy + 18} fontSize={Math.round(fSizeSm * 0.8)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold">2x Ø4.5 Tirador ({hLen}mm)</text>
+                </g>
+              );
+            })()}
+
+            {/* Rebaje Ovalado Verdulero con Cotas y Tapacanto Interior */}
+            {isVeggieFront && (() => {
+              let cutW = Math.min(360, Math.max(220, Math.round(pw * 0.55)));
+              let cutH = 70;
+              const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+              if (noteMatch) {
+                cutW = parseInt(noteMatch[1], 10);
+                cutH = parseInt(noteMatch[2], 10);
+              }
+              const cutX = (pw - cutW) / 2;
+              const cutY = (pl - cutH) / 2;
+              const cutR = cutH / 2;
+              const cotaTopCutY = Math.max(12, cutY - 14);
+
+              return (
+                <g key="cnc-calado-frente-verdulero">
+                  {/* Calado Ovalado Stadium / Pasante */}
+                  <rect 
+                    x={cutX} 
+                    y={cutY} 
+                    width={cutW} 
+                    height={cutH} 
+                    rx={cutR} 
+                    ry={cutR} 
+                    fill="#e2e8f0" 
+                    stroke="#0f172a" 
+                    strokeWidth={strokeMed} 
+                  />
+                  {/* Indicador de Tapacanto Interior Rojo Discontinuo */}
+                  <rect 
+                    x={cutX + 1.5} 
+                    y={cutY + 1.5} 
+                    width={cutW - 3} 
+                    height={cutH - 3} 
+                    rx={cutR - 1.5} 
+                    ry={cutR - 1.5} 
+                    fill="none" 
+                    stroke="#e11d48" 
+                    strokeWidth={strokeThin} 
+                    strokeDasharray="4,2" 
+                  />
+
+                  {/* Ejes de Simetría */}
+                  <line x1={cutX - 16} y1={pl / 2} x2={cutX + cutW + 16} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+                  <line x1={pw / 2} y1={cutY - 12} x2={pw / 2} y2={cutY + cutH + 12} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+
+                  {/* Centros de radio R35 */}
+                  <line x1={cutX + cutR - 5} y1={pl / 2} x2={cutX + cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutR} y1={pl / 2 - 5} x2={cutX + cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR - 5} y1={pl / 2} x2={cutX + cutW - cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR} y1={pl / 2 - 5} x2={cutX + cutW - cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+
+                  {/* Cota de Ancho del Calado (cutW) */}
+                  <line x1={cutX} y1={cotaTopCutY} x2={cutX + cutW} y2={cotaTopCutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX} y1={cutY} x2={cutX} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX - 3} y1={cotaTopCutY + 3} x2={cutX + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW - 3} y1={cotaTopCutY + 3} x2={cutX + cutW + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={pw / 2} y={cotaTopCutY - 4} fontSize={Math.round(fSizeSm * 0.9)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{cutW}</text>
+
+                  {/* Cota de Altura del Calado (cutH) al costado derecho */}
+                  <line x1={cutX + cutW + 14} y1={cutY} x2={cutX + cutW + 14} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW + 18} y2={cutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY + cutH} x2={cutX + cutW + 18} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW + 11} y1={cutY + 3} x2={cutX + cutW + 17} y2={cutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW + 11} y1={cutY + cutH + 3} x2={cutX + cutW + 17} y2={cutY + cutH - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={cutX + cutW + 24} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.85)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">{cutH}</text>
+
+                  {/* Indicación de Radio R */}
+                  <text x={cutX + 10} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.8)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">R{cutR}</text>
+
+                  {/* Texto Técnico de Rotulado */}
+                  <text x={pw / 2} y={pl / 2 + 3} fontSize={Math.round(fSizeSm * 0.85)} fill="#0f172a" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">CALADO VERDULERO {cutW}x{cutH}mm</text>
+                  <text x={pw / 2} y={pl / 2 + fSizeSm * 0.85 + 4} fontSize={Math.round(fSizeSm * 0.65)} fill="#e11d48" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">(TAPACANTO INTERIOR)</text>
+                </g>
+              );
+            })()}
+          </g>
+        )}
+
+        {/* Contrafrentes de Cajón: Calado Estructural CNC en Verdulero */}
+        {isContrafrente && (
+          <g key="machining-contrafrente-cajon">
+            {/* Ejes de fijación tornillos a 15mm de bordes laterales */}
+            <line x1={15} y1={0} x2={15} y2={pl} stroke={COLOR_DETALLE} strokeWidth={strokeThin} strokeDasharray="4,2" />
+            <line x1={pw - 15} y1={0} x2={pw - 15} y2={pl} stroke={COLOR_DETALLE} strokeWidth={strokeThin} strokeDasharray="4,2" />
+            <circle cx={15} cy={Math.min(35, Math.round(pl * 0.25))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={15} cy={Math.max(pl - 35, Math.round(pl * 0.75))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={pw - 15} cy={Math.min(35, Math.round(pl * 0.25))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={pw - 15} cy={Math.max(pl - 35, Math.round(pl * 0.75))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+
+            {/* Cota horizontal 15mm */}
+            <line x1={0} y1={-padT * 0.38} x2={15} y2={-padT * 0.38} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={0} y1={-padT * 0.50} x2={0} y2={0} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={15} y1={-padT * 0.50} x2={15} y2={Math.min(35, Math.round(pl * 0.25))} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <text x={7.5} y={-padT * 0.38 - 6} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">15</text>
+
+            <line x1={pw - 15} y1={-padT * 0.38} x2={pw} y2={-padT * 0.38} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={pw - 15} y1={-padT * 0.50} x2={pw - 15} y2={Math.min(35, Math.round(pl * 0.25))} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={pw} y1={-padT * 0.50} x2={pw} y2={0} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <text x={pw - 7.5} y={-padT * 0.38 - 6} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">15</text>
+
+            {isVeggieContrafrente && (() => {
+              const baseFrontW = cab ? (cab.width * 10 - 6) : pw;
+              const baseVeggieW = Math.min(360, Math.max(220, Math.round(baseFrontW * 0.55)));
+              let cutW = baseVeggieW + 40;
+              let cutH = Math.min(pl - 10, 70 + 40);
+              const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+              if (noteMatch) {
+                cutW = parseInt(noteMatch[1], 10);
+                cutH = parseInt(noteMatch[2], 10);
+              }
+              if (cutW > pw - 20) cutW = pw - 20;
+              if (cutH > pl - 10) cutH = Math.max(30, pl - 10);
+
+              const cutX = (pw - cutW) / 2;
+              const cutY = (pl - cutH) / 2;
+              const cutR = cutH / 2;
+              const cotaTopCutY = Math.max(12, cutY - 14);
+
+              return (
+                <g key="cnc-calado-contrafrente-verdulero">
+                  {/* Calado Estructural Interior CNC Agrandado (+20mm contorno) */}
+                  <rect 
+                    x={cutX} 
+                    y={cutY} 
+                    width={cutW} 
+                    height={cutH} 
+                    rx={cutR} 
+                    ry={cutR} 
+                    fill="#e2e8f0" 
+                    stroke="#0f172a" 
+                    strokeWidth={strokeMed} 
+                  />
+
+                  {/* Ejes de Simetría */}
+                  <line x1={cutX - 16} y1={pl / 2} x2={cutX + cutW + 16} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+                  <line x1={pw / 2} y1={cutY - 12} x2={pw / 2} y2={cutY + cutH + 12} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+
+                  {/* Centros de radio */}
+                  <line x1={cutX + cutR - 5} y1={pl / 2} x2={cutX + cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutR} y1={pl / 2 - 5} x2={cutX + cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR - 5} y1={pl / 2} x2={cutX + cutW - cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR} y1={pl / 2 - 5} x2={cutX + cutW - cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+
+                  {/* Cota de Ancho del Calado (cutW) */}
+                  <line x1={cutX} y1={cotaTopCutY} x2={cutX + cutW} y2={cotaTopCutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX} y1={cutY} x2={cutX} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX - 3} y1={cotaTopCutY + 3} x2={cutX + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW - 3} y1={cotaTopCutY + 3} x2={cutX + cutW + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={pw / 2} y={cotaTopCutY - 4} fontSize={Math.round(fSizeSm * 0.9)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{cutW}</text>
+
+                  {/* Cota de Altura del Calado (cutH) al costado derecho */}
+                  <line x1={cutX + cutW + 14} y1={cutY} x2={cutX + cutW + 14} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW + 18} y2={cutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY + cutH} x2={cutX + cutW + 18} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW + 11} y1={cutY + 3} x2={cutX + cutW + 17} y2={cutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW + 11} y1={cutY + cutH + 3} x2={cutX + cutW + 17} y2={cutY + cutH - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={cutX + cutW + 24} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.85)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">{cutH}</text>
+
+                  {/* Indicación de Radio */}
+                  <text x={cutX + 10} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.8)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">R{cutR}</text>
+
+                  {/* Texto Técnico de Rotulado */}
+                  <text x={pw / 2} y={pl / 2 + 3} fontSize={Math.round(fSizeSm * 0.82)} fill="#0f172a" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">CALADO CNC CONTRAFRENTE {cutW}x{cutH}mm</text>
+                  <text x={pw / 2} y={pl / 2 + fSizeSm * 0.85 + 4} fontSize={Math.round(fSizeSm * 0.65)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">(+20mm P/ ATORNILLADO TRASERO)</text>
                 </g>
               );
             })()}

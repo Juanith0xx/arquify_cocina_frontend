@@ -35,6 +35,19 @@ export interface CncPocket {
   depth: number;
 }
 
+export interface CncCutout {
+  id: string;
+  type: 'oval_stadium' | 'rect';
+  name: string;
+  x: number; // mm from bottom-left corner
+  y: number; // mm from bottom-left corner
+  width: number; // mm
+  height: number; // mm
+  radius: number; // mm
+  depth: number; // mm
+  isThrough: boolean;
+}
+
 export interface CncMachinedPart {
   partCode: string;
   partName: string;
@@ -57,6 +70,7 @@ export interface CncMachinedPart {
   drills: CncDrill[];
   grooves: CncGroove[];
   pockets: CncPocket[];
+  cutouts: CncCutout[];
 }
 
 /**
@@ -71,12 +85,13 @@ export function calculateCncMachiningForPart(
   golaSystem: 'none' | 'aluminum' | 'black' = 'none',
   handleConfig?: KitchenHandleConfig
 ): CncMachinedPart {
-  const isDrawerFront = part.name.toLowerCase().includes('frente cajón') || part.name.toLowerCase().includes('frente');
+  const isContrafrente = part.name.toLowerCase().includes('contrafrente');
+  const isDrawerFront = (part.name.toLowerCase().includes('frente cajón') || part.name.toLowerCase().includes('frente')) && !isContrafrente;
   const isDrawerSide = part.name.toLowerCase().includes('lateral cajón');
 
-  // En despiece industrial, los frentes de cajón tienen su longitud en part.length y altura en part.width.
+  // En despiece industrial, los frentes y contrafrentes de cajón tienen su longitud en part.length y altura en part.width.
   // Para CNC y orientación horizontal de mecanizado: pw = ancho frontal (X), pl = alto frontal (Y)
-  const isFrenteHoriz = isDrawerFront && part.length > part.width;
+  const isFrenteHoriz = (isDrawerFront || isContrafrente) && part.length > part.width;
   const pw = Math.round(isFrenteHoriz ? part.length : part.width);   // mm
   const pl = Math.round(isFrenteHoriz ? part.width : part.length);   // mm
   const th = Math.round(part.thickness);
@@ -84,6 +99,11 @@ export function calculateCncMachiningForPart(
   const drills: CncDrill[] = [];
   const grooves: CncGroove[] = [];
   const pockets: CncPocket[] = [];
+  const cutouts: CncCutout[] = [];
+
+  const isVeggieCab = cab ? (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') : false;
+  const isVeggieFront = isDrawerFront && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
+  const isVeggieContrafrente = isContrafrente && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('calado ovalado') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
 
   const isLateral = part.name.toLowerCase().includes('lateral');
   const isPiso = part.name.toLowerCase().includes('piso') || part.name.toLowerCase().includes('base');
@@ -391,8 +411,8 @@ export function calculateCncMachiningForPart(
       });
     });
 
-    // Perforaciones para Tirador en Frente de Cajón
-    if (golaSystem === 'none' && handleConfig && handleConfig.model !== 'none') {
+    // Perforaciones para Tirador en Frente de Cajón (Omitido en verdulero ya que la abertura ovalada actúa como tirador)
+    if (!isVeggieFront && golaSystem === 'none' && handleConfig && handleConfig.model !== 'none') {
       const isSingleHole = handleConfig.model === 'balin' || handleConfig.model === 'berlin';
       const isRearPestana = handleConfig.model === 'ce' || handleConfig.model === 'oslo';
       const cy = pl / 2;
@@ -428,6 +448,57 @@ export function calculateCncMachiningForPart(
         }
       }
     }
+
+    // Calado Ovalado Verdulero Pasante CNC en Frente
+    if (isVeggieFront) {
+      let cutW = Math.min(360, Math.max(220, Math.round(pw * 0.55)));
+      let cutH = 70;
+      const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+      if (noteMatch) {
+        cutW = parseInt(noteMatch[1], 10);
+        cutH = parseInt(noteMatch[2], 10);
+      }
+      cutouts.push({
+        id: 'cut-veggie-front',
+        type: 'oval_stadium',
+        name: `Calado Ovalado Verdulero ${cutW}x${cutH}mm`,
+        x: (pw - cutW) / 2,
+        y: (pl - cutH) / 2,
+        width: cutW,
+        height: cutH,
+        radius: cutH / 2,
+        depth: th,
+        isThrough: true
+      });
+    }
+  }
+
+  // 5. CONTRAFRENTES DE CAJÓN (Calado estructural ampliado para atornillado desde atrás en verdulero)
+  if (isContrafrente && isVeggieContrafrente) {
+    const baseFrontW = cab ? (cab.width * 10 - 6) : pw;
+    const baseVeggieW = Math.min(360, Math.max(220, Math.round(baseFrontW * 0.55)));
+    let cutW = baseVeggieW + 40;
+    let cutH = Math.min(pl - 10, 70 + 40);
+    const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+    if (noteMatch) {
+      cutW = parseInt(noteMatch[1], 10);
+      cutH = parseInt(noteMatch[2], 10);
+    }
+    if (cutW > pw - 20) cutW = pw - 20;
+    if (cutH > pl - 10) cutH = Math.max(30, pl - 10);
+
+    cutouts.push({
+      id: 'cut-veggie-contrafrente',
+      type: 'oval_stadium',
+      name: `Calado CNC Contrafrente ${cutW}x${cutH}mm`,
+      x: (pw - cutW) / 2,
+      y: (pl - cutH) / 2,
+      width: cutW,
+      height: cutH,
+      radius: cutH / 2,
+      depth: th,
+      isThrough: true
+    });
   }
 
   // Identificador de pieza estandarizado
@@ -455,6 +526,7 @@ export function calculateCncMachiningForPart(
     notes: part.notes || '',
     drills,
     grooves,
-    pockets
+    pockets,
+    cutouts
   };
 }

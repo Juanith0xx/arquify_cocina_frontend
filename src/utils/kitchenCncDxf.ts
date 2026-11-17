@@ -21,10 +21,12 @@ export function generatePartDxf(part: CncMachinedPart): string {
 
   // 2. TABLES SECTION (LAYERS DEFINITION WITH CNC COLORS)
   dxf += '0\nSECTION\n2\nTABLES\n';
-  dxf += '0\nTABLE\n2\nLAYER\n70\n9\n';
+  dxf += '0\nTABLE\n2\nLAYER\n70\n10\n';
 
   // Layer CUT_EXTERIOR (Color 7: Blanco / Corte perimetral con fresa)
   dxf += '0\nLAYER\n2\nCUT_EXTERIOR\n70\n0\n62\n7\n6\nCONTINUOUS\n';
+  // Layer CUT_INTERIOR (Color 7: Blanco / Calados y vaciados interiores pasantes con fresa)
+  dxf += '0\nLAYER\n2\nCUT_INTERIOR\n70\n0\n62\n7\n6\nCONTINUOUS\n';
   // Layer DRILL_FACE_35 (Color 1: Rojo / Cazoletas de bisagra Ø35mm)
   dxf += '0\nLAYER\n2\nDRILL_FACE_35\n70\n0\n62\n1\n6\nCONTINUOUS\n';
   // Layer DRILL_FACE_15 (Color 3: Verde / Cajas Minifix Ø15mm)
@@ -127,7 +129,82 @@ export function generatePartDxf(part: CncMachinedPart): string {
     });
   });
 
-  // 3.5 Textos informativos de identificación para operador CNC
+  // 3.5 Calados y Vaciados Interiores CNC (CUT_INTERIOR - ej. Calado Ovalado Verdulero)
+  const cutoutsToRender = part.cutouts && part.cutouts.length > 0 ? part.cutouts : (() => {
+    // Respaldo de seguridad automática si no vinieran definidos en cutouts
+    const isVeggie = part.partName.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('calado ovalado') || part.notes?.toLowerCase().includes('perforación verdulero');
+    if (!isVeggie) return [];
+    const isContra = part.partName.toLowerCase().includes('contrafrente');
+    const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+    let cW = noteMatch ? parseInt(noteMatch[1], 10) : (isContra ? Math.min(w - 20, Math.round(w * 0.55) + 40) : Math.min(360, Math.max(220, Math.round(w * 0.55))));
+    let cH = noteMatch ? parseInt(noteMatch[2], 10) : (isContra ? Math.min(l - 10, 110) : 70);
+    return [{
+      id: 'cut-veggie-auto',
+      type: 'oval_stadium' as const,
+      name: isContra ? `Calado CNC Contrafrente ${cW}x${cH}mm` : `Calado Ovalado Verdulero ${cW}x${cH}mm`,
+      x: (w - cW) / 2,
+      y: (l - cH) / 2,
+      width: cW,
+      height: cH,
+      radius: cH / 2,
+      depth: part.thickness,
+      isThrough: true
+    }];
+  })();
+
+  cutoutsToRender.forEach(cut => {
+    if (cut.type === 'oval_stadium') {
+      const r = cut.radius;
+      const cxLeft = cut.x + r;
+      const cxRight = cut.x + cut.width - r;
+      const cy = cut.y + r;
+
+      // 1. Línea recta superior
+      dxf += '0\nLINE\n8\nCUT_INTERIOR\n';
+      dxf += `10\n${cxLeft.toFixed(3)}\n20\n${(cut.y + cut.height).toFixed(3)}\n30\n0.0\n`;
+      dxf += `11\n${cxRight.toFixed(3)}\n21\n${(cut.y + cut.height).toFixed(3)}\n31\n0.0\n`;
+
+      // 2. Arco derecho (semicírculo: desde 270° a 90° en sentido antihorario pasando por 0°)
+      dxf += '0\nARC\n8\nCUT_INTERIOR\n';
+      dxf += `10\n${cxRight.toFixed(3)}\n20\n${cy.toFixed(3)}\n30\n0.0\n`;
+      dxf += `40\n${r.toFixed(3)}\n`;
+      dxf += '50\n270.0\n51\n90.0\n';
+
+      // 3. Línea recta inferior
+      dxf += '0\nLINE\n8\nCUT_INTERIOR\n';
+      dxf += `10\n${cxRight.toFixed(3)}\n20\n${cut.y.toFixed(3)}\n30\n0.0\n`;
+      dxf += `11\n${cxLeft.toFixed(3)}\n21\n${cut.y.toFixed(3)}\n31\n0.0\n`;
+
+      // 4. Arco izquierdo (semicírculo: desde 90° a 270° en sentido antihorario pasando por 180°)
+      dxf += '0\nARC\n8\nCUT_INTERIOR\n';
+      dxf += `10\n${cxLeft.toFixed(3)}\n20\n${cy.toFixed(3)}\n30\n0.0\n`;
+      dxf += `40\n${r.toFixed(3)}\n`;
+      dxf += '50\n90.0\n51\n270.0\n';
+
+      // Ejes de simetría (TEXT_INFO)
+      dxf += '0\nLINE\n8\nTEXT_INFO\n';
+      dxf += `10\n${(cut.x - 10).toFixed(3)}\n20\n${cy.toFixed(3)}\n30\n0.0\n`;
+      dxf += `11\n${(cut.x + cut.width + 10).toFixed(3)}\n21\n${cy.toFixed(3)}\n31\n0.0\n`;
+
+      dxf += '0\nLINE\n8\nTEXT_INFO\n';
+      dxf += `10\n${(w / 2).toFixed(3)}\n20\n${(cut.y - 10).toFixed(3)}\n30\n0.0\n`;
+      dxf += `11\n${(w / 2).toFixed(3)}\n21\n${(cut.y + cut.height + 10).toFixed(3)}\n31\n0.0\n`;
+    } else if (cut.type === 'rect') {
+      const rCorners = [
+        { x1: cut.x, y1: cut.y, x2: cut.x + cut.width, y2: cut.y },
+        { x1: cut.x + cut.width, y1: cut.y, x2: cut.x + cut.width, y2: cut.y + cut.height },
+        { x1: cut.x + cut.width, y1: cut.y + cut.height, x2: cut.x, y2: cut.y + cut.height },
+        { x1: cut.x, y1: cut.y + cut.height, x2: cut.x, y2: cut.y },
+      ];
+      rCorners.forEach(c => {
+        dxf += '0\nLINE\n8\nCUT_INTERIOR\n';
+        dxf += `10\n${c.x1.toFixed(3)}\n20\n${c.y1.toFixed(3)}\n30\n0.0\n`;
+        dxf += `11\n${c.x2.toFixed(3)}\n21\n${c.y2.toFixed(3)}\n31\n0.0\n`;
+      });
+    }
+  });
+
+  // 3.6 Textos informativos de identificación para operador CNC
   dxf += '0\nTEXT\n8\nTEXT_INFO\n';
   dxf += `10\n${Math.round(w / 2)}\n20\n${Math.round(l / 2)}\n30\n0.0\n`;
   dxf += '40\n18.0\n'; // Altura de texto
