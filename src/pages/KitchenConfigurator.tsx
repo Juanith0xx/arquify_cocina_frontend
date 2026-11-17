@@ -21,7 +21,7 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
@@ -237,6 +237,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const [isStudioRenderModalOpen, setIsStudioRenderModalOpen] = useState(false);
   const [isExportingLabels, setIsExportingLabels] = useState(false);
   const [leftTab, setLeftTab] = useState<'modules' | 'placed'>('modules');
+  const [moduleSearchQuery, setModuleSearchQuery] = useState('');
   const [rightTab, setRightTab] = useState<'module' | 'materials' | 'engineering' | 'mep' | 'decoration'>('module');
   const [activeMobileTab, setActiveMobileTab] = useState<'catalog' | 'module' | 'materials' | 'engineering' | 'mep' | 'scene' | 'decoration'>('catalog');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1040,31 +1041,18 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       <span className={`text-[9px] font-normal font-mono ${isLight ? 'text-amber-800' : 'text-zinc-400'}`}>{currentAreaM2.toFixed(1)} m² • Muros & Cotas</span>
                     </div>
                   </button>
-
-                  <button
+                  <ToolButton
+                    isLight={isLight}
+                    active={toolMode === 'draw_wall'}
                     onClick={() => {
                       if (activeCabinetId) setActiveCabinet(null);
                       if (activeArchElementId) setActiveArchElement(null);
-                      setIsCountertopModalOpen(true);
+                      setToolMode('draw_wall');
+                      setViewMode('2d');
                     }}
-                    className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
-                      countertopConfig.enabled
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-xs'
-                        : isLight
-                          ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                    }`}
-                  >
-                    <Sparkles size={15} className="text-amber-400 shrink-0" />
-                    <div className="flex flex-col text-left">
-                      <div className="flex items-center gap-1.5">
-                        <span>Cubiertas</span>
-                        {countertopConfig.enabled && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
+                    icon={<PenTool size={14} />}
+                    label="Dibujar Tramo Muro"
+                  />
 
                   <button
                     onClick={() => {
@@ -1072,42 +1060,15 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       if (activeArchElementId) setActiveArchElement(null);
                       setIsNanoBananaModalOpen(true);
                     }}
-                    className="flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-xs shadow-orange-500/10"
+                    className="flex items-center justify-between p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border border-orange-500/30 cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-xs shadow-orange-500/20"
+                    title="Generar render fotorrealista con IA"
                   >
-                    <Camera size={15} className="shrink-0" />
-                    <div className="flex flex-col text-left">
-                      <div className="flex items-center gap-1.5 font-black">
-                        <span>Render NanoBanana</span>
-                        <span className="text-[9px] px-1 py-0.1 bg-black/20 text-black rounded font-mono uppercase">AI</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Camera size={14} className="shrink-0 text-black" />
+                      <span className="font-black">Render NanoBanana</span>
                     </div>
+                    <span className="text-[9px] px-1.5 py-0.5 bg-black/20 text-black rounded font-mono font-bold uppercase">AI</span>
                   </button>
-
-                  {isSuperAdmin && (
-                    <button
-                      onClick={() => {
-                        if (activeCabinetId) setActiveCabinet(null);
-                        if (activeArchElementId) setActiveArchElement(null);
-                        setIsStudioRenderModalOpen(true);
-                      }}
-                      className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
-                        isLight
-                          ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
-                          : 'bg-zinc-800/90 hover:bg-zinc-800 border-white/10 text-white'
-                      }`}
-                      title="Generar render fotográfico nítido en alta resolución (FHD, 2K, 4K) usando Three.js puro sin IA"
-                    >
-                      <Camera size={15} className="text-orange-500 shrink-0" />
-                      <div className="flex flex-col text-left">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <span>Render Estudio 3D</span>
-                          <span className="text-[9px] px-1 py-0.1 bg-emerald-500/20 text-emerald-400 rounded font-mono uppercase border border-emerald-500/30">GPU</span>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-
-                  <ToolButton isLight={isLight} active={toolMode === 'draw_wall'} onClick={() => { if (activeCabinetId) setActiveCabinet(null); if (activeArchElementId) setActiveArchElement(null); setToolMode('draw_wall'); setViewMode('2d'); }} icon={<PenTool size={15}/>} label="Dibujar Tramo Muro" />
                </div>
             </div>
 
@@ -1145,167 +1106,240 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
               >
                 <ListOrdered size={13} />
                 <span>Escena</span>
+                {cabinets.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                    leftTab === 'placed'
+                      ? 'bg-black/25 text-black'
+                      : isLight
+                        ? 'bg-orange-100 text-orange-800'
+                        : 'bg-orange-500/20 text-orange-400'
+                  }`}>
+                    {cabinets.length}
+                  </span>
+                )}
               </button>
             </div>
 
-            <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+            <div className="p-3 lg:p-4 flex-1 overflow-y-auto custom-scrollbar">
                {leftTab === 'modules' ? (
                  <div className="flex flex-col gap-2">
-                    {/* 1. Bases */}
-                    <ModuleCategoryAccordion
-                      id="bases"
-                      title="1. Bases"
-                      count={10}
-                      icon={<Box size={14} />}
-                      isOpen={!!moduleAccordions.bases}
-                      onToggle={() => toggleModuleAccordion('bases')}
-                      hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_4_drawers', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} icon={<Box size={14}/>} label="1 Puerta" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} icon={<Box size={14}/>} label="2 Puertas" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} icon={<Box size={14}/>} label="4 Cajones" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} icon={<Box size={14}/>} label="2 Olleros" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_u_drawer'} onClick={() => handleInsertModule('place_base_sink_u_drawer')} icon={<Box size={14}/>} label="Fregadero Cajón en U" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} icon={<Box size={14}/>} label="Especiero" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_wine_rack'} onClick={() => handleInsertModule('place_base_wine_rack')} icon={<Wine size={14}/>} label="Botellero Base" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_blind'} onClick={() => handleInsertModule('place_base_corner_blind')} icon={<Box size={14}/>} label="Esquinero Ciego" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_l'} onClick={() => handleInsertModule('place_base_corner_l')} icon={<Box size={14}/>} label="Esquinero en L (90x90)" />
-                    </ModuleCategoryAccordion>
+                   {/* Buscador Rápido de Módulos */}
+                   <div className="relative mb-0.5">
+                     <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${isLight ? 'text-slate-400' : 'text-zinc-500'}`} />
+                     <input
+                       type="text"
+                       value={moduleSearchQuery}
+                       onChange={(e) => setModuleSearchQuery(e.target.value)}
+                       placeholder="Buscar módulo..."
+                       className={`w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border outline-none transition-all ${
+                         isLight
+                           ? 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-orange-500 focus:bg-white'
+                           : 'bg-zinc-800/60 border-white/10 text-zinc-100 placeholder-zinc-500 focus:border-orange-500 focus:bg-zinc-800'
+                       }`}
+                     />
+                     {moduleSearchQuery && (
+                       <button
+                         onClick={() => setModuleSearchQuery('')}
+                         className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-xs ${isLight ? 'text-slate-400 hover:text-slate-600' : 'text-zinc-400 hover:text-white'}`}
+                         title="Limpiar búsqueda"
+                       >
+                         <X size={12} />
+                       </button>
+                     )}
+                   </div>
 
-                    {/* 2. Torres & Despensas */}
-                    <ModuleCategoryAccordion
-                      id="torres"
-                      title="2. Torres & Despensas"
-                      count={10}
-                      icon={<LayoutGrid size={14} />}
-                      isOpen={!!moduleAccordions.torres}
-                      onToggle={() => toggleModuleAccordion('torres')}
-                      hasActiveTool={['place_tall_1_door', 'place_tall_split_2_doors', 'place_tall_oven_micro', 'place_tall_oven_vent', 'place_tall_inner_drawers', 'place_tall_microwave_niche', 'place_tall_open', 'place_tall_wine_rack', 'place_tall_2_doors', 'place_tall_terminal_shelves'].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_1_door'} onClick={() => handleInsertModule('place_tall_1_door')} icon={<LayoutGrid size={14}/>} label="1 Pta Larga (Repisas)" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_split_2_doors'} onClick={() => handleInsertModule('place_tall_split_2_doors')} icon={<LayoutGrid size={14}/>} label="2 Ptas (Línea Base + Alta)" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_micro'} onClick={() => handleInsertModule('place_tall_oven_micro')} icon={<LayoutGrid size={14}/>} label="Torre Horno + Micro Empotrado" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_vent'} onClick={() => handleInsertModule('place_tall_oven_vent')} icon={<LayoutGrid size={14}/>} label="Torre Hornos Vent. Técnica" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_inner_drawers'} onClick={() => handleInsertModule('place_tall_inner_drawers')} icon={<LayoutGrid size={14}/>} label="Despensa Cajones Interiores" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_microwave_niche'} onClick={() => handleInsertModule('place_tall_microwave_niche')} icon={<LayoutGrid size={14}/>} label="Nicho Micro Portátil" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_open'} onClick={() => handleInsertModule('place_tall_open')} icon={<LayoutGrid size={14}/>} label="Repisas a la Vista" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_terminal_shelves'} onClick={() => handleInsertModule('place_tall_terminal_shelves')} icon={<LayoutGrid size={14}/>} label="Torre Repisas Terminales" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_wine_rack'} onClick={() => handleInsertModule('place_tall_wine_rack')} icon={<Wine size={14}/>} label="Botellero Despensa" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_tall_2_doors'} onClick={() => handleInsertModule('place_tall_2_doors')} icon={<LayoutGrid size={14}/>} label="Despensa 2 Puertas" />
-                    </ModuleCategoryAccordion>
+                   {(() => {
+                     const searchQ = moduleSearchQuery.trim().toLowerCase();
+                     const matchesQ = (label: string) => !searchQ || label.toLowerCase().includes(searchQ);
+                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', '4 cajones', '2 olleros', 'fregadero', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
+                     const torresHasMatch = !searchQ || ['1 pta larga', '2 ptas', 'torre horno', 'torre hornos', 'despensa cajones', 'nicho micro', 'repisas a la vista', 'torre repisas', 'botellero despensa', 'despensa 2 puertas', 'torres'].some(s => s.includes(searchQ));
+                     const muralesHasMatch = !searchQ || ['aéreo 1 puerta', 'aéreo 2 puertas', 'pta elevable', 'doble pta', 'nicho micro', 'repisas', 'esquinero', 'botellero', 'new flow 60', 'murales'].some(s => s.includes(searchQ));
+                     const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
+                     const closetsHasMatch = !searchQ || ['barra + maletero', 'mixto', 'lencero', 'cajonera', 'clóset 2 puertas', 'walk-in', 'cajones ocultos', 'closet', 'ropéro'].some(s => s.includes(searchQ));
+                     const archHasMatch = !searchQ || ['puerta', 'ventana', 'pilar', 'muro corto', 'arquitectónicos'].some(s => s.includes(searchQ));
+                     const decoHasMatch = !searchQ || ['cocina fdv 90', 'refrigerador sbs', 'campana fdv conic 90', 'planta interior', 'lavavajillas', 'decoración'].some(s => s.includes(searchQ));
+                     const hasAnyMatch = basesHasMatch || torresHasMatch || muralesHasMatch || islaHasMatch || closetsHasMatch || archHasMatch || decoHasMatch;
 
-                    {/* 3. Murales & Aéreos */}
-                    <ModuleCategoryAccordion
-                      id="murales"
-                      title="3. Murales & Aéreos"
-                      count={9}
-                      icon={<Square size={14} />}
-                      isOpen={!!moduleAccordions.murales}
-                      onToggle={() => toggleModuleAccordion('murales')}
-                      hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow'].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_2_doors'} onClick={() => handleInsertModule('place_wall_2_doors')} icon={<Square size={14}/>} label="2. Aéreo 2 Puertas" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up'} onClick={() => handleInsertModule('place_wall_lift_up')} icon={<Square size={14}/>} label="3. Pta Elevable Aventos" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up_double'} onClick={() => handleInsertModule('place_wall_lift_up_double')} icon={<Square size={14}/>} label="4. Doble Pta Elevable" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_microwave_niche'} onClick={() => handleInsertModule('place_wall_microwave_niche')} icon={<Square size={14}/>} label="5. Nicho Micro + Pta Sup" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_open'} onClick={() => handleInsertModule('place_wall_open')} icon={<Square size={14}/>} label="6. Repisas a la Vista" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} icon={<Wind size={14}/>} label="9. New Flow 60" />
-                    </ModuleCategoryAccordion>
+                     return (
+                       <>
+                         {searchQ && !hasAnyMatch && (
+                           <div className={`p-4 rounded-xl border text-center text-xs ${isLight ? 'bg-slate-50 border-slate-200 text-slate-500' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+                             No se encontraron módulos para "{moduleSearchQuery}"
+                           </div>
+                         )}
 
-                    {/* 4. Isla */}
-                    <ModuleCategoryAccordion
-                      id="isla"
-                      title="4. Muebles Isla"
-                      count={6}
-                      icon={<Layers size={14} />}
-                      isOpen={!!moduleAccordions.isla}
-                      onToggle={() => toggleModuleAccordion('isla')}
-                      hasActiveTool={[
-                        'place_island',
-                        'place_island_4_drawers',
-                        'place_island_2_drawers_1_pot',
-                        'place_island_1_door',
-                        'place_island_2_doors',
-                        'place_island_wine_rack'
-                      ].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island'} onClick={() => handleInsertModule('place_island')} icon={<Box size={14}/>} label="Isla 2 Olleros" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island_4_drawers'} onClick={() => handleInsertModule('place_island_4_drawers')} icon={<LayoutGrid size={14}/>} label="Isla 4 Cajones" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island_2_drawers_1_pot'} onClick={() => handleInsertModule('place_island_2_drawers_1_pot')} icon={<LayoutGrid size={14}/>} label="Isla 2 Caj. + 1 Ollero" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island_1_door'} onClick={() => handleInsertModule('place_island_1_door')} icon={<Square size={14}/>} label="Isla 1 Puerta" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island_2_doors'} onClick={() => handleInsertModule('place_island_2_doors')} icon={<Columns size={14}/>} label="Isla 2 Puertas" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_island_wine_rack'} onClick={() => handleInsertModule('place_island_wine_rack')} icon={<Wine size={14}/>} label="Botellero Isla" />
-                    </ModuleCategoryAccordion>
+                         {/* 1. Bases */}
+                         {basesHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="bases"
+                             title="1. Bases"
+                             count={10}
+                             icon={<Box size={14} />}
+                             isOpen={Boolean(moduleAccordions.bases || searchQ)}
+                             onToggle={() => toggleModuleAccordion('bases')}
+                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_4_drawers', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} icon={<Box size={14}/>} label="1 Puerta" />}
+                             {matchesQ('1 Pta + 1 Cajón') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />}
+                             {matchesQ('2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} icon={<Box size={14}/>} label="2 Puertas" />}
+                             {matchesQ('4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} icon={<Box size={14}/>} label="4 Cajones" />}
+                             {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} icon={<Box size={14}/>} label="2 Olleros" />}
+                             {matchesQ('Fregadero Cajón en U') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_u_drawer'} onClick={() => handleInsertModule('place_base_sink_u_drawer')} icon={<Box size={14}/>} label="Fregadero Cajón en U" />}
+                             {matchesQ('Especiero') && <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} icon={<Box size={14}/>} label="Especiero" />}
+                             {matchesQ('Botellero Base') && <ToolButton isLight={isLight} active={toolMode === 'place_base_wine_rack'} onClick={() => handleInsertModule('place_base_wine_rack')} icon={<Wine size={14}/>} label="Botellero Base" />}
+                             {matchesQ('Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_blind'} onClick={() => handleInsertModule('place_base_corner_blind')} icon={<Box size={14}/>} label="Esquinero Ciego" />}
+                             {matchesQ('Esquinero en L (90x90)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_l'} onClick={() => handleInsertModule('place_base_corner_l')} icon={<Box size={14}/>} label="Esquinero en L (90x90)" />}
+                           </ModuleCategoryAccordion>
+                         )}
 
-                    {/* 5. Clósets & Roperos */}
-                    <ModuleCategoryAccordion
-                      id="closets"
-                      title="5. Clósets & Roperos"
-                      count={7}
-                      icon={<Box size={14} />}
-                      isOpen={!!moduleAccordions.closets}
-                      onToggle={() => toggleModuleAccordion('closets')}
-                      hasActiveTool={[
-                        'place_closet_hanger',
-                        'place_closet_mixed',
-                        'place_closet_shelves',
-                        'place_closet_drawers',
-                        'place_closet_2_doors',
-                        'place_closet_walkin',
-                        'place_closet_inner_drawers'
-                      ].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_hanger'} onClick={() => handleInsertModule('place_closet_hanger')} icon={<Box size={14}/>} label="1. Barra + Maletero" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_mixed'} onClick={() => handleInsertModule('place_closet_mixed')} icon={<LayoutGrid size={14}/>} label="2. Mixto (Barra + Cajones)" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_shelves'} onClick={() => handleInsertModule('place_closet_shelves')} icon={<Square size={14}/>} label="3. Lencero (Repisas)" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_drawers'} onClick={() => handleInsertModule('place_closet_drawers')} icon={<LayoutGrid size={14}/>} label="4. Cajonera 4 Cajones" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_2_doors'} onClick={() => handleInsertModule('place_closet_2_doors')} icon={<Columns size={14}/>} label="5. Clóset 2 Puertas" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_walkin'} onClick={() => handleInsertModule('place_closet_walkin')} icon={<Layers size={14}/>} label="6. Walk-in Abierto" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_closet_inner_drawers'} onClick={() => handleInsertModule('place_closet_inner_drawers')} icon={<LayoutGrid size={14}/>} label="7. Cajones Ocultos (2 Ptas)" />
-                    </ModuleCategoryAccordion>
+                         {/* 2. Torres & Despensas */}
+                         {torresHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="torres"
+                             title="2. Torres & Despensas"
+                             count={10}
+                             icon={<LayoutGrid size={14} />}
+                             isOpen={Boolean(moduleAccordions.torres || searchQ)}
+                             onToggle={() => toggleModuleAccordion('torres')}
+                             hasActiveTool={['place_tall_1_door', 'place_tall_split_2_doors', 'place_tall_oven_micro', 'place_tall_oven_vent', 'place_tall_inner_drawers', 'place_tall_microwave_niche', 'place_tall_open', 'place_tall_wine_rack', 'place_tall_2_doors', 'place_tall_terminal_shelves'].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('1 Pta Larga (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_1_door'} onClick={() => handleInsertModule('place_tall_1_door')} icon={<LayoutGrid size={14}/>} label="1 Pta Larga (Repisas)" />}
+                             {matchesQ('2 Ptas (Línea Base + Alta)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_split_2_doors'} onClick={() => handleInsertModule('place_tall_split_2_doors')} icon={<LayoutGrid size={14}/>} label="2 Ptas (Línea Base + Alta)" />}
+                             {matchesQ('Torre Horno + Micro Empotrado') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_micro'} onClick={() => handleInsertModule('place_tall_oven_micro')} icon={<LayoutGrid size={14}/>} label="Torre Horno + Micro Empotrado" />}
+                             {matchesQ('Torre Hornos Vent. Técnica') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_vent'} onClick={() => handleInsertModule('place_tall_oven_vent')} icon={<LayoutGrid size={14}/>} label="Torre Hornos Vent. Técnica" />}
+                             {matchesQ('Despensa Cajones Interiores') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_inner_drawers'} onClick={() => handleInsertModule('place_tall_inner_drawers')} icon={<LayoutGrid size={14}/>} label="Despensa Cajones Interiores" />}
+                             {matchesQ('Nicho Micro Portátil') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_microwave_niche'} onClick={() => handleInsertModule('place_tall_microwave_niche')} icon={<LayoutGrid size={14}/>} label="Nicho Micro Portátil" />}
+                             {matchesQ('Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_open'} onClick={() => handleInsertModule('place_tall_open')} icon={<LayoutGrid size={14}/>} label="Repisas a la Vista" />}
+                             {matchesQ('Torre Repisas Terminales') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_terminal_shelves'} onClick={() => handleInsertModule('place_tall_terminal_shelves')} icon={<LayoutGrid size={14}/>} label="Torre Repisas Terminales" />}
+                             {matchesQ('Botellero Despensa') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_wine_rack'} onClick={() => handleInsertModule('place_tall_wine_rack')} icon={<Wine size={14}/>} label="Botellero Despensa" />}
+                             {matchesQ('Despensa 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_2_doors'} onClick={() => handleInsertModule('place_tall_2_doors')} icon={<LayoutGrid size={14}/>} label="Despensa 2 Puertas" />}
+                           </ModuleCategoryAccordion>
+                         )}
 
-                    {/* 6. Elementos Arquitectónicos */}
-                    <ModuleCategoryAccordion
-                      id="arch"
-                      title="6. Elementos Arquitectónicos"
-                      count={3}
-                      icon={<Columns size={14} />}
-                      isOpen={!!moduleAccordions.arch}
-                      onToggle={() => toggleModuleAccordion('arch')}
-                      hasActiveTool={['place_arch_door', 'place_arch_window', 'place_arch_pillar'].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_arch_door'} onClick={() => { setToolMode('place_arch_door'); setViewMode('3d'); }} icon={<Columns size={14}/>} label="Puerta" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_arch_window'} onClick={() => { setToolMode('place_arch_window'); setViewMode('3d'); }} icon={<Square size={14}/>} label="Ventana" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_arch_pillar'} onClick={() => { setToolMode('place_arch_pillar'); setViewMode('3d'); }} icon={<Maximize2 size={14}/>} label="Pilar / Muro Corto" />
-                    </ModuleCategoryAccordion>
+                         {/* 3. Murales & Aéreos */}
+                         {muralesHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="murales"
+                             title="3. Murales & Aéreos"
+                             count={9}
+                             icon={<Square size={14} />}
+                             isOpen={Boolean(moduleAccordions.murales || searchQ)}
+                             onToggle={() => toggleModuleAccordion('murales')}
+                             hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow'].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('1. Aéreo 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />}
+                             {matchesQ('2. Aéreo 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_2_doors'} onClick={() => handleInsertModule('place_wall_2_doors')} icon={<Square size={14}/>} label="2. Aéreo 2 Puertas" />}
+                             {matchesQ('3. Pta Elevable Aventos') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up'} onClick={() => handleInsertModule('place_wall_lift_up')} icon={<Square size={14}/>} label="3. Pta Elevable Aventos" />}
+                             {matchesQ('4. Doble Pta Elevable') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up_double'} onClick={() => handleInsertModule('place_wall_lift_up_double')} icon={<Square size={14}/>} label="4. Doble Pta Elevable" />}
+                             {matchesQ('5. Nicho Micro + Pta Sup') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_microwave_niche'} onClick={() => handleInsertModule('place_wall_microwave_niche')} icon={<Square size={14}/>} label="5. Nicho Micro + Pta Sup" />}
+                             {matchesQ('6. Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_open'} onClick={() => handleInsertModule('place_wall_open')} icon={<Square size={14}/>} label="6. Repisas a la Vista" />}
+                             {matchesQ('7. Aéreo Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />}
+                             {matchesQ('8. Botellero Aéreo') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />}
+                             {matchesQ('9. New Flow 60') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} icon={<Wind size={14}/>} label="9. New Flow 60" />}
+                           </ModuleCategoryAccordion>
+                         )}
 
-                    {/* 7. Decoración */}
-                    <ModuleCategoryAccordion
-                      id="deco"
-                      title="7. Decoración"
-                      count={5}
-                      icon={<Sparkles size={14} />}
-                      isOpen={!!moduleAccordions.deco}
-                      onToggle={() => toggleModuleAccordion('deco')}
-                      hasActiveTool={['place_deco_stove', 'place_deco_fridge', 'place_deco_hood', 'place_deco_plant', 'place_deco_dishwasher'].includes(toolMode)}
-                      isLight={isLight}
-                    >
-                      <ToolButton isLight={isLight} active={toolMode === 'place_deco_stove'} onClick={() => handleInsertModule('place_deco_stove')} icon={<Flame size={14}/>} label="1. Cocina FDV 90" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_deco_fridge'} onClick={() => handleInsertModule('place_deco_fridge')} icon={<Refrigerator size={14}/>} label="2. Refrigerador SBS" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_deco_hood'} onClick={() => handleInsertModule('place_deco_hood')} icon={<Sparkles size={14}/>} label="3. Campana FDV Conic 90" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_deco_plant'} onClick={() => handleInsertModule('place_deco_plant')} icon={<Flower2 size={14}/>} label="4. Planta Interior" />
-                      <ToolButton isLight={isLight} active={toolMode === 'place_deco_dishwasher'} onClick={() => handleInsertModule('place_deco_dishwasher')} icon={<Utensils size={14}/>} label="5. Lavavajillas FDV 12C" />
-                    </ModuleCategoryAccordion>
+                         {/* 4. Isla */}
+                         {islaHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="isla"
+                             title="4. Muebles Isla"
+                             count={6}
+                             icon={<Layers size={14} />}
+                             isOpen={Boolean(moduleAccordions.isla || searchQ)}
+                             onToggle={() => toggleModuleAccordion('isla')}
+                             hasActiveTool={[
+                               'place_island',
+                               'place_island_4_drawers',
+                               'place_island_2_drawers_1_pot',
+                               'place_island_1_door',
+                               'place_island_2_doors',
+                               'place_island_wine_rack'
+                             ].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('Isla 2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_island'} onClick={() => handleInsertModule('place_island')} icon={<Box size={14}/>} label="Isla 2 Olleros" />}
+                             {matchesQ('Isla 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_island_4_drawers'} onClick={() => handleInsertModule('place_island_4_drawers')} icon={<LayoutGrid size={14}/>} label="Isla 4 Cajones" />}
+                             {matchesQ('Isla 2 Caj. + 1 Ollero') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_drawers_1_pot'} onClick={() => handleInsertModule('place_island_2_drawers_1_pot')} icon={<LayoutGrid size={14}/>} label="Isla 2 Caj. + 1 Ollero" />}
+                             {matchesQ('Isla 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_island_1_door'} onClick={() => handleInsertModule('place_island_1_door')} icon={<Square size={14}/>} label="Isla 1 Puerta" />}
+                             {matchesQ('Isla 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_doors'} onClick={() => handleInsertModule('place_island_2_doors')} icon={<Columns size={14}/>} label="Isla 2 Puertas" />}
+                             {matchesQ('Botellero Isla') && <ToolButton isLight={isLight} active={toolMode === 'place_island_wine_rack'} onClick={() => handleInsertModule('place_island_wine_rack')} icon={<Wine size={14}/>} label="Botellero Isla" />}
+                           </ModuleCategoryAccordion>
+                         )}
+
+                         {/* 5. Clósets & Roperos */}
+                         {closetsHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="closets"
+                             title="5. Clósets & Roperos"
+                             count={7}
+                             icon={<Box size={14} />}
+                             isOpen={Boolean(moduleAccordions.closets || searchQ)}
+                             onToggle={() => toggleModuleAccordion('closets')}
+                             hasActiveTool={[
+                               'place_closet_hanger',
+                               'place_closet_mixed',
+                               'place_closet_shelves',
+                               'place_closet_drawers',
+                               'place_closet_2_doors',
+                               'place_closet_walkin',
+                               'place_closet_inner_drawers'
+                             ].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('1. Barra + Maletero') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_hanger'} onClick={() => handleInsertModule('place_closet_hanger')} icon={<Box size={14}/>} label="1. Barra + Maletero" />}
+                             {matchesQ('2. Mixto (Barra + Cajones)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_mixed'} onClick={() => handleInsertModule('place_closet_mixed')} icon={<LayoutGrid size={14}/>} label="2. Mixto (Barra + Cajones)" />}
+                             {matchesQ('3. Lencero (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_shelves'} onClick={() => handleInsertModule('place_closet_shelves')} icon={<Square size={14}/>} label="3. Lencero (Repisas)" />}
+                             {matchesQ('4. Cajonera 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_drawers'} onClick={() => handleInsertModule('place_closet_drawers')} icon={<LayoutGrid size={14}/>} label="4. Cajonera 4 Cajones" />}
+                             {matchesQ('5. Clóset 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_2_doors'} onClick={() => handleInsertModule('place_closet_2_doors')} icon={<Columns size={14}/>} label="5. Clóset 2 Puertas" />}
+                             {matchesQ('6. Walk-in Abierto') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_walkin'} onClick={() => handleInsertModule('place_closet_walkin')} icon={<Layers size={14}/>} label="6. Walk-in Abierto" />}
+                             {matchesQ('7. Cajones Ocultos (2 Ptas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_inner_drawers'} onClick={() => handleInsertModule('place_closet_inner_drawers')} icon={<LayoutGrid size={14}/>} label="7. Cajones Ocultos (2 Ptas)" />}
+                           </ModuleCategoryAccordion>
+                         )}
+
+                         {/* 6. Elementos Arquitectónicos */}
+                         {archHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="arch"
+                             title="6. Elementos Arquitectónicos"
+                             count={3}
+                             icon={<Columns size={14} />}
+                             isOpen={Boolean(moduleAccordions.arch || searchQ)}
+                             onToggle={() => toggleModuleAccordion('arch')}
+                             hasActiveTool={['place_arch_door', 'place_arch_window', 'place_arch_pillar'].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_door'} onClick={() => { setToolMode('place_arch_door'); setViewMode('3d'); }} icon={<Columns size={14}/>} label="Puerta" />}
+                             {matchesQ('Ventana') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_window'} onClick={() => { setToolMode('place_arch_window'); setViewMode('3d'); }} icon={<Square size={14}/>} label="Ventana" />}
+                             {matchesQ('Pilar / Muro Corto') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_pillar'} onClick={() => { setToolMode('place_arch_pillar'); setViewMode('3d'); }} icon={<Maximize2 size={14}/>} label="Pilar / Muro Corto" />}
+                           </ModuleCategoryAccordion>
+                         )}
+
+                         {/* 7. Decoración */}
+                         {decoHasMatch && (
+                           <ModuleCategoryAccordion
+                             id="deco"
+                             title="7. Decoración"
+                             count={5}
+                             icon={<Sparkles size={14} />}
+                             isOpen={Boolean(moduleAccordions.deco || searchQ)}
+                             onToggle={() => toggleModuleAccordion('deco')}
+                             hasActiveTool={['place_deco_stove', 'place_deco_fridge', 'place_deco_hood', 'place_deco_plant', 'place_deco_dishwasher'].includes(toolMode)}
+                             isLight={isLight}
+                           >
+                             {matchesQ('1. Cocina FDV 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_stove'} onClick={() => handleInsertModule('place_deco_stove')} icon={<Flame size={14}/>} label="1. Cocina FDV 90" />}
+                             {matchesQ('2. Refrigerador SBS') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_fridge'} onClick={() => handleInsertModule('place_deco_fridge')} icon={<Refrigerator size={14}/>} label="2. Refrigerador SBS" />}
+                             {matchesQ('3. Campana FDV Conic 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_hood'} onClick={() => handleInsertModule('place_deco_hood')} icon={<Sparkles size={14}/>} label="3. Campana FDV Conic 90" />}
+                             {matchesQ('4. Planta Interior') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_plant'} onClick={() => handleInsertModule('place_deco_plant')} icon={<Flower2 size={14}/>} label="4. Planta Interior" />}
+                             {matchesQ('5. Lavavajillas FDV 12C') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_dishwasher'} onClick={() => handleInsertModule('place_deco_dishwasher')} icon={<Utensils size={14}/>} label="5. Lavavajillas FDV 12C" />}
+                           </ModuleCategoryAccordion>
+                         )}
+                       </>
+                     );
+                   })()}
                  </div>
                ) : (
                  <div className="flex flex-col gap-3">
@@ -3153,16 +3187,16 @@ function ToolButton({ active, onClick, icon, label, isLight }: { active: boolean
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 p-3 rounded-lg text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-all border cursor-pointer ${
         active 
           ? 'bg-orange-500/20 border-orange-500 text-orange-500 font-bold shadow-[0_0_10px_rgba(249,115,22,0.15)]' 
           : isLight 
-            ? 'bg-slate-100 border-slate-300 text-slate-900 font-bold hover:bg-slate-200 hover:text-black hover:border-slate-400 shadow-sm'
-            : 'bg-black/20 border-white/5 text-slate-400 hover:bg-white/5 hover:text-slate-200 font-semibold'
+            ? 'bg-slate-50 border-slate-200 text-slate-800 font-semibold hover:bg-slate-100 hover:text-black hover:border-slate-300 shadow-xs' 
+            : 'bg-black/20 border-white/5 text-slate-300 hover:bg-white/5 hover:text-white font-medium'
       }`}
     >
-      <span className={`shrink-0 ${active ? 'text-orange-500' : isLight ? 'text-slate-800' : 'text-slate-400'}`}>{icon}</span>
-      <span className="text-left leading-tight">{label}</span>
+      <span className={`shrink-0 ${active ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}`}>{icon}</span>
+      <span className="text-left leading-tight truncate">{label}</span>
     </button>
   );
 }
@@ -3202,7 +3236,7 @@ function ModuleCategoryAccordion({
       <button
         type="button"
         onClick={onToggle}
-        className={`w-full flex items-center justify-between p-2.5 text-xs font-bold uppercase tracking-wider cursor-pointer select-none transition-colors ${
+        className={`w-full flex items-center justify-between p-2.5 text-xs font-bold cursor-pointer select-none transition-colors ${
           hasActiveTool
             ? isLight
               ? 'text-orange-800 bg-orange-100/70'
@@ -3212,8 +3246,8 @@ function ModuleCategoryAccordion({
               : 'text-slate-200 hover:bg-white/5'
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={hasActiveTool ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}>
+        <div className="flex items-center gap-2 min-w-0 pr-1">
+          <span className={`shrink-0 ${hasActiveTool ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}`}>
             {icon}
           </span>
           <span className="truncate">{title}</span>
