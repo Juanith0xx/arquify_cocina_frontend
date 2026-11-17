@@ -235,6 +235,17 @@ export function KitchenModuleContextMenu({
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  useEffect(() => {
+    if (!activeCabinetId) return;
+    const cab = cabinets.find(c => c.id === activeCabinetId);
+    if (!cab) return;
+    const v = cab.variant;
+    const isDrawerOnly = v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === '4_drawers' || v === '2_pot_drawers' || v === '2_drawers_1_pot' || v === 'sink_u_drawer' || v === 'spice_rack';
+    if (isDrawerOnly && targetZone === 'doors') {
+      setTargetZone('drawerFronts');
+    }
+  }, [activeCabinetId, cabinets]);
+
   const isLight = propIsLight !== undefined ? propIsLight : (() => {
     try {
       return localStorage.getItem('arquify_kitchen_theme') === 'light';
@@ -620,9 +631,16 @@ export function KitchenModuleContextMenu({
       case 'structure':
         updateCabinet(activeCabinetId, { structureColor: url, structureMaterial: mat as any });
         break;
-      case 'doors':
-        updateCabinet(activeCabinetId, { doorColor: url, doorMaterial: mat as any });
+      case 'doors': {
+        const v = activeCabinet.variant;
+        const isDrawerOnly = v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === '4_drawers' || v === '2_pot_drawers' || v === '2_drawers_1_pot' || v === 'sink_u_drawer' || v === 'spice_rack';
+        if (isDrawerOnly) {
+          updateCabinet(activeCabinetId, { drawerFrontColor: url, drawerFrontMaterial: mat as any });
+        } else {
+          updateCabinet(activeCabinetId, { doorColor: url, doorMaterial: mat as any });
+        }
         break;
+      }
       case 'drawerFronts':
         updateCabinet(activeCabinetId, { drawerFrontColor: url, drawerFrontMaterial: mat as any });
         break;
@@ -812,6 +830,14 @@ export function KitchenModuleContextMenu({
     } else if (is2PotDrawers) {
       elements.push({ id: 'drawer-0', label: 'Cacerolero Superior', type: 'drawer' });
       elements.push({ id: 'drawer-1', label: 'Cacerolero Inferior', type: 'drawer' });
+    } else if (variant === '3_drawers_veggie' || variant === 'base_3_drawers_veggie') {
+      elements.push({ id: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cajón 3 (Inferior)', type: 'drawer' });
+    } else if (variant === '2_drawers_1_pot') {
+      elements.push({ id: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
     } else if (isSpiceRack) {
       elements.push({ id: 'drawer-0', label: 'Especiero Extraíble', type: 'drawer' });
     } else if (activeCabinet.type === 'closet' || activeCabinet.variant?.startsWith('closet_')) {
@@ -858,7 +884,13 @@ export function KitchenModuleContextMenu({
     const shelfColor = activeCabinet.shelfColor || globalState.shelfColor || structColor;
     const backColor = activeCabinet.backColor || globalState.backColor || structColor;
 
-    if (target === 'doors') return doorColor?.toLowerCase() === url.toLowerCase();
+    const isDrawerOnly = variant === '3_drawers_veggie' || variant === 'base_3_drawers_veggie' || variant === '4_drawers' || variant === '2_pot_drawers' || variant === '2_drawers_1_pot' || variant === 'sink_u_drawer' || variant === 'spice_rack';
+    if (target === 'doors') {
+      if (isDrawerOnly) {
+        return drawerFrontColor?.toLowerCase() === url.toLowerCase();
+      }
+      return doorColor?.toLowerCase() === url.toLowerCase();
+    }
     if (target === 'structure') return structColor?.toLowerCase() === url.toLowerCase();
     if (target === 'drawerFronts') return drawerFrontColor?.toLowerCase() === url.toLowerCase();
     if (target === 'drawerInner') return drawerInnerColor?.toLowerCase() === url.toLowerCase();

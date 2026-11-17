@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { CabinetType, useKitchenStore, getCabinetLabel } from '../../store/kitchenStore';
 import { useStore } from '../../store';
+import { useAdminStore } from '../../store/adminStore';
 import { Edges, Line, Text, Billboard, Html } from '@react-three/drei';
 import { Maximize2, Check } from 'lucide-react';
 import { Board } from '../Board';
@@ -128,15 +129,23 @@ export function NotchedLateralBoard({
     return g;
   }, [cabH, bodyDepth, thickness, notchDepth, notchHeight, notchYFromBottom, midNotchCenterYFromBottom, midNotchDepth, midNotchHeight]);
 
+  const isTransparentLateral = useStore((state) => state.isTransparent);
+  const isTranspLateral = isTransparentLateral || Boolean(colorProps?.transparent);
+  const currentOpacityLateral = isTransparentLateral ? 0.3 : (colorProps?.opacity ?? 1);
+
   return (
-    <mesh position={position} geometry={geom} castShadow receiveShadow>
+    <mesh position={position} geometry={geom} castShadow={!isTranspLateral} receiveShadow={!isTranspLateral}>
       <meshStandardMaterial
         color={texture ? '#ffffff' : (colorProps?.color || '#ffffff')}
         map={texture}
         roughness={colorProps?.roughness ?? 0.6}
         metalness={colorProps?.metalness ?? 0.1}
+        transparent={isTranspLateral}
+        opacity={currentOpacityLateral}
+        depthWrite={!isTranspLateral}
       />
-      <Edges threshold={15} color="#18181b" />
+      {!isTransparentLateral && <Edges threshold={15} color="#18181b" />}
+      {isTransparentLateral && <Edges threshold={15} color="#555555" />}
     </mesh>
   );
 }
@@ -161,6 +170,7 @@ export function VeggieFrontBoard({
   holeH: number;
   colorProps: any;
 }) {
+  const isTransparent = useStore((state) => state.isTransparent);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
@@ -173,10 +183,142 @@ export function VeggieFrontBoard({
           tex.dispose();
           return;
         }
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(width / 183, height / 250);
-        setTexture(tex);
+        const clonedTex = tex.clone();
+        clonedTex.wrapS = THREE.RepeatWrapping;
+        clonedTex.wrapT = THREE.RepeatWrapping;
+
+        const adminTextures = useAdminStore.getState().textures || [];
+        const customItem = adminTextures.find(
+          (t: any) => t.url === colorProps.textureUrl || t.previewUrl === colorProps.textureUrl
+        ) as any;
+        const isHpl = colorProps.materialType === 'hpl' || (customItem && (customItem.category === 'hpl_autor' || customItem.brand?.toLowerCase().includes('abet')));
+        const dim1 = customItem?.sheetWidthM ? customItem.sheetWidthM * 100 : (isHpl ? 130 : 183);
+        const dim2 = customItem?.sheetHeightM ? customItem.sheetHeightM * 100 : (isHpl ? 305 : 250);
+        const maxSheetDim = Math.max(dim1, dim2);
+        const minSheetDim = Math.min(dim1, dim2);
+        const realWidthCm = minSheetDim;
+        const realHeightCm = maxSheetDim;
+
+        clonedTex.repeat.set(width / realWidthCm, height / realHeightCm);
+        clonedTex.needsUpdate = true;
+        setTexture(clonedTex);
+      });
+    } else {
+      setTexture(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [colorProps?.textureUrl, colorProps?.materialType, width, height]);
+
+  const geom = useMemo(() => {
+    const shape = new THREE.Shape();
+    const hw = width / 2;
+    const hh = height / 2;
+    shape.moveTo(-hw, -hh);
+    shape.lineTo(hw, -hh);
+    shape.lineTo(hw, hh);
+    shape.lineTo(-hw, hh);
+    shape.closePath();
+
+    const hole = new THREE.Path();
+    const r = holeH / 2;
+    const sx = Math.max(1, (holeW / 2) - r);
+    hole.moveTo(-sx, r);
+    hole.lineTo(sx, r);
+    hole.absarc(sx, 0, r, Math.PI / 2, -Math.PI / 2, true);
+    hole.lineTo(-sx, -r);
+    hole.absarc(-sx, 0, r, Math.PI * 1.5, Math.PI * 0.5, true);
+    hole.closePath();
+
+    shape.holes.push(hole);
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: false,
+      curveSegments: 32,
+    });
+    g.translate(0, 0, -thickness / 2);
+    g.computeVertexNormals();
+
+    // Normalizar coordenadas UV a [0, 1] en base a las dimensiones del frente (hw, hh)
+    const uvAttr = g.attributes.uv;
+    const posAttr = g.attributes.position;
+    for (let i = 0; i < uvAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      uvAttr.setXY(i, (x + hw) / width, (y + hh) / height);
+    }
+    uvAttr.needsUpdate = true;
+
+    return g;
+  }, [width, height, thickness, holeW, holeH]);
+
+  const isTransp = isTransparent || Boolean(colorProps?.transparent);
+  const currentOpacity = isTransparent ? 0.3 : (colorProps?.opacity ?? 1);
+  const resolvedColor = !texture && (colorProps?.color === '#ffffff' || colorProps?.color === '#f8fafc')
+    ? '#edf2f7'
+    : (texture ? '#ffffff' : (colorProps?.color || '#edf2f7'));
+
+  return (
+    <mesh position={position} geometry={geom} castShadow={!isTransp} receiveShadow={!isTransp}>
+      <meshStandardMaterial
+        color={resolvedColor}
+        map={texture}
+        roughness={colorProps?.roughness ?? 0.85}
+        metalness={colorProps?.metalness ?? 0.0}
+        transparent={isTransp}
+        opacity={currentOpacity}
+        depthWrite={!isTransp}
+        side={THREE.DoubleSide}
+      />
+      {!isTransparent && <Edges threshold={15} color="#18181b" />}
+      {isTransparent && <Edges threshold={15} color="#555555" />}
+    </mesh>
+  );
+}
+
+/**
+ * Frente interior estructural (contrafrente) del cajón verdulero.
+ * Posee una perforación ovalada agrandada en 2 cm perimetrales respecto al borde exterior
+ * para permitir atornillar desde atrás de forma robusta y evitar que se asome por la vista frontal.
+ */
+export function VeggieInnerFrontBoard({
+  position,
+  width,
+  height,
+  thickness,
+  holeW,
+  holeH,
+  colorProps,
+}: {
+  position: [number, number, number];
+  width: number;
+  height: number;
+  thickness: number;
+  holeW: number;
+  holeH: number;
+  colorProps: any;
+}) {
+  const isTransparent = useStore((state) => state.isTransparent);
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (colorProps?.textureUrl) {
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(colorProps.textureUrl, (tex) => {
+        if (!active) {
+          tex.dispose();
+          return;
+        }
+        const clonedTex = tex.clone();
+        clonedTex.wrapS = THREE.RepeatWrapping;
+        clonedTex.wrapT = THREE.RepeatWrapping;
+        clonedTex.repeat.set(width / 183, height / 250);
+        clonedTex.needsUpdate = true;
+        setTexture(clonedTex);
       });
     } else {
       setTexture(null);
@@ -196,14 +338,19 @@ export function VeggieFrontBoard({
     shape.lineTo(-hw, hh);
     shape.closePath();
 
+    // Perforación interior: 2 cm más grande hacia todo el perímetro del borde
+    const innerHoleW = holeW + 4;
+    const innerHoleH = Math.min(height - 1.0, holeH + 4);
+    const r = innerHoleH / 2;
+    const sx = Math.max(0.5, (innerHoleW / 2) - r);
+    const cy = -0.6; // Alineado al centro del óvalo exterior que está en yBoxCenter
+
     const hole = new THREE.Path();
-    const r = holeH / 2;
-    const sx = Math.max(1, (holeW / 2) - r);
-    hole.moveTo(sx, -r);
-    hole.lineTo(-sx, -r);
-    hole.absarc(-sx, 0, r, -Math.PI / 2, Math.PI / 2, false);
-    hole.lineTo(sx, r);
-    hole.absarc(sx, 0, r, Math.PI / 2, -Math.PI / 2, false);
+    hole.moveTo(-sx, cy + r);
+    hole.lineTo(sx, cy + r);
+    hole.absarc(sx, cy, r, Math.PI / 2, -Math.PI / 2, true);
+    hole.lineTo(-sx, cy - r);
+    hole.absarc(-sx, cy, r, Math.PI * 1.5, Math.PI * 0.5, true);
     hole.closePath();
 
     shape.holes.push(hole);
@@ -211,22 +358,43 @@ export function VeggieFrontBoard({
     const g = new THREE.ExtrudeGeometry(shape, {
       depth: thickness,
       bevelEnabled: false,
-      curveSegments: 24,
+      curveSegments: 32,
     });
     g.translate(0, 0, -thickness / 2);
     g.computeVertexNormals();
+
+    const uvAttr = g.attributes.uv;
+    const posAttr = g.attributes.position;
+    for (let i = 0; i < uvAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      uvAttr.setXY(i, (x + hw) / width, (y + hh) / height);
+    }
+    uvAttr.needsUpdate = true;
+
     return g;
   }, [width, height, thickness, holeW, holeH]);
 
+  const isTransp = isTransparent || Boolean(colorProps?.transparent);
+  const currentOpacity = isTransparent ? 0.3 : (colorProps?.opacity ?? 1);
+  const resolvedColor = !texture && (colorProps?.color === '#ffffff' || colorProps?.color === '#f8fafc')
+    ? '#edf2f7'
+    : (texture ? '#ffffff' : (colorProps?.color || '#edf2f7'));
+
   return (
-    <mesh position={position} geometry={geom} castShadow receiveShadow>
+    <mesh position={position} geometry={geom} castShadow={!isTransp} receiveShadow={!isTransp}>
       <meshStandardMaterial
-        color={texture ? '#ffffff' : (colorProps?.color || '#ffffff')}
+        color={resolvedColor}
         map={texture}
-        roughness={colorProps?.roughness ?? 0.6}
-        metalness={colorProps?.metalness ?? 0.1}
+        roughness={colorProps?.roughness ?? 0.85}
+        metalness={colorProps?.metalness ?? 0.0}
+        transparent={isTransp}
+        opacity={currentOpacity}
+        depthWrite={!isTransp}
+        side={THREE.DoubleSide}
       />
-      <Edges threshold={15} color="#18181b" />
+      {!isTransparent && <Edges threshold={15} color="#18181b" />}
+      {isTransparent && <Edges threshold={15} color="#555555" />}
     </mesh>
   );
 }
@@ -1860,7 +2028,10 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      </mesh>
                   </group>
 
-                  <AnimatedDrawer openZOffset={drawerBoxLength - 3} forceOpen={isElementOpen(drawerKey)}>
+                  <AnimatedDrawer 
+                     openZOffset={drawerBoxLength - 3} 
+                     forceOpen={isElementOpen(drawerKey)}
+                  >
                      {/* Drawer Front */}
                      {isVeggie ? (
                         <VeggieFrontBoard
@@ -1887,11 +2058,23 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      <Board position={[-skw/2 + thickness/2, yBoxCenter, drawerBoxZCenter]} args={[thickness, sideHeight, drawerBoxLength]} {...parseColor(cInner, drawerInnerMaterial)} />
                      <Board position={[skw/2 - thickness/2, yBoxCenter, drawerBoxZCenter]} args={[thickness, sideHeight, drawerBoxLength]} {...parseColor(cInner, drawerInnerMaterial)} />
                      <Board position={[0, yBoxCenter + 0.6, drawerBoxZCenter - drawerBoxLength/2 + thickness/2]} args={[skw - thickness*2, sideHeight - 1.2, thickness]} {...parseColor(cInner, drawerInnerMaterial)} />
-                     <Board 
-                        position={[0, isVeggie ? yBoxBottom + 2.5 : yBoxCenter + 0.6, drawerBoxZCenter + drawerBoxLength/2 - thickness/2]} 
-                        args={[skw - thickness*2, isVeggie ? 5 : sideHeight - 1.2, thickness]} 
-                        {...parseColor(cInner, drawerInnerMaterial)} 
-                     />
+                     {isVeggie ? (
+                        <VeggieInnerFrontBoard
+                           position={[0, yBoxCenter + 0.6, drawerBoxZCenter + drawerBoxLength / 2 - thickness / 2]}
+                           width={skw - thickness * 2}
+                           height={sideHeight - 1.2}
+                           thickness={thickness}
+                           holeW={Math.min(36, Math.max(22, Math.round((width - gap * 2) * 0.55)))}
+                           holeH={Math.min(7.0, Math.max(5.0, drawerH * 0.35))}
+                           colorProps={parseColor(cInner, drawerInnerMaterial)}
+                        />
+                     ) : (
+                        <Board 
+                           position={[0, yBoxCenter + 0.6, drawerBoxZCenter + drawerBoxLength / 2 - thickness / 2]} 
+                           args={[skw - thickness*2, sideHeight - 1.2, thickness]} 
+                           {...parseColor(cInner, drawerInnerMaterial)} 
+                        />
+                     )}
                      <Board position={[0, botPanelY, drawerBoxZCenter]} args={[skw - thickness*2, botPanelThickness, drawerBoxLength - thickness*2]} {...botColorProps} />
                      
                      {/* Vegetales decorativos en verdulero */}

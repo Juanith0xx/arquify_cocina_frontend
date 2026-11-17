@@ -2298,14 +2298,20 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
                 notes: `P/ ${hwSpec.slideName} (NL=${nominalLength}mm)`
             });
-            // Contrafrente (Frontal Interior) de caja: rebajado a 50mm si es verdulero para dar paso libre y ventilación a la perforación
-            const frontTesteroH = isVeggie ? 50 : currentSideH;
+            // Contrafrente (Frontal Interior) de caja: altura completa con calado CNC (+20mm contorno) en verdulero para atornillado firme desde atrás
+            const frontTesteroH = currentSideH;
+            const innerCutoutWMm = cutoutWMm + 40;
+            const innerCutoutHMm = Math.min(frontTesteroH - 10, cutoutHMm + 40);
+            const innerCutoutPerimeterM = isVeggie ? (2 * (innerCutoutWMm - innerCutoutHMm) + Math.PI * innerCutoutHMm) / 1000 : 0;
             parts.push({
                 name: `Contrafrente Cajón ${cabName} (${i+1})`,
                 moduleId: cab.id, moduleIndex: index, qty: 1,
                 length: drawerFrontBackLength, width: frontTesteroH, thickness: thickness * 10, material: cInnerMat,
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-                notes: isVeggie ? 'Testero frontal bajo p/ ventilación y vista perforación verdulero' : `Testero frontal interior p/ fijación de frente exterior`
+                extraEdgeMeters: isVeggie ? innerCutoutPerimeterM : undefined,
+                notes: isVeggie 
+                    ? `Mecanizado CNC calado ovalado interior ${innerCutoutWMm}x${innerCutoutHMm}mm (+20mm p/ atornillado desde atrás)` 
+                    : `Testero frontal interior p/ fijación de frente exterior`
             });
             // Trasera de caja
             parts.push({
