@@ -16,12 +16,13 @@ import {
   Maximize2,
   ShieldAlert,
   Zap,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useAdminStore } from '../../store/adminStore';
 import { useSupabaseAuthStore } from '../../store/supabaseAuthStore';
 import { useKitchenStore } from '../../store/kitchenStore';
-import { getFriendlyColorName } from '../../utils/colorNames';
-import { FINISH_LABELS, HandleFinish } from '../../types/handle';
+import { extractDetailedKitchenBimManifest, DetailedBimManifest } from '../../utils/nanoBananaExtractor';
 
 interface NanoBananaRenderModalProps {
   isOpen: boolean;
@@ -53,6 +54,27 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
   const [showRechargeModal, setShowRechargeModal] = useState<boolean>(false);
+  const [showBimDetails, setShowBimDetails] = useState<boolean>(false);
+
+  const kitchenState = useKitchenStore();
+  const auditedBim: DetailedBimManifest | null = React.useMemo(() => {
+    try {
+      return extractDetailedKitchenBimManifest(kitchenState);
+    } catch (e) {
+      console.warn('Error al extraer auditoría BIM:', e);
+      return null;
+    }
+  }, [
+    kitchenState.cabinets,
+    kitchenState.countertopConfig,
+    kitchenState.showSocle,
+    kitchenState.socleFinish,
+    kitchenState.socleHeight,
+    kitchenState.handleConfig,
+    kitchenState.golaSystem,
+    kitchenState.floorType,
+    kitchenState.wallColor,
+  ]);
 
   if (!isOpen) return null;
 
@@ -92,136 +114,17 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
     }
 
     try {
-      setProgressStatus('Analizando geometría y módulos 3D...');
-      await new Promise((r) => setTimeout(r, 600));
+      setProgressStatus('Auditando código y despiece del proyecto (Cero Alucinación)...');
+      await new Promise((r) => setTimeout(r, 400));
 
-      let bimManifest: any = null;
-      try {
-        const kitchenState = useKitchenStore.getState();
-        if (kitchenState && kitchenState.cabinets && kitchenState.cabinets.length > 0) {
-          const { cabinets, countertopConfig, qstoneCatalog, handleConfig, floorType, wallColor, showSocle, socleFinish, socleHeight } = kitchenState;
-          
-          const wallOrBaseCab = cabinets.find((c) => c.type !== 'island') || cabinets[0];
-          const rawColor = wallOrBaseCab?.doorColor || wallOrBaseCab?.drawerFrontColor || wallOrBaseCab?.color || '';
-          const colorName = getFriendlyColorName(rawColor);
-
-          // Detección estricta de melamina y tono de madera
-          const isLightWood = rawColor.includes('light-wood-grain') || 
-                              rawColor.toLowerCase().includes('roble') || 
-                              colorName.toLowerCase().includes('roble') || 
-                              rawColor === '#D4A373' || 
-                              rawColor === '#dfc7a5' || 
-                              rawColor === '#d6ba94';
-
-          const woodToneDetails = isLightWood
-            ? 'Roble Nórdico Claro / Rubio Escandinavo (#dfc7a5 / #d6ba94). Tono arena cálido muy claro y luminoso, veta lineal sutil, CERO nudos negros, PROHIBIDO nogal oscuro o castaño rústico.'
-            : `${colorName} (${rawColor})`;
-
-          const islandCabinets = cabinets.filter((c) => c.type === 'island');
-          const hasIsland = islandCabinets.length > 0;
-          const islandCab = islandCabinets[0];
-          const islandRawColor = islandCab?.drawerFrontColor || islandCab?.doorColor || islandCab?.color || rawColor;
-          const islandColorName = getFriendlyColorName(islandRawColor);
-
-          // Mapeo detallado por zonas (Aéreos, Bases, Torres, Isla, Decoración/Electrodomésticos)
-          const wallCabinets = cabinets.filter((c) => c.type === 'wall');
-          const baseCabinets = cabinets.filter((c) => c.type === 'base');
-          const tallCabinets = cabinets.filter((c) => c.type === 'tall');
-          const decoCabinets = cabinets.filter((c) => c.type === 'decoration');
-
-          // Directiva dinámica para muebles aéreos superiores:
-          const hasWallMicrowave = wallCabinets.some((c) => c.variant?.includes('micro'));
-          const hasWallOpen = wallCabinets.some((c) => c.variant?.includes('open') || c.variant?.includes('shelves'));
-          let wallNotes = '';
-          if (wallCabinets.length > 0) {
-            wallNotes = `MUEBLES AÉREOS SUPERIORES (${wallCabinets.length} módulos): Todos los módulos aéreos tienen puertas batientes o abatibles lisas de melamina con tiradores idénticos a la captura 3D.`;
-            if (hasWallMicrowave) {
-              wallNotes += ' Incluye un nicho abierto de microondas.';
-            } else if (hasWallOpen) {
-              wallNotes += ' Incluye repisas abiertas vistas según la captura 3D.';
-            } else {
-              wallNotes += ' TODAS las puertas son completamente opacas, lisas y cerradas. ESTRICTAMENTE PROHIBIDO inventar repisas abiertas, nichos de microondas, botelleros, cavas o puertas de vidrio en la corrida superior.';
-            }
-          }
-
-          // Directiva dinámica para muebles bajos de mesón:
-          const hasBaseWineRack = baseCabinets.some((c) => c.variant === 'base_wine_rack' || c.variant === 'wine_rack' || c.variant === 'spice_rack');
-          const baseNotes = `MUEBLES BAJOS (${baseCabinets.length} módulos bajo mesón): Muebles base con puertas y cajoneras bajo la cubierta de mesón.${hasBaseWineRack ? ' El botellero angosto de vino está situado en la fila baja bajo la cubierta de piedra.' : ''} Mantener el número exacto de frentes y cajones horizontales vistos en el 3D.`;
-
-          // Directiva para electrodomésticos independientes (ej. cocina de pie / refrigerador):
-          const hasFreestandingStove = decoCabinets.some((c) => c.variant?.includes('stove') || c.variant?.includes('cocina'));
-          const applianceNotes = hasFreestandingStove
-            ? 'ELECTRODOMÉSTICO DE PIE: Cocina a gas independiente de 90cm en acero inoxidable con quemadores y perillas en la cubierta superior y puerta de horno de vidrio/inox, posicionada exactamente en su lugar entre los muebles base y la torre.'
-            : '';
-
-          // Directiva para torres altas:
-          const hasOpenTower = tallCabinets.some((c) => c.variant === 'tall_terminal_shelves' || c.variant === 'tall_open');
-          const hasBuiltInOven = tallCabinets.some((c) => c.variant?.includes('oven') || c.variant?.includes('micro'));
-          const tallNotes = tallCabinets.length > 0
-            ? `MUEBLES TORRE ALTOS (${tallCabinets.length} torre): Torre con hornos empotrados integrados (horno y microondas negros/inox), despensa alta con puertas${hasOpenTower ? ', y torre con repisas abiertas vistas SIN PUERTAS' : ''}.`
-            : '';
-
-          // Directiva estricta para la isla o ausencia total de isla:
-          const islandNotes = hasIsland 
-            ? `ISLA CENTRAL: Mueble isla rectangular con cajonera y puertas lisas al frente. Cubierta en voladizo simétrico limpio.${showSocle ? ' Lleva ZÓCALO CONTINUO CERRADO sellado al piso idéntico a los muebles de muro. TOTALMENTE PROHIBIDO poner patas negras visibles debajo del zócalo de la isla.' : ' Montada sobre patas individuales con luz al piso.'}`
-            : 'PROHIBICIÓN ESTRICTA DE ISLA O PENÍNSULA: Este proyecto NO TIENE NINGUNA ISLA NI PENÍNSULA. El piso central y de primer plano es un espacio abierto 100% despejado. ESTRICTAMENTE PROHIBIDO DIBUJAR O AGREGAR CUALQUIER ISLA, PENÍNSULA O BARRA EN EL SUELO.';
-
-          const moduleArchitecture = [
-            wallNotes,
-            baseNotes,
-            applianceNotes,
-            tallNotes,
-            islandNotes
-          ].filter(Boolean).join(' | ');
-
-          // Cubierta
-          const currentCountertopItem = qstoneCatalog?.find((item) => item.id === countertopConfig?.selectedProductId);
-          const countertopDesc = currentCountertopItem
-            ? `${currentCountertopItem.name} (${currentCountertopItem.finish}, tonalidad ${currentCountertopItem.colorHex})`
-            : 'Piedra sintetizada Qstone gris azulado / piedra pulida';
-
-          let floorDesc = 'Baldosas cerámicas blancas en cuadrícula cuadrada regular con fragüe gris';
-          if (floorType && floorType.includes('parquet')) {
-            floorDesc = 'Piso flotante / parquet de madera';
-          } else if (floorType && floorType.includes('concreto')) {
-            floorDesc = 'Piso de microcemento / concreto pulido';
-          }
-
-          const rawFinish = handleConfig?.finish as HandleFinish | undefined;
-          const finishLabel = (rawFinish && FINISH_LABELS[rawFinish]) 
-            ? FINISH_LABELS[rawFinish] 
-            : (rawFinish === 'negro' || (rawFinish as any) === 'black' ? 'Negro Mate' : 'Negro Mate');
-          
-          const isGola = handleConfig?.model === 'none' || kitchenState.golaSystem !== 'none';
-          const hardwareDesc = isGola
-            ? 'Sistema Riel Gola integrado sin tiradores frontales'
-            : `Tiradores tipo perfil/asa en acabado ${finishLabel} (color ${rawFinish === 'negro' || !rawFinish ? '#1c1917 negro mate puro' : finishLabel})`;
-
-          const socleColorName = socleFinish === 'black' ? 'NEGRO MATE' : socleFinish === 'grey_satin' ? 'ALUMINIO GRIS SATINADO' : 'aluminio gris satinado';
-          const socleDesc = showSocle
-            ? `Zócalo inferior continuo y cerrado de ${socleHeight || 10} cm en acabado ${socleColorName}`
-            : 'Sin zócalo cerrado: muebles montados sobre patas cilíndricas negras individuales con espacio de luz/aire libre al suelo';
-
-          const socleDirective = showSocle
-            ? `ZÓCALO CONTINUO CERRADO HERMÉTICO de ${socleHeight || 10} cm en acabado ${socleColorName} que sella completamente la base contra el suelo en todos los muebles inferiores.${hasIsland ? ' Aplica idéntico en los muebles de pared y en la isla.' : ''} ESTRICTAMENTE PROHIBIDO DIBUJAR PATAS NEGRAS, POSTES O SALIENTES METÁLICAS DEBAJO O POR FUERA DEL ZÓCALO. Toda la base es un zócalo sólido continuo sellado al piso.`
-            : 'PATAS CILÍNDRICAS INDIVIDUALES NEGRAS con espacio abierto al suelo. NO colocar zócalo cerrado ni bajar paneles laterales al suelo.';
-
-          bimManifest = {
-            cabinetFronts: colorName,
-            hasIsland,
-            islandFronts: hasIsland ? islandColorName : null,
-            woodToneDetails,
-            moduleArchitecture,
-            countertop: countertopDesc,
-            flooring: floorDesc,
-            wallFinish: `Pintura lisa mate color ${wallColor || '#f3f4f6'}`,
-            hardware: hardwareDesc,
-            socle: socleDesc,
-            socleDirective,
-          };
+      let bimManifest = auditedBim;
+      if (!bimManifest) {
+        try {
+          const kitchenState = useKitchenStore.getState();
+          bimManifest = extractDetailedKitchenBimManifest(kitchenState);
+        } catch (e) {
+          console.warn('No se pudo extraer bimManifest detallado de cocina:', e);
         }
-      } catch (e) {
-        console.warn('No se pudo extraer bimManifest de cocina:', e);
       }
 
       setProgressStatus('Aplicando motor de iluminación y materiales NanoBanana AI...');
@@ -535,8 +438,96 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
             </div>
           )}
 
-          {/* Banner Informativo sobre Protección Geométrica */}
-          {!resultImage && (
+          {/* Auditoría Técnica del Proyecto (Cero Alucinación) */}
+          {!resultImage && auditedBim && (
+            <div className={`rounded-xl border overflow-hidden transition-all ${
+              isLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/10 text-slate-200'
+            }`}>
+              <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5 sm:mt-0">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                        Diseño y Código Auditado (Fidelidad 1:1)
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {auditedBim.totalModulesCount} Muebles Bloqueados
+                      </span>
+                    </div>
+                    <p className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {auditedBim.breakdown.baseCount} bajos · {auditedBim.breakdown.wallCount} aéreos · {auditedBim.breakdown.tallCount} torres · {auditedBim.hasIsland ? `${auditedBim.breakdown.islandCount} en isla` : '0 islas (piso despejado)'} · Cubierta: {auditedBim.countertop.productName} ({auditedBim.countertop.regruesoCm}cm)
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBimDetails(!showBimDetails)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1.5 cursor-pointer self-end sm:self-center shrink-0 ${
+                    isLight ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700' : 'bg-white/10 hover:bg-white/20 border-white/10 text-slate-300'
+                  }`}
+                >
+                  <span>{showBimDetails ? 'Ocultar Despiece' : 'Ver Despiece'}</span>
+                  {showBimDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
+
+              {showBimDetails && (
+                <div className={`px-4 pb-4 pt-2 border-t text-xs space-y-2 max-h-60 overflow-y-auto ${
+                  isLight ? 'border-slate-200 bg-white/70' : 'border-white/10 bg-black/30'
+                }`}>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {auditedBim.cabinetsList.map((cab) => (
+                      <div
+                        key={cab.id}
+                        className={`p-2.5 rounded-lg border text-[11px] flex items-start justify-between gap-3 ${
+                          isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/5 border-white/5'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold flex items-center gap-1.5">
+                            <span className="text-orange-400 font-extrabold">#{cab.index}</span>
+                            <span>{cab.label}</span>
+                            <span className={`text-[10px] font-normal px-1.5 py-0.2 rounded border ${
+                              isLight ? 'bg-slate-200 border-slate-300 text-slate-700' : 'bg-white/10 border-white/10 text-slate-300'
+                            }`}>
+                              {cab.widthCm}×{cab.heightCm}×{cab.depthCm} cm
+                            </span>
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {cab.frontType === 'drawers' ? cab.drawerStyle : cab.doorStyle || cab.nicheDescription || 'Frente melamina'} · Frente: {cab.frontColorName} · Posición X: {cab.positionCm.x} cm
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Bloqueado
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className={`p-2.5 rounded-lg border text-[11px] mt-2 space-y-1 ${
+                    isLight ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                  }`}>
+                    <div className="font-bold flex items-center gap-1 text-[11px]">
+                      <ShieldAlert size={14} className="text-amber-500" />
+                      <span>Directivas Estrictas de Inmutabilidad NanoBanana:</span>
+                    </div>
+                    <ul className="list-disc list-inside text-[10px] space-y-0.5 opacity-90 pl-1">
+                      {auditedBim.strictNegativeDirectives.map((directive, dIdx) => (
+                        <li key={dIdx}>{directive}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Banner Informativo sobre Protección Geométrica si no hay auditoría previa */}
+          {!resultImage && !auditedBim && (
             <div className={`p-4 rounded-xl border flex items-start gap-3 ${
               isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
             }`}>

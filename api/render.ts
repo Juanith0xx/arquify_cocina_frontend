@@ -47,51 +47,65 @@ export async function handleRenderRequest(body: any) {
 
   const hasIsland = Boolean(bimManifest?.hasIsland);
 
-  let bimSection = '';
-  if (bimManifest) {
-    bimSection = `
+  // Especificación detallada del proyecto BIM
+  const inventorySection = bimManifest?.rawTextPromptSpec
+    ? `
+MANDATORY ARCHITECTURAL BIM SPECIFICATION & STRICT BILL OF QUANTITIES:
+${bimManifest.rawTextPromptSpec}
+`
+    : `
 EXACT MATERIAL & FINISH SPECIFICATIONS:
-- Cabinet Fronts: ${bimManifest.cabinetFronts || 'Melamina madera natural'}${hasIsland && bimManifest.islandFronts ? `\n- Island Fronts: ${bimManifest.islandFronts}` : ''}
-- Wood Tone & Grain Finish: ${bimManifest.woodToneDetails || 'Roble nórdico claro rubio / light blonde oak, veta sutil limpia'}
-- Modules Architecture & Layout: ${bimManifest.moduleArchitecture || 'Disposición exacta según captura 3D'}
-- Base Support & Zócalo: ${bimManifest.socleDirective || bimManifest.socle || 'Seguir exactamente la imagen de entrada'}
-- Countertop: ${bimManifest.countertop || 'Piedra sintetizada Qstone gris'}
-- Hardware / Handles: ${bimManifest.hardware || 'Tiradores en acabado Negro Mate'}
-- Flooring: ${bimManifest.flooring || 'Baldosas cerámicas blancas en cuadrícula cuadrada regular con fragüe gris'}
-- Walls Finish: ${bimManifest.wallFinish || 'Pintura lisa mate color muro actual'}
+- Cabinet Fronts: ${bimManifest?.cabinetFronts || 'Melamina madera natural'}${hasIsland && bimManifest?.islandFronts ? `\n- Island Fronts: ${bimManifest.islandFronts}` : ''}
+- Wood Tone & Grain Finish: ${bimManifest?.woodToneDetails || 'Roble nórdico claro rubio / light blonde oak, veta sutil limpia'}
+- Modules Architecture & Layout: ${bimManifest?.moduleArchitecture || 'Disposición exacta según captura 3D'}
+- Base Support & Zócalo: ${bimManifest?.socleDirective || bimManifest?.socle?.directive || bimManifest?.socle || 'Seguir exactamente la imagen de entrada'}
+- Countertop: ${bimManifest?.countertop?.description || bimManifest?.countertop || 'Piedra sintetizada Qstone gris'}
+- Hardware / Handles: ${bimManifest?.hardwareSummary || bimManifest?.hardware || 'Tiradores en acabado Negro Mate'}
+- Flooring: ${bimManifest?.finishSummary?.floorDescription || bimManifest?.flooring || 'Baldosas cerámicas blancas en cuadrícula cuadrada regular con fragüe gris'}
+- Walls Finish: ${bimManifest?.finishSummary?.wallColor || bimManifest?.wallFinish || 'Pintura lisa mate color muro actual'}
 `;
-  }
+
+  const totalCount = bimManifest?.totalModulesCount ? `${bimManifest.totalModulesCount} modules` : 'the exact count shown in the input 3D model';
 
   const structuredPrompt = `
 You are a professional architectural rendering engine. Perform a strict photorealistic restyling of this exact 3D CAD/BIM viewport capture.
 
-${bimSection}
+${inventorySection}
 
-CRITICAL ABSOLUTE LAYOUT FIDELITY (DO NOT INVENT FURNITURE OR FILL EMPTY SPACES):
-1. EXACT OCCUPANCY & BOUNDS:
-   - Every single cabinet, appliance, tower, drawer, door, shelf, and opening in the input image is sacred.
-   - ABSOLUTELY FORBIDDEN: DO NOT turn closed cabinet doors into open niches or open shelves! If the 3D capture shows closed cabinet doors, they MUST remain closed opaque doors.
-   - ABSOLUTELY FORBIDDEN: DO NOT fill empty wall spaces with new cabinets, shelves, or wall units! Keep empty walls completely clean and bare exactly as shown in the 3D capture.
-   - DO NOT alter the drawer configuration. Replicate the exact horizontal split lines and number of drawer fronts visible in the 3D capture.
+CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
+1. STRICT INVENTORY CONFINEMENT (ZERO INVENTED OR REMOVED MODULES):
+   - The scene contains ONLY AND STRICTLY ${totalCount} as detailed in the official BIM inventory above.
+   - You MUST NOT generate, add, duplicate, or infer any extra cabinet, shelf, hanging unit, kitchen island, cart, or appliance.
+   - Any wall or floor space not occupied in the 3D capture must remain completely empty and clean.
 
-2. ${hasIsland 
+2. DOOR & DRAWER INTEGRITY (PROHIBITED MODIFICATIONS):
+   - All modules cataloged with doors MUST remain closed with solid, smooth, opaque melamine fronts. UNDER NO CIRCUMSTANCES should closed doors be converted into open display shelves, glass cabinets, or niches.
+   - All modules cataloged with drawers MUST reproduce the exact horizontal split lines and count of drawers listed.
+
+3. ${bimManifest?.islandDirectives?.description || (hasIsland 
     ? 'ISLAND FIDELITY:\n   - Replicate the exact island geometry and bounds from the 3D capture.' 
-    : 'STRICT OPEN FLOOR PRESERVATION - ABSOLUTELY NO ISLAND, PENINSULA OR BREAKFAST BAR:\n   - This kitchen has NO island, NO peninsula, and NO breakfast bar.\n   - The center and foreground floor is 100% EMPTY, bare, open floor tile space.\n   - ABSOLUTELY FORBIDDEN: DO NOT invent, generate, add, or suggest any kitchen island, peninsula, dining counter, bar, table, or floating module in the open floor. The tiled floor MUST remain completely bare and open.'}
+    : 'STRICT OPEN FLOOR PRESERVATION - ABSOLUTELY NO ISLAND, PENINSULA OR BREAKFAST BAR:\n   - This kitchen has NO island, NO peninsula, and NO breakfast bar.\n   - The center and foreground floor is 100% EMPTY, bare, open floor tile space.\n   - ABSOLUTELY FORBIDDEN: DO NOT invent, generate, add, or suggest any kitchen island, peninsula, dining counter, bar, table, or floating module in the open floor. The tiled floor MUST remain completely bare and open.')}
 
-3. BUILT-IN & FREESTANDING APPLIANCES FIDELITY:
-   - The freestanding range cooker / gas stove (with knobs, burners, and oven) between base cabinets and the tall pantry must remain in that exact location in stainless steel finish.
-   - The double built-in oven and microwave stack on the tall pantry tower must retain clean, modern stainless steel and black glass styling.
+4. BUILT-IN & FREESTANDING APPLIANCES FIDELITY:
+   - Freestanding appliances (stove/cooker, refrigerator) and built-in appliances (sink, cooktop, ovens) must remain in their exact specified positions and dimensions with professional stainless steel/black finishes.
    - Do not distort, remove, invent, or relocate any appliances.
 
-4. STRICT WOOD COLOR & TONE FIDELITY (NO DARKENING):
-   - The cabinet melamine is a LIGHT BLONDE SCANDINAVIAN OAK / HONEY MAPLE (soft warm sand / wheat tone, hex #dfc7a5 / #d6ba94).
-   - STRICTLY FORBIDDEN: DO NOT render dark walnut, dark brown timber, rustic aged oak, or heavy black wood knots. Keep the wood light, clean, bright, and contemporary.
+5. STRICT COUNTERTOP SPECIFICATION:
+   ${bimManifest?.countertop?.description ? `- ${bimManifest.countertop.description}` : '- Follow the exact countertop in the input capture.'}
+   ${bimManifest?.countertop?.hasWaterfallLeft ? '- Left waterfall: extends down to the floor in stone.' : ''}
+   ${bimManifest?.countertop?.hasWaterfallRight ? '- Right waterfall: extends down to the floor in stone.' : ''}
+   ${bimManifest?.countertop && !bimManifest.countertop.hasWaterfallLeft && !bimManifest.countertop.hasWaterfallRight ? '- Straight end finish on both sides (no waterfall drops to the floor).' : ''}
 
-5. BASE SUPPORT & ZÓCALO FIDELITY:
-   ${bimManifest?.socleDirective ? `- STRICT BASE DIRECTIVE: ${bimManifest.socleDirective}` : '- Follow the exact base support in the input capture.'}
-   - When a continuous kickplate / zócalo is active: DO NOT draw any individual black legs or feet poking out. The zócalo is completely solid and sealed to the floor.
+6. BASE SUPPORT & ZÓCALO FIDELITY:
+   ${bimManifest?.socle?.directive || bimManifest?.socleDirective ? `- STRICT BASE DIRECTIVE: ${bimManifest?.socle?.directive || bimManifest?.socleDirective}` : '- Follow the exact base support in the input capture.'}
 
-6. ARCHITECTURAL STAGING & PROPS (DECORATION):
+7. STRICT MATERIAL & WOOD TONE FIDELITY:
+   - Wood Tone: ${bimManifest?.finishSummary?.woodToneDetails || bimManifest?.woodToneDetails || 'Roble nórdico claro rubio / light blonde oak, veta sutil limpia'}.
+   - Hardware: ${bimManifest?.hardwareSummary || bimManifest?.hardware || 'Tiradores en acabado Negro Mate'}.
+   - Floor: ${bimManifest?.finishSummary?.floorDescription || bimManifest?.flooring || 'Baldosas cerámicas'}.
+   - Walls: ${bimManifest?.finishSummary?.wallColor || bimManifest?.wallFinish || 'Pintura lisa'}.
+
+8. ARCHITECTURAL STAGING & PROPS (DECORATION):
    - Maintain pristine architectural staging and high-end interior editorial realism.
    ${hasPeople ? '- HUMAN STAGING: 1 realistic person standing naturally inside the open room floor space, without obstructing or modifying any cabinetry design.' : '- NO HUMANS: STRICTLY NO PEOPLE, no figures, no silhouettes anywhere in the scene.'}
    ${hasProps ? `- TASTEFUL DECORATION & LIVING PROPS:
@@ -99,11 +113,11 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY (DO NOT INVENT FURNITURE OR FILL EMPTY SPACES)
      * Include: a sleek designer coffee machine or stainless/matte kettle, an artisan wood cutting board with fresh citrus/bread, small ceramic pots with fresh green herbs (basil/rosemary) or a delicate minimalist vase with natural greenery, elegant salt/pepper mills, and a neatly folded linen kitchen towel.
      * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.` : '- NO PROPS: Keep countertops and surfaces completely clean, pristine, polished, and free of clutter or staging objects.'}
 
-7. CAMERA POSE & PERSPECTIVE IMMUTABILITY:
+9. CAMERA POSE & PERSPECTIVE IMMUTABILITY:
    - DO NOT change the camera angle, elevation, pitch, yaw, or framing.
    - Maintain the exact camera perspective from the input capture.
 
-8. PHOTOREALISTIC RESTYLING TASK:
+10. PHOTOREALISTIC RESTYLING TASK:
    - Replace the flat/shaded 3D viewport look with high-end architectural rendering: physically accurate daylight, subtle contact ambient occlusion, realistic reflections on stone countertops, smooth light Scandinavian wood grain, and crisp black hardware.
    - Ambient Lighting: ${lighting || 'Luz natural de sol de mañana, suave y brillante'}.
    - Property context: ${propertyType || 'Casa Residencial moderna'}.
