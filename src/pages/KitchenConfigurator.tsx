@@ -1173,17 +1173,18 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="bases"
                              title="1. Bases"
-                             count={10}
+                             count={11}
                              icon={<Box size={14} />}
                              isOpen={Boolean(moduleAccordions.bases || searchQ)}
                              onToggle={() => toggleModuleAccordion('bases')}
-                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_4_drawers', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
+                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
                              isLight={isLight}
                            >
                              {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} icon={<Box size={14}/>} label="1 Puerta" />}
                              {matchesQ('1 Pta + 1 Cajón') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />}
                              {matchesQ('2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} icon={<Box size={14}/>} label="2 Puertas" />}
                              {matchesQ('4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} icon={<Box size={14}/>} label="4 Cajones" />}
+                             {matchesQ('Verdulero 3 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_3_drawers_veggie'} onClick={() => handleInsertModule('place_base_3_drawers_veggie')} icon={<Box size={14}/>} label="Verdulero 3 Cajones" />}
                              {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} icon={<Box size={14}/>} label="2 Olleros" />}
                              {matchesQ('Fregadero Cajón en U') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_u_drawer'} onClick={() => handleInsertModule('place_base_sink_u_drawer')} icon={<Box size={14}/>} label="Fregadero Cajón en U" />}
                              {matchesQ('Especiero') && <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} icon={<Box size={14}/>} label="Especiero" />}

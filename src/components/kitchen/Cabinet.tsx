@@ -141,6 +141,96 @@ export function NotchedLateralBoard({
   );
 }
 
+/**
+ * Frente de cajón verdulero con perforación ovalada central tipo stadium / pasante.
+ */
+export function VeggieFrontBoard({
+  position,
+  width,
+  height,
+  thickness,
+  holeW,
+  holeH,
+  colorProps,
+}: {
+  position: [number, number, number];
+  width: number;
+  height: number;
+  thickness: number;
+  holeW: number;
+  holeH: number;
+  colorProps: any;
+}) {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (colorProps?.textureUrl) {
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(colorProps.textureUrl, (tex) => {
+        if (!active) {
+          tex.dispose();
+          return;
+        }
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(width / 183, height / 250);
+        setTexture(tex);
+      });
+    } else {
+      setTexture(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [colorProps?.textureUrl, width, height]);
+
+  const geom = useMemo(() => {
+    const shape = new THREE.Shape();
+    const hw = width / 2;
+    const hh = height / 2;
+    shape.moveTo(-hw, -hh);
+    shape.lineTo(hw, -hh);
+    shape.lineTo(hw, hh);
+    shape.lineTo(-hw, hh);
+    shape.closePath();
+
+    const hole = new THREE.Path();
+    const r = holeH / 2;
+    const sx = Math.max(1, (holeW / 2) - r);
+    hole.moveTo(sx, -r);
+    hole.lineTo(-sx, -r);
+    hole.absarc(-sx, 0, r, -Math.PI / 2, Math.PI / 2, false);
+    hole.lineTo(sx, r);
+    hole.absarc(sx, 0, r, Math.PI / 2, -Math.PI / 2, false);
+    hole.closePath();
+
+    shape.holes.push(hole);
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: false,
+      curveSegments: 24,
+    });
+    g.translate(0, 0, -thickness / 2);
+    g.computeVertexNormals();
+    return g;
+  }, [width, height, thickness, holeW, holeH]);
+
+  return (
+    <mesh position={position} geometry={geom} castShadow receiveShadow>
+      <meshStandardMaterial
+        color={texture ? '#ffffff' : (colorProps?.color || '#ffffff')}
+        map={texture}
+        roughness={colorProps?.roughness ?? 0.6}
+        metalness={colorProps?.metalness ?? 0.1}
+      />
+      <Edges threshold={15} color="#18181b" />
+    </mesh>
+  );
+}
+
 export function AssemblyJoint({
   position, 
   length, 
@@ -1718,7 +1808,15 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
       const renderFronts = () => {
          if (variant === 'open') return null;
          
-          const renderUndermountDrawer = (keyPrefix: string, yPos: number, drawerH: number, colorProps: any, drawerKey = 'drawer-0') => {
+          const renderUndermountDrawer = (
+            keyPrefix: string, 
+            yPos: number, 
+            drawerH: number, 
+            colorProps: any, 
+            drawerKey = 'drawer-0',
+            isVeggie = false,
+            veggieType: 'lemons' | 'apples' | 'potatoes' | null = null
+          ) => {
             const innerDepthMm = (bodyDepth - 1.5) * 10;
             const nominalLength = getNominalSlideLength(innerDepthMm) / 10; // cm
             const drawerBoxLength = nominalLength; // SKL = NL para corredera telescópica
@@ -1764,10 +1862,22 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
 
                   <AnimatedDrawer openZOffset={drawerBoxLength - 3} forceOpen={isElementOpen(drawerKey)}>
                      {/* Drawer Front */}
-                     <Board position={[0, yBoxCenter, frontZ]} args={[width - gap*2, drawerH, thickness]} {...colorProps} isFrontPanel={true} globalPosition={[position[0] + 0, position[1] + yBoxCenter, position[2] + frontZ]} />
+                     {isVeggie ? (
+                        <VeggieFrontBoard
+                           position={[0, yBoxCenter, frontZ]}
+                           width={width - gap * 2}
+                           height={drawerH}
+                           thickness={thickness}
+                           holeW={Math.min(36, Math.max(22, Math.round((width - gap * 2) * 0.55)))}
+                           holeH={Math.min(7.0, Math.max(5.0, drawerH * 0.35))}
+                           colorProps={colorProps}
+                        />
+                     ) : (
+                        <Board position={[0, yBoxCenter, frontZ]} args={[width - gap*2, drawerH, thickness]} {...colorProps} isFrontPanel={true} globalPosition={[position[0] + 0, position[1] + yBoxCenter, position[2] + frontZ]} />
+                     )}
 
-                     {/* Tirador Cajón 3D */}
-                     {showHandle && (
+                     {/* Tirador Cajón 3D (Omitido en verdulero ya que la perforación actúa como tirador) */}
+                     {showHandle && !isVeggie && (
                        <group position={[0, yBoxCenter + (isPestanaHandle ? drawerH / 2 : (drawerH > 22 ? drawerH * 0.15 : 0)), frontZ + thickness / 2]}>
                          <KitchenHandle3D config={handleConfig} orientation="horizontal" isUpper={false} thickness={thickness} />
                        </group>
@@ -1777,8 +1887,35 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      <Board position={[-skw/2 + thickness/2, yBoxCenter, drawerBoxZCenter]} args={[thickness, sideHeight, drawerBoxLength]} {...parseColor(cInner, drawerInnerMaterial)} />
                      <Board position={[skw/2 - thickness/2, yBoxCenter, drawerBoxZCenter]} args={[thickness, sideHeight, drawerBoxLength]} {...parseColor(cInner, drawerInnerMaterial)} />
                      <Board position={[0, yBoxCenter + 0.6, drawerBoxZCenter - drawerBoxLength/2 + thickness/2]} args={[skw - thickness*2, sideHeight - 1.2, thickness]} {...parseColor(cInner, drawerInnerMaterial)} />
-                     <Board position={[0, yBoxCenter + 0.6, drawerBoxZCenter + drawerBoxLength/2 - thickness/2]} args={[skw - thickness*2, sideHeight - 1.2, thickness]} {...parseColor(cInner, drawerInnerMaterial)} />
+                     <Board 
+                        position={[0, isVeggie ? yBoxBottom + 2.5 : yBoxCenter + 0.6, drawerBoxZCenter + drawerBoxLength/2 - thickness/2]} 
+                        args={[skw - thickness*2, isVeggie ? 5 : sideHeight - 1.2, thickness]} 
+                        {...parseColor(cInner, drawerInnerMaterial)} 
+                     />
                      <Board position={[0, botPanelY, drawerBoxZCenter]} args={[skw - thickness*2, botPanelThickness, drawerBoxLength - thickness*2]} {...botColorProps} />
+                     
+                     {/* Vegetales decorativos en verdulero */}
+                     {isVeggie && veggieType === 'lemons' && (
+                        <group position={[0, botPanelY + 2.3, drawerBoxZCenter + drawerBoxLength / 2 - 6]}>
+                           <mesh position={[-5.5, 0, 0]} castShadow><sphereGeometry args={[2.2, 16, 16]} /><meshStandardMaterial color="#facc15" roughness={0.4} /></mesh>
+                           <mesh position={[0, 0, 0.5]} castShadow><sphereGeometry args={[2.3, 16, 16]} /><meshStandardMaterial color="#eab308" roughness={0.4} /></mesh>
+                           <mesh position={[5.5, 0, 0]} castShadow><sphereGeometry args={[2.2, 16, 16]} /><meshStandardMaterial color="#fde047" roughness={0.4} /></mesh>
+                        </group>
+                     )}
+                     {isVeggie && veggieType === 'apples' && (
+                        <group position={[0, botPanelY + 3.0, drawerBoxZCenter + drawerBoxLength / 2 - 6]}>
+                           <mesh position={[-6.5, 0, 0]} castShadow><sphereGeometry args={[2.8, 16, 16]} /><meshStandardMaterial color="#991b1b" roughness={0.35} /></mesh>
+                           <mesh position={[0, 0, 0.5]} castShadow><sphereGeometry args={[3.0, 16, 16]} /><meshStandardMaterial color="#b91c1c" roughness={0.35} /></mesh>
+                           <mesh position={[6.5, 0, 0]} castShadow><sphereGeometry args={[2.8, 16, 16]} /><meshStandardMaterial color="#ea580c" roughness={0.35} /></mesh>
+                        </group>
+                     )}
+                     {isVeggie && veggieType === 'potatoes' && (
+                        <group position={[0, botPanelY + 2.8, drawerBoxZCenter + drawerBoxLength / 2 - 6]}>
+                           <mesh position={[-6.5, 0, 0]} castShadow><sphereGeometry args={[2.7, 16, 16]} /><meshStandardMaterial color="#a16207" roughness={0.8} /></mesh>
+                           <mesh position={[0, 0, 0.5]} castShadow><sphereGeometry args={[2.9, 16, 16]} /><meshStandardMaterial color="#854d0e" roughness={0.8} /></mesh>
+                           <mesh position={[6.5, 0, 0]} castShadow><sphereGeometry args={[2.6, 16, 16]} /><meshStandardMaterial color="#15803d" roughness={0.6} /></mesh>
+                        </group>
+                     )}
                      
                      {/* Uniones del Cajón a la Trasera y al Contrafrente */}
                      <AssemblyJoint position={[-skw/2 + thickness, yBoxCenter, drawerBoxZCenter - drawerBoxLength/2 + thickness]} length={sideHeight} axis="y" pointing="right" thickness={thickness} count={1} overrideAssemblyType={useStore.getState().drawerAssemblyType} />
@@ -2596,8 +2733,9 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
                const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 5 - golaRegruesoDeduct);
                const drawerH = availH / 4;
-               const yBoxCenter = legsHeight + gap + drawerH / 2 + 3 * (drawerH + gap) + 4.0;
-               const yGolaC = legsHeight + gap + (drawerH + gap) * 2 + 2.0;
+               const yTopFront = legsHeight + cabH - 3.5 - gap - golaRegruesoDeduct;
+               const yBoxCenter = yTopFront - drawerH / 2;
+               const yGolaC = yTopFront - drawerH - gap - 2.0;
                const doorTopY = yGolaC - 2.0 - gap;
                const doorBottomY = legsHeight + gap;
                const doorH = Math.max(10, doorTopY - doorBottomY);
@@ -2770,6 +2908,44 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                   {renderUndermountDrawer('p0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0')}
                   {renderUndermountDrawer('d1', yMid, midDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1')}
                   {renderUndermountDrawer('d2', yTop, topDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-2'), 'drawer-2')}
+               </>
+            );
+         }
+
+         if (effectiveVariant === '3_drawers_veggie' || effectiveVariant === 'base_3_drawers_veggie') {
+            if (isGolaActive) {
+               const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
+               const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);
+               const lowerH = Math.round(availH * 0.43 * 10) / 10;
+               const midH = Math.round(availH * 0.33 * 10) / 10;
+               const topH = Math.round((availH - lowerH - midH) * 10) / 10;
+               const yLower = legsHeight + gap + lowerH / 2;
+               const yGolaC = legsHeight + gap + lowerH + 2.0;
+               const yMid = legsHeight + gap + lowerH + 4.0 + gap + midH / 2;
+               const yTop = legsHeight + gap + lowerH + 4.0 + gap + midH + gap + topH / 2;
+               return (
+                  <>
+                     {renderGolaL()}
+                     {renderGolaC(yGolaC)}
+                     {renderUndermountDrawer('v0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0', true, 'potatoes')}
+                     {renderUndermountDrawer('v1', yMid, midH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1', true, 'apples')}
+                     {renderUndermountDrawer('v2', yTop, topH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-2'), 'drawer-2', true, 'lemons')}
+                  </>
+               );
+            }
+            const deduct = isBaseOrIsland ? regruesoDeduct : 0;
+            const availableH = cabH - gap * 4;
+            const lowerH = Math.round(availableH * 0.43 * 10) / 10;
+            const midH = Math.round(availableH * 0.33 * 10) / 10;
+            const topDrawerH = Math.max(8, Math.round((availableH - lowerH - midH - deduct) * 10) / 10);
+            const yLower = legsHeight + gap + lowerH / 2;
+            const yMid = legsHeight + gap + lowerH + gap + midH / 2;
+            const yTop = legsHeight + gap + lowerH + gap + midH + gap + topDrawerH / 2;
+            return (
+               <>
+                  {renderUndermountDrawer('v0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0', true, 'potatoes')}
+                  {renderUndermountDrawer('v1', yMid, midH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1', true, 'apples')}
+                  {renderUndermountDrawer('v2', yTop, topDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-2'), 'drawer-2', true, 'lemons')}
                </>
             );
          }
@@ -3970,7 +4146,8 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
                      let midNotchCenterYFromBottom: number | undefined = undefined;
                      if (effectiveVariant === '1_door_1_drawer') {
-                        const drawerH = Math.max(8, 14.5 - golaRegruesoDeduct);
+                        const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 5 - golaRegruesoDeduct);
+                        const drawerH = availH / 4;
                         const yTopFrontFromBottom = cabH - 3.5 - gap - golaRegruesoDeduct;
                         midNotchCenterYFromBottom = yTopFrontFromBottom - drawerH - gap - 2.0;
                      } else if (effectiveVariant === '4_drawers') {
@@ -3981,9 +4158,9 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                         const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 3 - golaRegruesoDeduct);
                         const drawerH = availH / 2;
                         midNotchCenterYFromBottom = gap + drawerH + 2.0;
-                     } else if (effectiveVariant === '2_drawers_1_pot') {
+                     } else if (effectiveVariant === '2_drawers_1_pot' || effectiveVariant === '3_drawers_veggie' || effectiveVariant === 'base_3_drawers_veggie') {
                         const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);
-                        const lowerH = availH * 0.5;
+                        const lowerH = availH * (effectiveVariant.includes('veggie') ? 0.43 : 0.5);
                         midNotchCenterYFromBottom = gap + lowerH + 2.0;
                      }
 
@@ -4435,7 +4612,8 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
                      const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 5 - golaRegruesoDeduct);
                      const drawerH = availH / 4;
-                     const yBoxCenter = legsHeight + gap + drawerH / 2 + 3 * (drawerH + gap) + 4.0;
+                     const yTopFront = legsHeight + cabH - 3.5 - gap - golaRegruesoDeduct;
+                     const yBoxCenter = yTopFront - drawerH / 2;
                      drawerFronts.push({ yCenter: -height / 2 + yBoxCenter, frontH: drawerH });
                   } else {
                      const deduct = isBaseOrIsland ? regruesoDeduct : 0;
@@ -4509,6 +4687,32 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      const yTop = legsHeight + gap + lowerH + gap + midDrawerH + gap + topDrawerH / 2;
                      drawerFronts.push({ yCenter: -height / 2 + yLower, frontH: lowerH });
                      drawerFronts.push({ yCenter: -height / 2 + yMid, frontH: midDrawerH });
+                     drawerFronts.push({ yCenter: -height / 2 + yTop, frontH: topDrawerH });
+                  }
+               } else if (effVar === '3_drawers_veggie' || effVar === 'base_3_drawers_veggie') {
+                  if (isGolaActive) {
+                     const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
+                     const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);
+                     const lowerH = Math.round(availH * 0.43 * 10) / 10;
+                     const midH = Math.round(availH * 0.33 * 10) / 10;
+                     const topH = Math.round((availH - lowerH - midH) * 10) / 10;
+                     const yLower = legsHeight + gap + lowerH / 2;
+                     const yMid = legsHeight + gap + lowerH + 4.0 + gap + midH / 2;
+                     const yTop = legsHeight + gap + lowerH + 4.0 + gap + midH + gap + topH / 2;
+                     drawerFronts.push({ yCenter: -height / 2 + yLower, frontH: lowerH });
+                     drawerFronts.push({ yCenter: -height / 2 + yMid, frontH: midH });
+                     drawerFronts.push({ yCenter: -height / 2 + yTop, frontH: topH });
+                  } else {
+                     const deduct = isBaseOrIsland ? regruesoDeduct : 0;
+                     const availableH = cabH - gap * 4;
+                     const lowerH = Math.round(availableH * 0.43 * 10) / 10;
+                     const midH = Math.round(availableH * 0.33 * 10) / 10;
+                     const topDrawerH = Math.max(8, Math.round((availableH - lowerH - midH - deduct) * 10) / 10);
+                     const yLower = legsHeight + gap + lowerH / 2;
+                     const yMid = legsHeight + gap + lowerH + gap + midH / 2;
+                     const yTop = legsHeight + gap + lowerH + gap + midH + gap + topDrawerH / 2;
+                     drawerFronts.push({ yCenter: -height / 2 + yLower, frontH: lowerH });
+                     drawerFronts.push({ yCenter: -height / 2 + yMid, frontH: midH });
                      drawerFronts.push({ yCenter: -height / 2 + yTop, frontH: topDrawerH });
                   }
                } else if (effVar === 'sink_u_drawer') {

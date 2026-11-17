@@ -38,6 +38,7 @@ export type ToolMode =
   | 'place_base_2_doors' 
   | 'place_base_1_door_1_drawer' 
   | 'place_base_4_drawers' 
+  | 'place_base_3_drawers_veggie'
   | 'place_base_2_pot_drawers' 
   | 'place_base_spice_rack' 
   | 'place_base_corner_blind' 
@@ -240,6 +241,7 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'wall_hood_new_flow') return 'New Flow 60';
   if (cab.variant === '1_door_1_drawer') return 'Base 1 Pta + 1 Cajón';
   if (cab.variant === '4_drawers') return 'Base 4 Cajones';
+  if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') return 'Base Verdulero (3 Cajones)';
   if (cab.variant === '2_drawers_1_pot') return 'Base 2 Cajones + 1 Ollero';
   if (cab.variant === '2_pot_drawers') return 'Base 2 Olleros';
   if (cab.variant === 'spice_rack') return 'Base Especiero';

@@ -74,6 +74,7 @@ export interface Part {
   grainDirection?: 'vertical' | 'horizontal';
   isHpl?: boolean;
   materialCategory?: 'doors' | 'structure' | 'backs' | 'cover';
+  extraEdgeMeters?: number;
 }
 
 export function getNominalSlideLength(innerDepthMm: number): number {

@@ -1611,13 +1611,23 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     else if (v === '1_door_1_drawer') { w = 60; name = 'Base 1 Pta + 1 Cajón'; }
     else if (v === '2_doors') { w = 80; name = 'Base 2 Puertas'; }
     else if (v === '4_drawers') { w = 80; name = 'Base 4 Cajones'; }
+    else if (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie') { w = 60; name = 'Base Verdulero (3 Cajones)'; variant = '3_drawers_veggie'; }
     else if (v === '2_pot_drawers') { w = 80; name = 'Base 2 Olleros'; }
     else if (v === 'sink_u_drawer') { w = 90; name = 'Fregadero Cajón en U'; }
     else if (v === 'spice_rack') { w = 15; name = 'Especiero Extraíble'; }
     else if (v === 'wine_rack') { w = 20; name = 'Botellero Base'; }
     else if (v === 'corner_blind') { w = 110; name = 'Esquinero Ciego'; variant = 'corner_blind_right'; }
     else if (v === 'corner_l') { w = 90; d = 90; name = 'Esquinero en L'; }
-    return { type: 'base', variant, name, width: w, height: 80, depth: d, blindWidth: v === 'corner_blind' ? 60 : undefined };
+    return { 
+      type: 'base', 
+      variant, 
+      name, 
+      width: w, 
+      height: 80, 
+      depth: d, 
+      blindWidth: v === 'corner_blind' ? 60 : undefined,
+      drawersCount: (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie') ? 3 : (v === '4_drawers' ? 4 : (v === '2_pot_drawers' ? 2 : undefined))
+    };
   }
 
   // Torres
