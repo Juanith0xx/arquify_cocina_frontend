@@ -2540,7 +2540,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             );
          }
          
-           if (effectiveVariant === '2_doors' || effectiveVariant === 'tall_2_doors') {
+           if (effectiveVariant === '2_doors' || effectiveVariant === 'tall_2_doors' || effectiveVariant === 'wall_2_doors') {
             const doorW = (width - gap*3) / 2;
             const topDeduct = isGolaActive ? 3.5 : (isBaseOrIsland ? regruesoDeduct : 0);
             const doorH = Math.max(10, cabH - topDeduct - gap*2);
@@ -2556,7 +2556,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      doorW={doorW}
                      doorH={doorH}
                      thickness={thickness}
-                     isRightHinge={getDoorHinge('door-0', 'left')}
+                     isRightHinge={false}
                      isUpper={type === 'wall'}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-0')}
                      forceOpen={isElementOpen('door-0')}
@@ -2569,7 +2569,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      doorW={doorW}
                      doorH={doorH}
                      thickness={thickness}
-                     isRightHinge={getDoorHinge('door-1', 'right')}
+                     isRightHinge={true}
                      isUpper={type === 'wall'}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-1')}
                      forceOpen={isElementOpen('door-1')}
@@ -3199,7 +3199,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      doorW={doorW}
                      doorH={doorH}
                      thickness={thickness}
-                     isRightHinge={getDoorHinge('door-0', 'left')}
+                     isRightHinge={false}
                      isUpper={true}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-0')}
                      forceOpen={isElementOpen('door-0')}
@@ -3214,7 +3214,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      doorW={doorW}
                      doorH={doorH}
                      thickness={thickness}
-                     isRightHinge={getDoorHinge('door-1', 'right')}
+                     isRightHinge={true}
                      isUpper={true}
                      colorProps={parseColor(cDoors, doorMaterial, 'door-1')}
                      forceOpen={isElementOpen('door-1')}
@@ -3538,7 +3538,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                               doorW={doorW}
                               doorH={doorH}
                               thickness={thickness}
-                              isRightHinge={getDoorHinge('door-0', 'left')}
+                              isRightHinge={false}
                               isUpper={false}
                               colorProps={parseColor(cDoors, doorMaterial, 'door-left')}
                               forceOpen={isElementOpen('door-left') || isElementOpen('door-0')}
@@ -3551,7 +3551,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                               doorW={doorW}
                               doorH={doorH}
                               thickness={thickness}
-                              isRightHinge={getDoorHinge('door-1', 'right')}
+                              isRightHinge={true}
                               isUpper={false}
                               colorProps={parseColor(cDoors, doorMaterial, 'door-right')}
                               forceOpen={isElementOpen('door-right') || isElementOpen('door-1')}

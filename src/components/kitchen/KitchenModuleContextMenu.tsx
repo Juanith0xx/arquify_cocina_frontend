@@ -753,6 +753,14 @@ export function KitchenModuleContextMenu({
   const isOvenMicro = variant === 'tall_oven_micro';
   const isSpiceRack = variant === 'spice_rack';
   const isCornerBlind = variant === 'corner_blind' || variant === 'corner_blind_left' || variant === 'corner_blind_right' || variant?.startsWith('corner_blind') || variant?.startsWith('wall_corner_blind');
+  const isSideBySideDoors =
+    is2Doors ||
+    variant === 'wall_hood_new_flow' ||
+    variant === 'corner_l' ||
+    variant === 'base_corner_l' ||
+    ((activeCabinet.type === 'closet' || activeCabinet.variant?.startsWith('closet_')) &&
+      Boolean(activeCabinet.hasDoors || activeCabinet.variant === 'closet_2_doors' || activeCabinet.variant === 'closet_inner_drawers') &&
+      activeCabinet.width > 50);
 
   const getElementsList = () => {
     const elements: { id: string; label: string; type: 'door' | 'drawer' }[] = [];
@@ -1531,7 +1539,7 @@ export function KitchenModuleContextMenu({
               );
             })()}
 
-            {swingDoors.length > 1 && (
+            {swingDoors.length > 1 && !isSideBySideDoors && (
               <div className={`mb-3 rounded-xl border p-3 ${
                 isLight
                   ? 'border-slate-200 bg-slate-50'
