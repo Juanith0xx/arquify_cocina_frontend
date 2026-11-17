@@ -1646,8 +1646,8 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     let d = 35;
     let name = 'Módulo Aéreo';
     let variant = v;
-    if (v === '1_door') { w = 60; name = 'Aéreo 1 Puerta'; }
-    else if (v === '2_doors') { w = 80; name = 'Aéreo 2 Puertas'; }
+    if (v === '1_door') { variant = 'wall_1_door'; w = 60; name = 'Aéreo 1 Puerta'; }
+    else if (v === '2_doors') { variant = 'wall_2_doors'; w = 80; name = 'Aéreo 2 Puertas'; }
     else if (v === 'lift_up') { variant = 'wall_lift_up'; w = 80; h = 40; name = 'Aéreo Puerta Elevable'; }
     else if (v === 'lift_up_double') { variant = 'wall_lift_up_double'; w = 80; h = 70; name = 'Aéreo Doble Elevable'; }
     else if (v === 'microwave_niche') { variant = 'wall_microwave_niche'; w = 60; h = 80; d = 38; name = 'Aéreo Nicho Microondas'; }

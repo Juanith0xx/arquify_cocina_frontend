@@ -221,6 +221,16 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'tall_open') return 'Despensa Abierta';
   if (cab.variant === 'tall_terminal_shelves') return 'Torre Terminal Repisas';
   if (cab.variant === 'tall_2_doors') return 'Despensa 2 Puertas';
+  if (cab.type === 'wall') {
+    if (cab.variant === 'wall_1_door' || cab.variant === '1_door') return 'Aéreo 1 Puerta';
+    if (cab.variant === 'wall_2_doors' || cab.variant === '2_doors') return 'Aéreo 2 Puertas';
+    if (cab.variant === 'wall_lift_up') return 'Aéreo Elevable Aventos';
+    if (cab.variant === 'wall_lift_up_double') return 'Aéreo Doble Elevable';
+    if (cab.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro';
+    if (cab.variant === 'wall_open') return 'Aéreo Abierto Repisas';
+    if (cab.variant === 'wall_hood_new_flow') return 'New Flow 60';
+    return 'Mueble Aéreo';
+  }
   if (cab.variant === 'wall_1_door') return 'Aéreo 1 Puerta';
   if (cab.variant === 'wall_2_doors') return 'Aéreo 2 Puertas';
   if (cab.variant === 'wall_lift_up') return 'Aéreo Elevable Aventos';
@@ -237,7 +247,6 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === '1_door') return 'Base 1 Puerta';
   if (cab.type === 'base') return 'Mueble Base';
   if (cab.type === 'tall') return 'Torre / Despensa';
-  if (cab.type === 'wall') return 'Mueble Aéreo';
   if (cab.type === 'island') return 'Isla Cocina';
   return `Módulo ${index + 1}`;
 }

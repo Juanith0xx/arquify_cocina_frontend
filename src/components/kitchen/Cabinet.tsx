@@ -1,7 +1,8 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { CabinetType, useKitchenStore, getCabinetLabel } from '../../store/kitchenStore';
 import { useStore } from '../../store';
-import { Edges, Line, Text, Billboard } from '@react-three/drei';
+import { Edges, Line, Text, Billboard, Html } from '@react-three/drei';
+import { Maximize2, Check } from 'lucide-react';
 import { Board } from '../Board';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
@@ -2042,7 +2043,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             </group>
          );
          
-           if (effectiveVariant === '1_door' || effectiveVariant === 'tall_1_door') {
+           if (effectiveVariant === '1_door' || effectiveVariant === 'tall_1_door' || effectiveVariant === 'wall_1_door') {
             const doorW = width - gap*2;
             const topDeduct = isGolaActive ? 3.5 : (isBaseOrIsland ? regruesoDeduct : 0);
             const doorH = Math.max(10, cabH - topDeduct - gap*2);
@@ -4742,76 +4743,87 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             ))}
           </group>
 
-          {/* 4. Badge Flotante "MÓDULO ACTIVO" con dimensiones */}
+          {/* 4. Tooltip Flotante Moderno "MÓDULO ACTIVO" (Glassmorphism + Caret + Badge) */}
           {cabinetIndex >= 0 && (
-            <group position={[0, height / 2 + 12, 0]} renderOrder={1005}>
-              <Line
-                points={[[0, 0, 0], [0, -10, 0]]}
-                color={highlightColor}
-                lineWidth={2}
-                dashed
-                dashScale={1.2}
-                depthTest={false}
-                renderOrder={1004}
-              />
-              <Billboard follow={true}>
+            <group position={[0, height / 2 + 5, 0]} renderOrder={1005}>
+              <Html
+                center
+                distanceFactor={75}
+                zIndexRange={[100, 0]}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+              >
                 {(() => {
                   const cabLabel = getCabinetLabel({ type, variant, width, height, depth }, cabinetIndex);
-                  const headerText = `MOD ${cabinetIndex + 1} • ${cabLabel}`;
-                  const dimText = `${width.toFixed(0)} × ${height.toFixed(0)} × ${depth.toFixed(0)} cm`;
-                  const badgeW = Math.max(34, Math.max(headerText.length, dimText.length) * 2.2 + 8);
+                  const tagBg = isDecoration ? '#38bdf8' : '#f97316';
+                  const checkBg = isDecoration ? 'rgba(56, 189, 248, 0.2)' : 'rgba(249, 115, 22, 0.2)';
+                  const checkBorder = isDecoration ? '#38bdf8' : '#f97316';
+                  const checkColor = isDecoration ? '#38bdf8' : '#fb923c';
+
                   return (
-                    <group>
-                      <mesh position={[0, 0, -0.05]} renderOrder={1004}>
-                        <planeGeometry args={[badgeW, 12]} />
-                        <meshBasicMaterial color="#090d16" transparent opacity={0.94} depthTest={false} />
-                      </mesh>
-                      <Line
-                        points={[
-                          [-badgeW / 2, -6, 0],
-                          [badgeW / 2, -6, 0],
-                          [badgeW / 2, 6, 0],
-                          [-badgeW / 2, 6, 0],
-                          [-badgeW / 2, -6, 0],
-                        ]}
-                        color={highlightColor}
-                        lineWidth={2.2}
-                        depthTest={false}
-                        renderOrder={1005}
+                    <div className="relative flex flex-col items-center select-none filter drop-shadow-xl">
+                      {/* Card principal estilo glassmorphism */}
+                      <div
+                        className="flex flex-col gap-1.5 px-3.5 py-2 rounded-2xl border select-none whitespace-nowrap"
+                        style={{
+                          background: 'linear-gradient(180deg, rgba(45, 52, 68, 0.95) 0%, rgba(24, 29, 40, 0.98) 100%)',
+                          borderColor: 'rgba(255, 255, 255, 0.16)',
+                          boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+                          backdropFilter: 'blur(8px)',
+                          minWidth: '180px',
+                        }}
+                      >
+                        {/* Fila superior: Tag MOD + Nombre + Check */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            {/* Tag Píldora MOD */}
+                            <span
+                              className="font-extrabold text-[11px] px-2 py-0.5 rounded-[6px] tracking-tight text-slate-950 leading-tight"
+                              style={{ backgroundColor: tagBg }}
+                            >
+                              MOD {cabinetIndex + 1}
+                            </span>
+                            {/* Nombre del Módulo */}
+                            <span className="text-white font-semibold text-[13px] tracking-tight leading-tight">
+                              {cabLabel}
+                            </span>
+                          </div>
+
+                          {/* Icono de verificación circular */}
+                          <div
+                            className="w-[18px] h-[18px] rounded-full flex items-center justify-center shrink-0 border"
+                            style={{
+                              backgroundColor: checkBg,
+                              borderColor: checkBorder,
+                              color: checkColor,
+                            }}
+                          >
+                            <Check size={11} strokeWidth={3} />
+                          </div>
+                        </div>
+
+                        {/* Fila inferior: Icono de dimensiones + Medidas */}
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Maximize2 size={11} className="text-slate-400 shrink-0" />
+                          <span className="text-[11px] font-mono tracking-tight text-slate-300 leading-tight">
+                            {width.toFixed(0)} × {height.toFixed(0)} × {depth.toFixed(0)} cm
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Caret / Puntero triangular inferior dirigido a la cubierta del mueble */}
+                      <div
+                        className="w-0 h-0"
+                        style={{
+                          borderLeft: '7px solid transparent',
+                          borderRight: '7px solid transparent',
+                          borderTop: '7px solid rgba(24, 29, 40, 0.98)',
+                          marginTop: '-1px',
+                        }}
                       />
-                      <Text
-                        position={[0, 2.2, 0.05]}
-                        fontSize={4.4}
-                        color={badgeTextColor}
-                        anchorX="center"
-                        anchorY="middle"
-                        fontWeight="bold"
-                        outlineWidth={0.4}
-                        outlineColor="#000000"
-                        material-depthTest={false}
-                        material-toneMapped={false}
-                        renderOrder={1006}
-                      >
-                        {headerText}
-                      </Text>
-                      <Text
-                        position={[0, -2.5, 0.05]}
-                        fontSize={3.5}
-                        color="#e2e8f0"
-                        anchorX="center"
-                        anchorY="middle"
-                        outlineWidth={0.3}
-                        outlineColor="#000000"
-                        material-depthTest={false}
-                        material-toneMapped={false}
-                        renderOrder={1006}
-                      >
-                        {dimText}
-                      </Text>
-                    </group>
+                    </div>
                   );
                 })()}
-              </Billboard>
+              </Html>
             </group>
           )}
         </group>
