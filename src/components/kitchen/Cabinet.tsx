@@ -263,6 +263,7 @@ export function VeggieFrontBoard({
   return (
     <mesh position={position} geometry={geom} castShadow={!isTransp} receiveShadow={!isTransp}>
       <meshStandardMaterial
+        key={`${texture ? texture.uuid : (resolvedColor || 'solid')}-${isTransp}`}
         color={resolvedColor}
         map={texture}
         roughness={colorProps?.roughness ?? 0.85}
@@ -282,6 +283,7 @@ export function VeggieFrontBoard({
  * Frente interior estructural (contrafrente) del cajón verdulero.
  * Posee una perforación ovalada agrandada en 2 cm perimetrales respecto al borde exterior
  * para permitir atornillar desde atrás de forma robusta y evitar que se asome por la vista frontal.
+ * Mantiene la misma textura, tono y acabado que el resto del interior del cajón.
  */
 export function VeggieInnerFrontBoard({
   position,
@@ -305,10 +307,13 @@ export function VeggieInnerFrontBoard({
 
   useEffect(() => {
     let active = true;
-    if (colorProps?.textureUrl) {
+    let currentTexture: THREE.Texture | null = null;
+    const texUrl = colorProps?.textureUrl || (colorProps?.color && !colorProps.color.startsWith('#') ? colorProps.color : undefined);
+
+    if (texUrl) {
       const loader = new THREE.TextureLoader();
       loader.setCrossOrigin('anonymous');
-      loader.load(colorProps.textureUrl, (tex) => {
+      loader.load(texUrl, (tex) => {
         if (!active) {
           tex.dispose();
           return;
@@ -316,17 +321,59 @@ export function VeggieInnerFrontBoard({
         const clonedTex = tex.clone();
         clonedTex.wrapS = THREE.RepeatWrapping;
         clonedTex.wrapT = THREE.RepeatWrapping;
-        clonedTex.repeat.set(width / 183, height / 250);
+
+        const img = clonedTex.image;
+        const imgAspect = img && img.width > 0 ? (img.height / img.width) : 1;
+
+        const adminTextures = useAdminStore.getState().textures || [];
+        const customItem = adminTextures.find(
+          (t: any) => t.url === texUrl || t.previewUrl === texUrl
+        ) as any;
+        const isHpl = colorProps?.materialType === 'hpl' || (customItem && (customItem.category === 'hpl_autor' || customItem.brand?.toLowerCase().includes('abet')));
+        const dim1 = customItem?.sheetWidthM ? customItem.sheetWidthM * 100 : (isHpl ? 130 : 183);
+        const dim2 = customItem?.sheetHeightM ? customItem.sheetHeightM * 100 : (isHpl ? 305 : 250);
+        const maxSheetDim = Math.max(dim1, dim2);
+        const minSheetDim = Math.min(dim1, dim2);
+
+        let realWidthCm = minSheetDim;
+        let realHeightCm = maxSheetDim;
+        if (img && img.width > 0 && img.height > 0) {
+          if (img.width > img.height) {
+            realWidthCm = maxSheetDim;
+            realHeightCm = Math.max(minSheetDim, maxSheetDim * imgAspect);
+          } else {
+            realHeightCm = maxSheetDim;
+            realWidthCm = Math.max(minSheetDim, maxSheetDim / imgAspect);
+          }
+        }
+
+        clonedTex.repeat.set(width / realWidthCm, height / realHeightCm);
+
+        if (colorProps?.grainDirection === 'horizontal') {
+          clonedTex.rotation = Math.PI / 2;
+          clonedTex.center.set(0.5, 0.5);
+          clonedTex.repeat.set(height / realWidthCm, width / realHeightCm);
+        }
+
         clonedTex.needsUpdate = true;
-        setTexture(clonedTex);
+        setTexture((prev) => {
+          if (prev) prev.dispose();
+          return clonedTex;
+        });
+        currentTexture = clonedTex;
       });
     } else {
-      setTexture(null);
+      setTexture((prev) => {
+        if (prev) prev.dispose();
+        return null;
+      });
     }
+
     return () => {
       active = false;
+      if (currentTexture) currentTexture.dispose();
     };
-  }, [colorProps?.textureUrl, width, height]);
+  }, [colorProps?.textureUrl, colorProps?.color, colorProps?.materialType, colorProps?.grainDirection, width, height]);
 
   const geom = useMemo(() => {
     const shape = new THREE.Shape();
@@ -375,15 +422,18 @@ export function VeggieInnerFrontBoard({
     return g;
   }, [width, height, thickness, holeW, holeH]);
 
+  const storeColor = useStore((state) => state.structureColor);
+  const finalColor = colorProps?.color || storeColor;
   const isTransp = isTransparent || Boolean(colorProps?.transparent);
   const currentOpacity = isTransparent ? 0.3 : (colorProps?.opacity ?? 1);
-  const resolvedColor = !texture && (colorProps?.color === '#ffffff' || colorProps?.color === '#f8fafc')
+  const resolvedColor = !texture && (finalColor === '#ffffff' || finalColor === '#f8fafc')
     ? '#edf2f7'
-    : (texture ? '#ffffff' : (colorProps?.color || '#edf2f7'));
+    : (texture ? '#ffffff' : finalColor);
 
   return (
     <mesh position={position} geometry={geom} castShadow={!isTransp} receiveShadow={!isTransp}>
       <meshStandardMaterial
+        key={`${texture ? texture.uuid : (resolvedColor || 'solid')}-${isTransp}-${colorProps?.roughness ?? 0.85}`}
         color={resolvedColor}
         map={texture}
         roughness={colorProps?.roughness ?? 0.85}
@@ -1734,7 +1784,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
    const cStructure = safeStructureColor || safeColor || '#f8fafc';
    const cDoors = safeDoorColor || safeColor || '#f8fafc';
    const cDrawers = safeDrawerFrontColor || safeColor || '#f8fafc';
-   const cInner = drawerInnerColor || safeColor || '#f8fafc';
+   const cInner = drawerInnerColor || safeStructureColor || safeColor || '#f8fafc';
    const cShelves = safeShelfColor || safeColor || cStructure;
    const isDurolacBack = backMaterial === 'durolac' || backThickness === 3 || (!backMaterial && !backThickness && (!backColor || backColor === '#FFFFFF' || backColor === '#f8fafc'));
    const resolvedBackThicknessMm = backThickness || (isDurolacBack ? 3 : (backMaterial === 'melamina' || backMaterial === 'hpl' ? 15 : 3));
