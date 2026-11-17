@@ -12,7 +12,7 @@ try {
 dotenv.config({ override: true });
 
 export async function handleRenderRequest(body: any) {
-  const { imageBase64, prompt, propertyType, environment, lighting, hasPeople, hasProps, renderStyle, bimManifest } = body || {};
+  const { imageBase64, prompt, propertyType, environment, lighting, hasPeople, hasProps, stagingIntensity = 2, renderStyle, bimManifest } = body || {};
 
   if (!imageBase64) {
     throw new Error('Image base64 data is required');
@@ -67,6 +67,26 @@ EXACT MATERIAL & FINISH SPECIFICATIONS:
 
   const totalCount = bimManifest?.totalModulesCount ? `${bimManifest.totalModulesCount} modules` : 'the exact count shown in the input 3D model';
 
+  const intensityNum = Number(stagingIntensity) || 2;
+  const stagingPropsSection = !hasProps
+    ? '- NO PROPS: Keep countertops and surfaces completely clean, pristine, polished, and free of clutter or staging objects.'
+    : intensityNum === 1
+    ? `- TASTEFUL DECORATION & MINIMALIST STAGING (LEVEL 1 - SUBTLE & REFINED):
+     * Keep countertops 85% bare, clean, and uncluttered so the visual focus remains 100% on the pristine cabinetry and countertop stone.
+     * Rest only 1 or 2 high-end designer accent items naturally on the countertop: e.g. a minimalist ceramic vase with a single botanical sprig, or a sleek designer espresso machine.
+     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`
+    : intensityNum === 3
+    ? `- TASTEFUL DECORATION & RICH LIVED-IN STAGING (LEVEL 3 - ABUNDANT & VIBRANT):
+     * Create an authentic, warm, inhabited high-end kitchen atmosphere with generous culinary and lifestyle staging resting ONLY ON THE EXISTING COUNTERTOP SURFACES${hasIsland ? ' AND ISLAND' : ''}.
+     * Include: artisan wooden cutting board with sliced bread and fresh citrus, a premium espresso machine or kettle, clear glass canisters with dry grains or pasta, small ceramic pots with living herbs (basil/rosemary), a decorative fruit bowl, olive oil bottles, pepper grinder, stacked cookbooks, and a neatly folded linen towel.
+     * The kitchen feels actively loved and used, yet strictly preserves all cabinetry geometry, lines, and finishes.
+     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`
+    : `- TASTEFUL DECORATION & LIVING PROPS (LEVEL 2 - BALANCED EDITORIAL INTERIOR):
+     * Place rich, realistic, architectural lifestyle elements resting naturally ONLY ON THE EXISTING COUNTERTOP SURFACES${hasIsland ? ' AND ISLAND' : ''}.
+     * Include: a sleek designer coffee machine or stainless/matte kettle, an artisan wood cutting board with fresh citrus/bread, small ceramic pots with fresh green herbs (basil/rosemary) or a delicate minimalist vase with natural greenery, elegant salt/pepper mills, and a neatly folded linen kitchen towel.
+     * Countertops maintain a clean, organized, editorial balance.
+     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`;
+
   const structuredPrompt = `
 You are a professional architectural rendering engine. Perform a strict photorealistic restyling of this exact 3D CAD/BIM viewport capture.
 
@@ -108,19 +128,24 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
 8. ARCHITECTURAL STAGING & PROPS (DECORATION):
    - Maintain pristine architectural staging and high-end interior editorial realism.
    ${hasPeople ? '- HUMAN STAGING: 1 realistic person standing naturally inside the open room floor space, without obstructing or modifying any cabinetry design.' : '- NO HUMANS: STRICTLY NO PEOPLE, no figures, no silhouettes anywhere in the scene.'}
-   ${hasProps ? `- TASTEFUL DECORATION & LIVING PROPS:
-     * Place rich, realistic, architectural lifestyle elements resting naturally ONLY ON THE EXISTING COUNTERTOP SURFACES${hasIsland ? ' AND ISLAND' : ''}.
-     * Include: a sleek designer coffee machine or stainless/matte kettle, an artisan wood cutting board with fresh citrus/bread, small ceramic pots with fresh green herbs (basil/rosemary) or a delicate minimalist vase with natural greenery, elegant salt/pepper mills, and a neatly folded linen kitchen towel.
-     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.` : '- NO PROPS: Keep countertops and surfaces completely clean, pristine, polished, and free of clutter or staging objects.'}
+   ${stagingPropsSection}
 
 9. CAMERA POSE & PERSPECTIVE IMMUTABILITY:
    - DO NOT change the camera angle, elevation, pitch, yaw, or framing.
    - Maintain the exact camera perspective from the input capture.
+   - ARCHITECTURAL 2-POINT PERSPECTIVE: Keep all vertical cabinetry lines, tall units, door seams, and wall corners strictly plumb, parallel, and vertical (architectural tilt-shift lens look, zero converging vertical distortion).
 
 10. PHOTOREALISTIC RESTYLING TASK:
-   - Replace the flat/shaded 3D viewport look with high-end architectural rendering: physically accurate daylight, subtle contact ambient occlusion, realistic reflections on stone countertops, smooth light Scandinavian wood grain, and crisp black hardware.
-   - Ambient Lighting: ${lighting || 'Luz natural de sol de mañana, suave y brillante'}.
-   - Property context: ${propertyType || 'Casa Residencial moderna'}.
+   - Replace the flat/shaded 3D viewport look with high-end architectural editorial rendering: physically accurate daylight, subtle contact ambient occlusion, realistic reflections on stone countertops, smooth Scandinavian wood grain, and crisp black hardware.
+   - PHYSICAL MATERIALITY & REALISTIC FINISHES:
+     * Subtle micro-bevels (1mm soft chamfer) on cabinet edges to catch natural specular light, avoiding computer-generated sharp artificial edges.
+     * Accurate diffuse and specular reflections on countertops (natural stone/quartz reflection without excessive glare).
+     * Soft, silky matte anti-fingerprint texture on solid melamine fronts with clean tactile grain on wood fronts.
+     * Hardware: Crisp matte powder-coated black finish on handles.
+   - STRICT LIGHTING FIDELITY (NO INVENTED LIGHT FIXTURES):
+     * ABSOLUTELY DO NOT add, invent, or draw any under-cabinet LED light strips, spotlights, or hidden light bars unless they are physically modeled in the 3D input geometry. The cabinetry must reflect strictly what is manufactured and sold.
+     * Ambient Lighting: ${lighting || 'Luz natural de sol de mañana, suave y brillante'}.
+     * Property context: ${propertyType || 'Casa Residencial moderna'}.
   `.trim();
 
   let mimeType = 'image/jpeg';

@@ -18,6 +18,7 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Sliders,
 } from 'lucide-react';
 import { useAdminStore } from '../../store/adminStore';
 import { useSupabaseAuthStore } from '../../store/supabaseAuthStore';
@@ -46,6 +47,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
   const [lighting, setLighting] = useState<string>('Mañana Luminosa (Luz Natural Sol)');
   const [hasPeople, setHasPeople] = useState<boolean>(false);
   const [hasProps, setHasProps] = useState<boolean>(false);
+  const [stagingIntensity, setStagingIntensity] = useState<number>(2);
 
   // Estados del Flujo de Generación
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -102,7 +104,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
       const canvas = document.querySelector('canvas');
       if (canvas) {
         // Redimensionar y optimizar la imagen para mantener alta fidelidad visual sin exceder los límites de tokens
-        const maxDim = 1280;
+        const maxDim = 1536;
         let w = canvas.width;
         let h = canvas.height;
         if (w > maxDim || h > maxDim) {
@@ -120,9 +122,9 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
         const ctx = tempCanvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(canvas, 0, 0, w, h);
-          canvasDataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
+          canvasDataUrl = tempCanvas.toDataURL('image/jpeg', 0.90);
         } else {
-          canvasDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          canvasDataUrl = canvas.toDataURL('image/jpeg', 0.90);
         }
       }
     } catch (err) {
@@ -161,6 +163,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
           lighting,
           hasPeople,
           hasProps,
+          stagingIntensity,
           bimManifest,
         }),
       });
@@ -454,6 +457,92 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
                         className="w-4 h-4 accent-orange-500 cursor-pointer"
                       />
                     </label>
+
+                    {/* Control Deslizante (Slider) de Intensidad de Staging */}
+                    <div
+                      className={`p-3.5 rounded-xl border transition-all ${
+                        hasProps
+                          ? isLight
+                            ? 'bg-orange-500/5 border-orange-500/30'
+                            : 'bg-orange-500/5 border-orange-500/20'
+                          : isLight
+                          ? 'bg-slate-50 border-slate-200 opacity-60'
+                          : 'bg-white/5 border-white/10 opacity-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Sliders size={14} className={hasProps ? 'text-orange-400' : 'text-slate-400'} />
+                          <span className="text-xs font-bold">Intensidad de Staging</span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                            stagingIntensity === 1
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                              : stagingIntensity === 2
+                              ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          }`}
+                        >
+                          {stagingIntensity === 1
+                            ? '1 · Sutil (Minimalista)'
+                            : stagingIntensity === 2
+                            ? '2 · Equilibrado (Editorial)'
+                            : '3 · Intenso (Vivido)'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <input
+                          type="range"
+                          min="1"
+                          max="3"
+                          step="1"
+                          value={stagingIntensity}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setStagingIntensity(val);
+                            if (!hasProps) setHasProps(true);
+                          }}
+                          className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-orange-500 bg-zinc-700 focus:outline-none"
+                        />
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold px-0.5">
+                          <button
+                            type="button"
+                            onClick={() => { setStagingIntensity(1); if (!hasProps) setHasProps(true); }}
+                            className={`cursor-pointer transition-colors ${stagingIntensity === 1 ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
+                          >
+                            Sutil
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setStagingIntensity(2); if (!hasProps) setHasProps(true); }}
+                            className={`cursor-pointer transition-colors ${stagingIntensity === 2 ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
+                          >
+                            Equilibrado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setStagingIntensity(3); if (!hasProps) setHasProps(true); }}
+                            className={`cursor-pointer transition-colors ${stagingIntensity === 3 ? 'text-orange-400 font-bold' : 'hover:text-slate-200'}`}
+                          >
+                            Intenso
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className={`text-[11px] mt-2 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                        {stagingIntensity === 1 && (
+                          <span>🎯 <strong>Cubiertas 85% limpias:</strong> 1 o 2 objetos de autor destacados. Ideal para catálogo puro.</span>
+                        )}
+                        {stagingIntensity === 2 && (
+                          <span>✨ <strong>Estilo editorial:</strong> Tabla noble, hierbas aromáticas, cafetera y toalla de lino (Recomendado).</span>
+                        )}
+                        {stagingIntensity === 3 && (
+                          <span>🔥 <strong>Cocina habitada:</strong> Electrodomésticos, vajilla en uso, frascos gourmet y frutero lleno.</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
