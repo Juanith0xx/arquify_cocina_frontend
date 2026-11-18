@@ -4601,7 +4601,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                         const railY = height - railH / 2;
                         const frontRailZ = isGolaActive
                            ? (depth / 2 - thickness - 2.8 - thickness / 2)
-                           : (depth / 2 - thickness / 2);
+                           : (depth / 2 - thickness - thickness / 2);
                         return (
                            <>
                               <Board 
