@@ -578,6 +578,172 @@ function FdvDesign90Model({ position }: { position: [number, number, number] }) 
 }
 
 // =========================================================================
+// MALLA MONOLÍTICA DE CUBIERTA SIMULADA SEMITRANSPARENTE (SIN HUINCHAS NI COSTURAS)
+// =========================================================================
+function SimulatedPreviewCountertopMesh({
+  cabW,
+  cabD,
+  ctThick,
+  cutoutW,
+  cutoutD,
+  simMatProps,
+}: {
+  cabW: number;
+  cabD: number;
+  ctThick: number;
+  cutoutW: number;
+  cutoutD: number;
+  simMatProps: any;
+}) {
+  const geom = useMemo(() => {
+    const shape = new THREE.Shape();
+    const halfW = cabW / 2;
+    const ctDepth = cabD + 2;
+    const halfD = ctDepth / 2;
+
+    shape.moveTo(-halfW, -halfD);
+    shape.lineTo(halfW, -halfD);
+    shape.lineTo(halfW, halfD);
+    shape.lineTo(-halfW, halfD);
+    shape.closePath();
+
+    if (cutoutW > 0 && cutoutD > 0) {
+      const hole = new THREE.Path();
+      const hLeft = -cutoutW / 2;
+      const hRight = cutoutW / 2;
+      const hBack = -cutoutD / 2;
+      const hFront = cutoutD / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: ctThick,
+      bevelEnabled: false,
+    });
+    g.rotateX(Math.PI / 2);
+    g.translate(0, ctThick, 0);
+    g.computeVertexNormals();
+    return g;
+  }, [cabW, cabD, ctThick, cutoutW, cutoutD]);
+
+  return (
+    <mesh position={[0, 0, 1.0]} geometry={geom} castShadow={false} receiveShadow={false}>
+      <meshStandardMaterial {...simMatProps} />
+      <Edges scale={1} threshold={15} color="#94a3b8" />
+    </mesh>
+  );
+}
+
+// =========================================================================
+// MALLA MONOLÍTICA DE TRAMO DE CUBIERTA REAL CON CALADOS CNC INDEPENDIENTES
+// =========================================================================
+function ContinuousSlabSegmentMesh({
+  totalSegSlabLenCm,
+  depthCm,
+  stoneThicknessCm,
+  cabTopY,
+  localZShift,
+  isLastSeg,
+  isTransparent,
+  matProps,
+  sinkCutout,
+  cooktopCutout,
+}: {
+  totalSegSlabLenCm: number;
+  depthCm: number;
+  stoneThicknessCm: number;
+  cabTopY: number;
+  localZShift: number;
+  isLastSeg: boolean;
+  isTransparent: boolean;
+  matProps: any;
+  sinkCutout?: { localX: number; width: number; depth: number } | null;
+  cooktopCutout?: { localX: number; width: number; depth: number } | null;
+}) {
+  const geom = useMemo(() => {
+    if (!sinkCutout && !cooktopCutout) return null;
+
+    const shape = new THREE.Shape();
+    const halfW = (totalSegSlabLenCm - (isLastSeg ? 0 : 0.05)) / 2;
+    const halfD = depthCm / 2;
+
+    shape.moveTo(-halfW, -halfD);
+    shape.lineTo(halfW, -halfD);
+    shape.lineTo(halfW, halfD);
+    shape.lineTo(-halfW, halfD);
+    shape.closePath();
+
+    if (sinkCutout) {
+      const hole = new THREE.Path();
+      const hLeft = sinkCutout.localX - sinkCutout.width / 2;
+      const hRight = sinkCutout.localX + sinkCutout.width / 2;
+      const hBack = -sinkCutout.depth / 2;
+      const hFront = sinkCutout.depth / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    if (cooktopCutout) {
+      const hole = new THREE.Path();
+      const hLeft = cooktopCutout.localX - cooktopCutout.width / 2;
+      const hRight = cooktopCutout.localX + cooktopCutout.width / 2;
+      const hBack = -cooktopCutout.depth / 2;
+      const hFront = cooktopCutout.depth / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: stoneThicknessCm,
+      bevelEnabled: false,
+    });
+    g.rotateX(Math.PI / 2);
+    g.translate(0, stoneThicknessCm, 0);
+    g.computeVertexNormals();
+    return g;
+  }, [totalSegSlabLenCm, isLastSeg, depthCm, stoneThicknessCm, sinkCutout, cooktopCutout]);
+
+  if (!geom) {
+    return (
+      <mesh
+        position={[0, cabTopY + stoneThicknessCm / 2, localZShift]}
+        castShadow={!isTransparent}
+        receiveShadow={!isTransparent}
+      >
+        <boxGeometry args={[totalSegSlabLenCm - (isLastSeg ? 0 : 0.05), stoneThicknessCm, depthCm]} />
+        <meshStandardMaterial {...matProps} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+    );
+  }
+
+  return (
+    <mesh
+      position={[0, cabTopY, localZShift]}
+      geometry={geom}
+      castShadow={!isTransparent}
+      receiveShadow={!isTransparent}
+    >
+      <meshStandardMaterial {...matProps} />
+      {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+    </mesh>
+  );
+}
+
+// =========================================================================
 // COMPONENTE PRINCIPAL: KITCHEN COUNTERTOP 3D (CONTINUOUS SLABS & UNDERMOUNT SINK)
 // =========================================================================
 export function KitchenCountertop3D() {
@@ -657,9 +823,8 @@ export function KitchenCountertop3D() {
           const cabW = cab.width;
           const cabH = cab.height;
           const cabD = cab.depth || 60;
-          const ctDepth = cabD + 2;
           const ctThick = 2.0;
-          const slabCenterY = cabH + ctThick / 2;
+          const cabTopY = (cab.position[1] || 0) + cabH / 2;
           const localZShift = 1.0;
 
           let cutoutW = 0;
@@ -683,20 +848,6 @@ export function KitchenCountertop3D() {
             cutoutD = cooktopSpec.cutoutDepthMm / 10;
           }
 
-          const leftPartW = Math.max(0, (cabW - cutoutW) / 2);
-          const rightPartW = Math.max(0, (cabW - cutoutW) / 2);
-
-          const ctBackZ = -cabD / 2;
-          const ctFrontZ = cabD / 2 + 2;
-          const holeBackZ = localZShift - cutoutD / 2;
-          const holeFrontZ = localZShift + cutoutD / 2;
-
-          const rearPartD = Math.max(0, holeBackZ - ctBackZ);
-          const rearPartZ = (ctBackZ + holeBackZ) / 2;
-
-          const frontPartD = Math.max(0, ctFrontZ - holeFrontZ);
-          const frontPartZ = (holeFrontZ + ctFrontZ) / 2;
-
           const simMatProps = {
             color: '#cbd5e1',
             roughness: 0.2,
@@ -709,49 +860,29 @@ export function KitchenCountertop3D() {
           return (
             <group
               key={`preview-ct-${cab.id}`}
-              position={[cab.position[0], cab.position[1] || 0, cab.position[2]]}
+              position={[cab.position[0], cabTopY, cab.position[2]]}
               rotation={[0, cab.rotation || 0, 0]}
             >
-              {leftPartW > 0.1 && (
-                <mesh position={[-cabW / 2 + leftPartW / 2, slabCenterY, localZShift]}>
-                  <boxGeometry args={[leftPartW, ctThick, ctDepth]} />
-                  <meshStandardMaterial {...simMatProps} />
-                  <Edges scale={1} threshold={15} color="#94a3b8" />
-                </mesh>
-              )}
-              {rightPartW > 0.1 && (
-                <mesh position={[cabW / 2 - rightPartW / 2, slabCenterY, localZShift]}>
-                  <boxGeometry args={[rightPartW, ctThick, ctDepth]} />
-                  <meshStandardMaterial {...simMatProps} />
-                  <Edges scale={1} threshold={15} color="#94a3b8" />
-                </mesh>
-              )}
-              {rearPartD > 0.1 && (
-                <mesh position={[0, slabCenterY, rearPartZ]}>
-                  <boxGeometry args={[cutoutW, ctThick, rearPartD]} />
-                  <meshStandardMaterial {...simMatProps} />
-                  <Edges scale={1} threshold={15} color="#94a3b8" />
-                </mesh>
-              )}
-              {frontPartD > 0.1 && (
-                <mesh position={[0, slabCenterY, frontPartZ]}>
-                  <boxGeometry args={[cutoutW, ctThick, frontPartD]} />
-                  <meshStandardMaterial {...simMatProps} />
-                  <Edges scale={1} threshold={15} color="#94a3b8" />
-                </mesh>
-              )}
+              <SimulatedPreviewCountertopMesh
+                cabW={cabW}
+                cabD={cabD}
+                ctThick={ctThick}
+                cutoutW={cutoutW}
+                cutoutD={cutoutD}
+                simMatProps={simMatProps}
+              />
 
-              {/* Artefacto instalado */}
+              {/* Artefacto instalado apoyado sobre la cubierta simulada */}
               {isSink && sinkSpec && (
                 <>
                   {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
                     <AlfaTwocF5858aRealistic
-                      position={[0, cabH + ctThick, localZShift]}
+                      position={[0, ctThick, localZShift]}
                       stoneThicknessCm={ctThick}
                     />
                   ) : (
                     <AlfaOnec3018Realistic
-                      position={[0, cabH + ctThick, localZShift]}
+                      position={[0, ctThick, localZShift]}
                       stoneThicknessCm={ctThick}
                     />
                   )}
@@ -759,7 +890,7 @@ export function KitchenCountertop3D() {
               )}
 
               {isCooktop && (
-                <group position={[0, cabH + ctThick, localZShift]}>
+                <group position={[0, ctThick, localZShift]}>
                   {countertopConfig.cooktopModel === 'fdv_design_90' ? (
                     <FdvDesign90Model position={[0, 0, 0]} />
                   ) : (
@@ -922,216 +1053,60 @@ export function KitchenCountertop3D() {
                 cooktopRelX >= segLeft - 1 &&
                 cooktopRelX <= segRight + 1;
 
-              const cutoutW = sinkSpec ? sinkSpec.cutoutWidthMm / 10 : (cooktopSpec ? cooktopSpec.cutoutWidthMm / 10 : 0);
-              const cutoutD = sinkSpec ? sinkSpec.cutoutDepthMm / 10 : (cooktopSpec ? cooktopSpec.cutoutDepthMm / 10 : 0);
+              const sinkCutout = (hasSinkInSeg && sinkSpec) ? {
+                localX: sinkRelX! - segCenterRelX,
+                width: sinkSpec.cutoutWidthMm / 10,
+                depth: sinkSpec.cutoutDepthMm / 10,
+              } : null;
+
+              const cooktopCutout = (hasCooktopInSeg && cooktopSpec) ? {
+                localX: cooktopRelX! - segCenterRelX,
+                width: cooktopSpec.cutoutWidthMm / 10,
+                depth: cooktopSpec.cutoutDepthMm / 10,
+              } : null;
 
               return (
                 <group key={`seg-${segIdx}`} position={[segCenterRelX, 0, 0]}>
-                  {/* SI TIENE LAVAPLATOS: Generar la cubierta con HUECO REAL (Cutout) de 4 piezas sin colisiones ni z-fighting */}
-                  {hasSinkInSeg && sinkSpec ? (
-                    (() => {
-                      const localSinkX = sinkRelX! - segCenterRelX;
-                      const holeLeft = localSinkX - cutoutW / 2;
-                      const holeRight = localSinkX + cutoutW / 2;
-                      const holeBack = localZShift - cutoutD / 2;
-                      const holeFront = localZShift + cutoutD / 2;
+                  {/* Plancha de cubierta continua monolítica (con o sin calados CNC) */}
+                  <ContinuousSlabSegmentMesh
+                    totalSegSlabLenCm={totalSegSlabLenCm}
+                    depthCm={depthCm}
+                    stoneThicknessCm={stoneThicknessCm}
+                    cabTopY={cabTopY}
+                    localZShift={localZShift}
+                    isLastSeg={isLastSeg}
+                    isTransparent={isTransparent}
+                    matProps={getCountertopMatProps()}
+                    sinkCutout={sinkCutout}
+                    cooktopCutout={cooktopCutout}
+                  />
 
-                      const leftPartW = Math.max(0, holeLeft - (-totalSegSlabLenCm / 2));
-                      const rightPartW = Math.max(0, totalSegSlabLenCm / 2 - holeRight);
-                      const rearPartD = Math.max(0, holeBack - (-depthCm / 2));
-                      const frontPartD = Math.max(0, depthCm / 2 - holeFront);
+                  {/* MONTAJE BAJO CUBIERTA DEL LAVAPLATOS REALISTA */}
+                  {sinkCutout && (
+                    <>
+                      {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
+                        <AlfaTwocF5858aRealistic
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          stoneThicknessCm={stoneThicknessCm}
+                        />
+                      ) : (
+                        <AlfaOnec3018Realistic
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          stoneThicknessCm={stoneThicknessCm}
+                        />
+                      )}
+                    </>
+                  )}
 
-                      return (
-                        <group>
-                          {/* Pieza izquierda de la cubierta */}
-                          {leftPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                -totalSegSlabLenCm / 2 + leftPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[leftPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza derecha de la cubierta */}
-                          {rightPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                totalSegSlabLenCm / 2 - rightPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[rightPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza trasera (puente donde se monta la grifería) */}
-                          {rearPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localSinkX,
-                                slabCenterY,
-                                -depthCm / 2 + rearPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cutoutW, stoneThicknessCm, rearPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza delantera (borde frontal de la cubierta frente al lavaplatos) */}
-                          {frontPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localSinkX,
-                                slabCenterY,
-                                depthCm / 2 - frontPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cutoutW, stoneThicknessCm, frontPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* MONTAJE BAJO CUBIERTA DEL LAVAPLATOS REALISTA */}
-                          {countertopConfig.sinkModel === 'alfa_onec_3018' && (
-                            <AlfaOnec3018Realistic
-                              position={[localSinkX, cabTopY + stoneThicknessCm, localZShift]}
-                              stoneThicknessCm={stoneThicknessCm}
-                            />
-                          )}
-                          {countertopConfig.sinkModel === 'alfa_twoc_f5858a' && (
-                            <AlfaTwocF5858aRealistic
-                              position={[localSinkX, cabTopY + stoneThicknessCm, localZShift]}
-                              stoneThicknessCm={stoneThicknessCm}
-                            />
-                          )}
-                        </group>
-                      );
-                    })()
-                  ) : hasCooktopInSeg && cooktopSpec ? (
-                    (() => {
-                      const localCooktopX = cooktopRelX! - segCenterRelX;
-                      const cW = cooktopSpec.cutoutWidthMm / 10;
-                      const cD = cooktopSpec.cutoutDepthMm / 10;
-                      const holeLeft = localCooktopX - cW / 2;
-                      const holeRight = localCooktopX + cW / 2;
-                      const holeBack = localZShift - cD / 2;
-                      const holeFront = localZShift + cD / 2;
-
-                      const leftPartW = Math.max(0, holeLeft - (-totalSegSlabLenCm / 2));
-                      const rightPartW = Math.max(0, totalSegSlabLenCm / 2 - holeRight);
-                      const rearPartD = Math.max(0, holeBack - (-depthCm / 2));
-                      const frontPartD = Math.max(0, depthCm / 2 - holeFront);
-
-                      return (
-                        <group>
-                          {/* Pieza izquierda de la cubierta */}
-                          {leftPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                -totalSegSlabLenCm / 2 + leftPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[leftPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza derecha de la cubierta */}
-                          {rightPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                totalSegSlabLenCm / 2 - rightPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[rightPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza trasera de la cubierta */}
-                          {rearPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localCooktopX,
-                                slabCenterY,
-                                -depthCm / 2 + rearPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cW, stoneThicknessCm, rearPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza delantera de la cubierta */}
-                          {frontPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localCooktopX,
-                                slabCenterY,
-                                depthCm / 2 - frontPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cW, stoneThicknessCm, frontPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
-                          <group position={[localCooktopX, cabTopY + stoneThicknessCm, localZShift]}>
-                            {countertopConfig.cooktopModel === 'fdv_design_90' ? (
-                              <FdvDesign90Model position={[0, 0, 0]} />
-                            ) : (
-                              <FdvDesign60Model position={[0, 0, 0]} />
-                            )}
-                          </group>
-                        </group>
-                      );
-                    })()
-                  ) : (
-                    /* SI NO TIENE LAVAPLATOS NI ENCIMERA: Plancha corrida continua estándar cubriendo toda la superficie hasta el muro en esquinas */
-                    <mesh position={[0, slabCenterY, localZShift]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-                      <boxGeometry
-                        args={[totalSegSlabLenCm - (isLastSeg ? 0 : 0.05), stoneThicknessCm, depthCm]}
-                      />
-                      <meshStandardMaterial {...getCountertopMatProps()} />
-                      {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                    </mesh>
+                  {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
+                  {cooktopCutout && (
+                    <group position={[cooktopCutout.localX, cabTopY + stoneThicknessCm, localZShift]}>
+                      {countertopConfig.cooktopModel === 'fdv_design_90' ? (
+                        <FdvDesign90Model position={[0, 0, 0]} />
+                      ) : (
+                        <FdvDesign60Model position={[0, 0, 0]} />
+                      )}
+                    </group>
                   )}
 
                   {/* Junta sutil a 90° si el tramo fue seccionado por criterio de transporte */}
