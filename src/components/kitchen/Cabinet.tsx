@@ -1828,7 +1828,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
       if (thisCabinetObj?.doorHingeSides?.[doorKey]) {
          return thisCabinetObj.doorHingeSides[doorKey] === 'right';
       }
-      if (doorKey === 'door-0' && thisCabinetObj?.hingeSide) {
+      if ((doorKey === 'door-0' || doorKey === 'door-top') && thisCabinetObj?.hingeSide) {
          return thisCabinetObj.hingeSide === 'right';
       }
       return defaultSide === 'right';
@@ -3647,6 +3647,47 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      handleConfig={handleConfig}
                   />
                   {topH > 45 && renderShelfWithJoints(legsHeight + nicheH + topH / 2, 'wmn_top_shelf')}
+               </>
+            );
+         }
+
+         if (effectiveVariant === 'wall_door_shelf') {
+            const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+            const topH = Math.max(20, cabH - nicheH - gap);
+            const topDoorH = topH - gap * 2;
+            const topY = legsHeight + nicheH + gap + topDoorH / 2;
+
+            const effectiveShelves = shelvesCount !== undefined ? shelvesCount : (topH > 40 ? 1 : 0);
+            const shelfStep = (topH - thickness * 2) / (effectiveShelves + 1);
+
+            return (
+               <>
+                  {/* Divisor repisa sobre el nicho abierto inferior */}
+                  {renderShelfWithJoints(legsHeight + nicheH, 'wds_div')}
+
+                  {/* Puerta superior batiente (Se abre DESDE EL MENÚ y NO al hacer clic sobre el 3D) */}
+                  <AnimatedDoor
+                     position={[0, topY, frontZ]}
+                     doorW={width - gap * 2}
+                     doorH={topDoorH}
+                     thickness={thickness}
+                     isRightHinge={getDoorHinge('door-top', 'left')}
+                     isUpper={true}
+                     colorProps={parseColor(cDoors, doorMaterial, 'door-top')}
+                     forceOpen={isElementOpen('door-top') || isElementOpen('door-0')}
+                     globalPosition={[position[0], position[1] + topY, position[2] + frontZ]}
+                     handleConfig={handleConfig}
+                  />
+
+                  {/* Repisas interiores regulables en el compartimento superior */}
+                  {Array.from({ length: effectiveShelves }).map((_, sIdx) => {
+                     const sY = legsHeight + nicheH + thickness + (sIdx + 1) * shelfStep;
+                     return (
+                        <React.Fragment key={`wds-shelf-${sIdx}`}>
+                           {renderShelfWithJoints(sY, `wds-shelf-${sIdx}`)}
+                        </React.Fragment>
+                     );
+                  })}
                </>
             );
          }

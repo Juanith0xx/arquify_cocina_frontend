@@ -58,6 +58,7 @@ export type ToolMode =
   | 'place_wall_corner_blind'
   | 'place_wall_wine_rack'
   | 'place_wall_hood_new_flow'
+  | 'place_wall_door_shelf'
   | 'place_tall' 
   | 'place_tall_1_door'
   | 'place_tall_split_2_doors'
@@ -236,6 +237,7 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
     if (cab.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro';
     if (cab.variant === 'wall_open') return 'Aéreo Abierto Repisas';
     if (cab.variant === 'wall_hood_new_flow') return 'New Flow 60';
+    if (cab.variant === 'wall_door_shelf') return 'Aéreo Puerta + Repisa Inferior';
     return 'Mueble Aéreo';
   }
   if (cab.variant === 'wall_1_door') return 'Aéreo 1 Puerta';
@@ -245,6 +247,7 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro';
   if (cab.variant === 'wall_open') return 'Aéreo Abierto Repisas';
   if (cab.variant === 'wall_hood_new_flow') return 'New Flow 60';
+  if (cab.variant === 'wall_door_shelf') return 'Aéreo Puerta + Repisa Inferior';
   if (cab.variant === '1_door_1_drawer') return 'Base 1 Pta + 1 Cajón';
   if (cab.variant === '4_drawers') return 'Base 4 Cajones';
   if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') return 'Base Verdulero (3 Cajones)';

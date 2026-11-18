@@ -802,6 +802,8 @@ export function KitchenModuleContextMenu({
       elements.push({ id: 'door-lower', label: 'Pta. Elevable Inf.', type: 'door' });
     } else if (variant === 'wall_microwave_niche') {
       elements.push({ id: 'door-top', label: 'Pta. Superior Elevable', type: 'door' });
+    } else if (variant === 'wall_door_shelf') {
+      elements.push({ id: 'door-top', label: 'Puerta Superior', type: 'door' });
     } else if (isLiftUp) {
       elements.push({ id: 'door-lift', label: 'Puerta Elevable', type: 'door' });
     } else if (variant === 'corner_l' || variant === 'base_corner_l') {
@@ -1086,6 +1088,7 @@ export function KitchenModuleContextMenu({
     if (activeCabinet.variant === 'wall_lift_up') return 'Aéreo Puerta Elevable Aventos';
     if (activeCabinet.variant === 'wall_lift_up_double') return 'Aéreo Doble Puerta Elevable';
     if (activeCabinet.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro + Puerta';
+    if (activeCabinet.variant === 'wall_door_shelf') return 'Aéreo Puerta + Repisa Inferior';
     if (activeCabinet.variant === 'wall_open') return 'Aéreo Repisas a la Vista';
     if (activeCabinet.variant === 'wall_hood_new_flow') return 'New Flow 60';
     if (activeCabinet.variant === 'closet_hanger') return 'Clóset Barra + Maletero';

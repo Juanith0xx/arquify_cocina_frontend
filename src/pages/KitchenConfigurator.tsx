@@ -1234,11 +1234,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="murales"
                              title="3. Murales & Aéreos"
-                             count={9}
+                             count={10}
                              icon={<Square size={14} />}
                              isOpen={Boolean(moduleAccordions.murales || searchQ)}
                              onToggle={() => toggleModuleAccordion('murales')}
-                             hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow'].includes(toolMode)}
+                             hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow', 'place_wall_door_shelf'].includes(toolMode)}
                              isLight={isLight}
                            >
                              {matchesQ('1. Aéreo 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />}
@@ -1250,6 +1250,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              {matchesQ('7. Aéreo Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />}
                              {matchesQ('8. Botellero Aéreo') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />}
                              {matchesQ('9. New Flow 60') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} icon={<Wind size={14}/>} label="9. New Flow 60" />}
+                             {matchesQ('10. Aéreo Puerta + Repisa') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_door_shelf'} onClick={() => handleInsertModule('place_wall_door_shelf')} icon={<Square size={14}/>} label="10. Aéreo Puerta + Repisa" />}
                            </ModuleCategoryAccordion>
                          )}
 

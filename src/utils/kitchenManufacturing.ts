@@ -161,6 +161,7 @@ export function isCabinetWithDoors(cab: CabinetType): boolean {
     v === 'wall_1_door' ||
     v === 'wall_2_doors' ||
     v === 'wall_hood_new_flow' ||
+    v === 'wall_door_shelf' ||
     v === 'closet_2_doors' ||
     v === 'closet_inner_drawers' ||
     (cab.type === 'closet' && Boolean(cab.hasDoors)) ||
@@ -299,6 +300,11 @@ export function getCabinetHingesPositions(cab: CabinetType): number[] {
     return [9, Math.max(15, doorH - 9)];
   }
 
+  if (v === 'wall_door_shelf') {
+    const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+    return [nicheH + 9, cabH - 9];
+  }
+
   // Estándar 1 puerta o 2 puertas (base, isla, aéreo)
   return [9, cabH - 9];
 }
@@ -376,6 +382,26 @@ export function getResolvedCabinetShelfElevations(cab: CabinetType, thicknessCm 
         }
       }
       elevations.push(Math.max(thicknessCm + 4, Math.min(doorH - thicknessCm - 4, yPos)));
+    }
+    return elevations.sort((a, b) => a - b);
+  }
+
+  if (v === 'wall_door_shelf') {
+    const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+    const bottomOffset = nicheH + thicknessCm;
+    const topOffset = thicknessCm;
+    const usableH = cabH - topOffset - bottomOffset;
+    if (usableH <= 10) return [];
+    const step = usableH / (count + 1);
+    const elevations: number[] = [];
+    for (let i = 0; i < count; i++) {
+      let yPos = bottomOffset + (i + 1) * step;
+      for (const h of hinges) {
+        if (Math.abs(yPos - h) <= HINGE_COLLISION_RADIUS) {
+          yPos += (yPos >= h ? 4.5 : -4.5);
+        }
+      }
+      elevations.push(Math.round(yPos * 10) / 10);
     }
     return elevations.sort((a, b) => a - b);
   }
@@ -2151,6 +2177,49 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false
             });
         }
+    } else if (cab.variant === 'wall_door_shelf') {
+        const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+        const topH = Math.max(20, cabH - nicheH - gap);
+        const topDoorH = topH - gap * 2;
+        parts.push({
+            name: `Divisor Fijo Sobre Nicho ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 1,
+            length: (innerW - 0.2) * 10,
+            width: Number((effectiveDepth * 10).toFixed(1)),
+            thickness: thickness * 10,
+            material: cab.shelfColor || state.structureColor,
+            edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+            notes: 'Repisa divisoria fija sobre nicho inferior'
+        });
+        parts.push({
+            name: `Puerta Superior Batiente ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 1,
+            length: topDoorH * 10,
+            width: (w - gap * 2) * 10,
+            thickness: thickness * 10,
+            material: frontMat,
+            edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+            notes: 'Puerta batiente superior de mueble aéreo'
+        });
+        const shelfCount = cab.shelvesCount !== undefined ? cab.shelvesCount : (topH > 40 ? 1 : 0);
+        if (shelfCount > 0) {
+            parts.push({
+                name: `Repisa Interior Superior ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: shelfCount,
+                length: (innerW - 0.2) * 10,
+                width: stdShelfDepthMm,
+                thickness: thickness * 10,
+                material: cab.shelfColor || state.structureColor,
+                edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                notes: 'Repisas regulables interiores en compartimento superior'
+            });
+        }
     } else if (cab.variant === 'wall_hood_new_flow') {
         const hoodH = 17.6;
         const visorH = 4.0; // Visera frontal inferior visible
@@ -2742,6 +2811,12 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             const leaves = 2;
             totalHinges += leaves * getHingesCountByHeight(topDoorHMm);
             neuFlowHoodsCount += 1;
+        } else if (cab.variant === 'wall_door_shelf') {
+            const nicheH = Math.min(30, Math.max(22, Math.round(cabBodyH * 0.35)));
+            const topH = Math.max(20, cabBodyH - nicheH - gap);
+            const topDoorHMm = Math.round((topH - gap * 2) * 10);
+            const leaves = 1;
+            totalHinges += leaves * getHingesCountByHeight(topDoorHMm);
         } else if (cab.variant === 'tall_1_door') {
             const leaves = 1;
             totalHinges += leaves * stdHingesPerLeaf;
@@ -3198,7 +3273,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             return 0;
         }
         const v = cab.variant || (cab.width > 60 ? '2_doors' : '1_door');
-        if (v === '1_door' || v === 'spice_rack' || v === 'sink_1_door' || v === 'wall_1_door' || v === 'tall_1_door' || v === 'wall_lift_up' || v === 'wall_microwave_niche' || v === 'corner_l' || v === 'wall_corner_l' || v?.startsWith('corner_blind') || v === 'corner_blind' || v?.startsWith('wall_corner_blind')) {
+        if (v === '1_door' || v === 'spice_rack' || v === 'sink_1_door' || v === 'wall_1_door' || v === 'tall_1_door' || v === 'wall_lift_up' || v === 'wall_microwave_niche' || v === 'wall_door_shelf' || v === 'corner_l' || v === 'wall_corner_l' || v?.startsWith('corner_blind') || v === 'corner_blind' || v?.startsWith('wall_corner_blind')) {
             return 1;
         }
         if (v === '2_doors' || v === '1_door_1_drawer' || v === '2_drawers' || v === 'sink_2_doors' || v === 'sink_2_drawers_u' || v === 'wall_2_doors' || v === 'wall_hood_new_flow' || v === 'wall_lift_up_double' || v === 'tall_2_doors' || v === 'tall_split_2_doors' || v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_microwave_niche') {
