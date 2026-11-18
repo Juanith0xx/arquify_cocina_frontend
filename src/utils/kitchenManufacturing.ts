@@ -189,7 +189,7 @@ export function getSplitCabinetShelvesCounts(cab: CabinetType): { lower: number;
   let defaultLower = 1;
   let defaultUpper = 3;
   if (cab.variant === 'tall_oven_vent' || cab.variant === 'tall_oven_micro') {
-    defaultLower = 1;
+    defaultLower = (cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers') ? 0 : 1;
     defaultUpper = 1;
   } else if (cab.variant === 'tall_microwave_niche') {
     defaultLower = 1;
@@ -826,7 +826,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             thickness: thickness * 10,
             material: cab.shelfColor || state.structureColor,
             edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-            notes: 'Base reforzada soporte horno a 70cm'
+            notes: 'Base reforzada soporte horno a 60cm de casco'
         });
         parts.push({
             name: `Divisor Horno / Microondas ${cabName}`,
@@ -1908,35 +1908,110 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             notes: 'Puerta superior despensa (ancho <= 600mm)'
         });
     } else if (cab.variant === 'tall_oven_micro') {
-        const baseH = 70;
+        const baseH = 60;
         const ovenH = 60;
         const microH = 38;
         const topH = Math.max(10, cabH - (baseH + ovenH + microH));
         const lowerDoorH = baseH - gap*2;
         const topDoorH = topH - gap*2;
 
-        parts.push({
-            name: `Puerta Inferior Base ${cabName}`,
-            moduleId: cab.id,
-            moduleIndex: index,
-            qty: 1,
-            length: lowerDoorH * 10,
-            width: (w - gap*2) * 10,
-            thickness: thickness * 10,
-            material: frontMat,
-            edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true
-        });
+        if (cab.towerLowerType === 'drawers') {
+            const singleDrawerH = (baseH - gap * 3) / 2;
+            const drawH_mm = Number((singleDrawerH * 10).toFixed(1));
+            const drawW_mm = Number(((w - gap * 2) * 10).toFixed(1));
+
+            // 2 Frentes Caceroleros
+            parts.push({
+                name: `Frente Cacerolero Inferior 1 ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: drawH_mm,
+                width: drawW_mm,
+                thickness: thickness * 10,
+                material: cab.drawerFrontColor || frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Frente gaveta cacerolera inferior (base de torre)'
+            });
+            parts.push({
+                name: `Frente Cacerolero Inferior 2 ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: drawH_mm,
+                width: drawW_mm,
+                thickness: thickness * 10,
+                material: cab.drawerFrontColor || frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Frente gaveta cacerolera media (bajo horno)'
+            });
+
+            // Cajas de los 2 cajones caceroleros
+            const innerDepthMm = (effectiveDepth - 2) * 10;
+            const nominalLength = getNominalSlideLength(innerDepthMm);
+            const drawerBoxLength = nominalLength - hwSpec.drawerLengthDeduction;
+            const drawerBoxOuterWidth = innerW * 10 - hwSpec.slideClearanceTotal;
+            const drawerFrontBackLength = drawerBoxOuterWidth - (2 * thickness * 10);
+            const cInnerMat = cab.drawerInnerColor || state.structureColor;
+            const caceroleroSideH = 180; // Altura lateral cacerolero estándar 180mm
+
+            for (let i = 0; i < 2; i++) {
+                parts.push({
+                    name: `Lateral Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 2,
+                    length: drawerBoxLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `P/ ${hwSpec.slideName} (NL=${nominalLength}mm)`
+                });
+                parts.push({
+                    name: `Contrafrente Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerFrontBackLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `Testero frontal interior p/ fijación de frente exterior`
+                });
+                parts.push({
+                    name: `Trasera Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerFrontBackLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `Testero posterior p/ ${hwSpec.slideName}`
+                });
+                const botSpecs = getDrawerBottomSpecs(w, cInnerMat, cab.drawerInnerMaterial || state.drawerInnerMaterial, thickness);
+                parts.push({
+                    name: `Fondo Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerBoxLength, width: botSpecs.isDurolac ? drawerBoxOuterWidth : drawerFrontBackLength, thickness: botSpecs.thicknessMm, material: botSpecs.materialName,
+                    edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: botSpecs.notes
+                });
+            }
+        } else {
+            parts.push({
+                name: `Puerta Inferior Base ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: Number((lowerDoorH * 10).toFixed(1)),
+                width: Number(((w - gap*2) * 10).toFixed(1)),
+                thickness: thickness * 10,
+                material: frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Puerta inferior base de torre horno'
+            });
+        }
         if (topDoorH > 10) {
             parts.push({
                 name: `Puerta Superior Despensa ${cabName}`,
                 moduleId: cab.id,
                 moduleIndex: index,
                 qty: 1,
-                length: topDoorH * 10,
-                width: (w - gap*2) * 10,
+                length: Number((topDoorH * 10).toFixed(1)),
+                width: Number(((w - gap*2) * 10).toFixed(1)),
                 thickness: thickness * 10,
                 material: frontMat,
-                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Puerta superior torre despensa'
             });
         }
     } else if (cab.variant === 'tall_microwave_niche') {
@@ -2669,13 +2744,15 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             totalHinges += leaves * (getHingesCountByHeight(lowerHMm) + getHingesCountByHeight(upperHMm));
         } else if (cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent') {
             const leaves = 1;
-            const baseH = 70;
+            const baseH = (cab.variant === 'tall_oven_micro') ? 60 : 70;
             const ovenH = 60;
             const microH = 38;
             const topH = Math.max(10, cabBodyH - (baseH + ovenH + microH));
             const lowerHMm = Math.round((baseH - gap * 2) * 10);
             const topHMm = Math.round((topH - gap * 2) * 10);
-            totalHinges += leaves * getHingesCountByHeight(lowerHMm);
+            if (!(cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers')) {
+                totalHinges += leaves * getHingesCountByHeight(lowerHMm);
+            }
             if (topH > 10) {
                 totalHinges += leaves * getHingesCountByHeight(topHMm);
             }
@@ -2725,6 +2802,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         if (cab.variant === 'sink_u_drawer') cabDrawers = 2;
         if (cab.variant === 'tall_inner_drawers') cabDrawers = 4;
         if (cab.variant === 'spice_rack') cabDrawers = 1;
+        if (cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers') cabDrawers = 2;
         if (cab.type === 'closet' || cab.variant?.startsWith('closet_')) {
             cabDrawers = cab.drawersCount !== undefined 
                 ? cab.drawersCount 

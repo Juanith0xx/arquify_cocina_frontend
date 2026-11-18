@@ -817,7 +817,12 @@ export function KitchenModuleContextMenu({
       elements.push({ id: 'drawer-2', label: 'Cajón Interior 3', type: 'drawer' });
       elements.push({ id: 'drawer-3', label: 'Cajón Interior 4 (Inf.)', type: 'drawer' });
     } else if (isOvenMicro || variant === 'tall_oven_vent' || variant === 'tall_microwave_niche') {
-      elements.push({ id: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+      if (isOvenMicro && activeCabinet.towerLowerType === 'drawers') {
+        elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior 1', type: 'drawer' });
+        elements.push({ id: 'drawer-1', label: 'Cacerolero Inferior 2', type: 'drawer' });
+      } else {
+        elements.push({ id: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+      }
       elements.push({ id: 'door-top', label: 'Puerta Superior', type: 'door' });
     } else if (is1Door1Drawer) {
       elements.push({ id: 'drawer-0', label: 'Cajón Superior', type: 'drawer' });
@@ -1402,6 +1407,55 @@ export function KitchenModuleContextMenu({
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { depth: val })}
             />
           </div>
+
+          {/* CONFIGURACIÓN INFERIOR TORRE HORNO + MICRO */}
+          {activeCabinet.variant === 'tall_oven_micro' && (
+            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
+              isLight ? 'bg-orange-50/70 border-orange-200' : 'bg-orange-500/10 border-orange-500/20'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                  isLight ? 'text-orange-950' : 'text-orange-200'
+                }`}>
+                  Configuración Inferior (Bajo Horno)
+                </span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                  isLight ? 'bg-orange-100 text-orange-800' : 'bg-orange-500/20 text-orange-300'
+                }`}>
+                  NPT 70-75cm
+                </span>
+              </div>
+              <p className={`text-[11px] leading-tight ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>
+                Selecciona la distribución bajo la base del horno:
+              </p>
+              <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-lg border ${
+                isLight ? 'bg-white border-orange-200' : 'bg-[#1c1c1f] border-white/5'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => updateCabinet(activeCabinet.id, { towerLowerType: 'door' })}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    (!activeCabinet.towerLowerType || activeCabinet.towerLowerType === 'door')
+                      ? 'bg-orange-600 text-white shadow-sm'
+                      : (isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-zinc-400 hover:bg-white/5')
+                  }`}
+                >
+                  🚪 1 Puerta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCabinet(activeCabinet.id, { towerLowerType: 'drawers' })}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeCabinet.towerLowerType === 'drawers'
+                      ? 'bg-orange-600 text-white shadow-sm'
+                      : (isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-zinc-400 hover:bg-white/5')
+                  }`}
+                >
+                  🗄️ 2 Gavetas
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* INFO ESPECÍFICA CAMPANA INTEGRADA NEW FLOW 60 */}
           {activeCabinet.variant === 'wall_hood_new_flow' && (

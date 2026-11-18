@@ -174,6 +174,7 @@ export interface CabinetType {
   closetSocleHeight?: number;
   closetSocleColorMode?: 'structure' | 'doors';
   blindWidth?: number; // cm (ancho independiente de la zona ciega del esquinero, por defecto 65cm)
+  towerLowerType?: 'door' | 'drawers';
 }
 
 export interface GolaIncompatibilityAlert {

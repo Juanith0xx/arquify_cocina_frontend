@@ -686,17 +686,29 @@ export function extractKitchen3dElements(
       }
 
     } else if (v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_oven' || v.includes('oven')) {
-      const baseSectionH = 70;
+      const baseSectionH = (v === 'tall_oven_micro') ? 60 : 70;
       const ovenNicheH = 60;
       const microNicheH = 38;
       const drW = width - gap * 2;
 
-      // 1. Base: Puerta inferior batiente
-      const lowerDoorH = baseSectionH - gap * 2;
-      const yLowerDoor = legsH + gap + lowerDoorH / 2;
-      addLocalBox('Torre_Puerta_Inferior', 'door', 'Melamina_Frente', colorDoors, 0, yLowerDoor, frontZ, drW, lowerDoorH, th);
-      addDetailedHandle3D('TPtaInf', width / 2 - 4.5, legsH + lowerDoorH - 8, frontZ + th / 2, true);
-      addDoorHinges('TPtaInf', yLowerDoor, lowerDoorH, false);
+      // 1. Base: Puerta inferior batiente o 2 gavetas caceroleras
+      if (cab.towerLowerType === 'drawers') {
+        const singleDrawerH = (baseSectionH - gap * 3) / 2;
+        const yDrawerLower = legsH + gap + singleDrawerH / 2;
+        const yDrawerUpper = legsH + gap + singleDrawerH + gap + singleDrawerH / 2;
+        addLocalBox('Torre_Cacerolero_Inf_1', 'drawer', 'Melamina_Frente', colorDrawers, 0, yDrawerLower, frontZ, drW, singleDrawerH, th);
+        addDetailedHandle3D('TCacInf1', 0, yDrawerLower + singleDrawerH / 2 - 4, frontZ + th / 2, false);
+        addDrawerInteriorBox('Caja_Cacerolero_1', yDrawerLower, singleDrawerH);
+        addLocalBox('Torre_Cacerolero_Inf_2', 'drawer', 'Melamina_Frente', colorDrawers, 0, yDrawerUpper, frontZ, drW, singleDrawerH, th);
+        addDetailedHandle3D('TCacInf2', 0, yDrawerUpper + singleDrawerH / 2 - 4, frontZ + th / 2, false);
+        addDrawerInteriorBox('Caja_Cacerolero_2', yDrawerUpper, singleDrawerH);
+      } else {
+        const lowerDoorH = baseSectionH - gap * 2;
+        const yLowerDoor = legsH + gap + lowerDoorH / 2;
+        addLocalBox('Torre_Puerta_Inferior', 'door', 'Melamina_Frente', colorDoors, 0, yLowerDoor, frontZ, drW, lowerDoorH, th);
+        addDetailedHandle3D('TPtaInf', width / 2 - 4.5, legsH + lowerDoorH - 8, frontZ + th / 2, true);
+        addDoorHinges('TPtaInf', yLowerDoor, lowerDoorH, false);
+      }
 
       // 2. Repisa soporte de Horno
       const yOvenShelf = legsH + baseSectionH;

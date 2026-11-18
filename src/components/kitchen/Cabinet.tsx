@@ -1764,7 +1764,7 @@ interface CabinetProps extends CabinetType {
   index?: number;
 }
 
-function CabinetBase({ id, type, variant, width, height, depth, position, rotation, color, structureColor, doorColor, drawerFrontColor, drawerInnerColor, shelfColor, backColor, socleColor, structureMaterial, doorMaterial, drawerFrontMaterial, drawerInnerMaterial, shelfMaterial, backMaterial, socleMaterial, grainDirection, grainElements, hplBalancer, isOpen, openElements, index, shelvesCount, shelvesCountLower, shelvesCountUpper, drawersCount, hasHanger, hasDoors, innerDrawers, handleConfig: propHandleConfig, leftCoverPanel, rightCoverPanel, backThickness, drawerBottomMaterial, drawerBottomThickness, closetSocleHeight, closetSocleColorMode, blindWidth }: CabinetProps) {
+function CabinetBase({ id, type, variant, width, height, depth, position, rotation, color, structureColor, doorColor, drawerFrontColor, drawerInnerColor, shelfColor, backColor, socleColor, structureMaterial, doorMaterial, drawerFrontMaterial, drawerInnerMaterial, shelfMaterial, backMaterial, socleMaterial, grainDirection, grainElements, hplBalancer, isOpen, openElements, index, shelvesCount, shelvesCountLower, shelvesCountUpper, drawersCount, hasHanger, hasDoors, innerDrawers, handleConfig: propHandleConfig, leftCoverPanel, rightCoverPanel, backThickness, drawerBottomMaterial, drawerBottomThickness, closetSocleHeight, closetSocleColorMode, blindWidth, towerLowerType }: CabinetProps) {
    const { activeCabinetId, setActiveCabinet, setDraggingCabinetId, setToolMode, showSocle, socleHeight, cabinets, viewMode, golaSystem, countertopConfig, qstoneCatalog, setOpenElement, handleConfig: storeHandleConfig } = useKitchenStore();
    const handleConfig = propHandleConfig || storeHandleConfig;
 
@@ -2511,7 +2511,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
          }
 
          if (effectiveVariant === 'tall_oven_micro') {
-            const baseH = 70;
+            const baseH = 60;
             const ovenH = 60;
             const microH = 38;
             const topStart = baseH + ovenH + microH;
@@ -2522,29 +2522,43 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             const ovenY = legsHeight + baseH + ovenH/2;
             const microY = legsHeight + baseH + ovenH + microH/2;
             const topY = legsHeight + topStart + gap + topDoorH/2;
-            const cabObj: CabinetType = { id, type, variant, width, height, depth, position, rotation, color, shelvesCount, shelvesCountLower, shelvesCountUpper };
+            const cabObj: CabinetType = { id, type, variant, width, height, depth, position, rotation, color, shelvesCount, shelvesCountLower, shelvesCountUpper, towerLowerType };
             const shelfElevations = getResolvedCabinetShelfElevations(cabObj, thickness);
+
+            const isDrawers = towerLowerType === 'drawers';
+            const singleDrawerH = (baseH - gap * 3) / 2;
+            const yDrawerLower = legsHeight + gap + singleDrawerH / 2;
+            const yDrawerUpper = legsHeight + gap + singleDrawerH + gap + singleDrawerH / 2;
 
             return (
                <>
-                  <AnimatedDoor
-                     position={[0, lowerY, frontZ]}
-                     doorW={width - gap*2}
-                     doorH={lowerDoorH}
-                     thickness={thickness}
-                     isRightHinge={getDoorHinge('door-lower', 'left')}
-                     isUpper={false}
-                     colorProps={parseColor(cDoors, doorMaterial, 'door-lower')}
-                     forceOpen={isElementOpen('door-lower')}
-                     globalPosition={[position[0], position[1] + lowerY, position[2] + frontZ]}
-                     handleConfig={handleConfig}
-                  />
-                  {/* Repisas Dinámicas en Puerta Inferior (Anti-Colisión) */}
-                  {shelfElevations.filter(e => e < baseH).map((elev, sIdx) => (
-                     <React.Fragment key={`oven-micro-low-${sIdx}`}>
-                        {renderShelfWithJoints(legsHeight + elev, `oven-micro-low-${sIdx}`)}
-                     </React.Fragment>
-                  ))}
+                  {isDrawers ? (
+                     <>
+                        {renderUndermountDrawer('oven-low-0', yDrawerLower, singleDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0')}
+                        {renderUndermountDrawer('oven-low-1', yDrawerUpper, singleDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1')}
+                     </>
+                  ) : (
+                     <>
+                        <AnimatedDoor
+                           position={[0, lowerY, frontZ]}
+                           doorW={width - gap*2}
+                           doorH={lowerDoorH}
+                           thickness={thickness}
+                           isRightHinge={getDoorHinge('door-lower', 'left')}
+                           isUpper={false}
+                           colorProps={parseColor(cDoors, doorMaterial, 'door-lower')}
+                           forceOpen={isElementOpen('door-lower')}
+                           globalPosition={[position[0], position[1] + lowerY, position[2] + frontZ]}
+                           handleConfig={handleConfig}
+                        />
+                        {/* Repisas Dinámicas en Puerta Inferior (Anti-Colisión) */}
+                        {shelfElevations.filter(e => e < baseH).map((elev, sIdx) => (
+                           <React.Fragment key={`oven-micro-low-${sIdx}`}>
+                              {renderShelfWithJoints(legsHeight + elev, `oven-micro-low-${sIdx}`)}
+                           </React.Fragment>
+                        ))}
+                     </>
+                  )}
                   <Board position={[0, legsHeight + baseH, shelfZ]} args={[innerW, thickness, shelfDepth]} {...parseColor(cShelves, shelfMaterial)} />
                   <group position={[0, ovenY, 0]}>
                      <BuiltInOven width={innerW + 1.4} height={ovenH - 0.6} depth={depth - 4} />
@@ -4421,7 +4435,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                         : ((rightNeighbor && (rightNeighbor.type === 'base' || rightNeighbor.type === 'island')) 
                            ? rightNeighbor 
                            : cabinets.find((c) => (c.type === 'base' || c.type === 'island') && !c.variant?.startsWith('deco_')));
-                     const baseH = adjacentBase ? (adjacentBase.height - legsHeight) : 70;
+                     const baseH = (effectiveVariant === 'tall_oven_micro') ? 60 : (adjacentBase ? (adjacentBase.height - legsHeight) : 70);
                      return (
                         <NotchedLateralBoard 
                            key={`lat-${key}`}

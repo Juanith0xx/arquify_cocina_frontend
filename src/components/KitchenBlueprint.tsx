@@ -1872,20 +1872,39 @@ export function KitchenBlueprint() {
                   // Torre Horno + Microondas: 4 zonas verticales (de abajo hacia arriba)
                   // bodyH es la altura del cuerpo en mm (ej. 2050mm)
                   // En SVG: Y=0 es el techo del cuerpo, Y=bodyH es el fondo/base del cuerpo
-                  const baseH = 700; // 70cm puerta inferior
+                  const baseH = (cab.variant === 'tall_oven_micro') ? 600 : 700; // 60cm en tall_oven_micro
                   const ovenH = 600; // 60cm nicho horno
                   const microH = 380; // 38cm nicho microondas
-                  const yBaseTop = Math.max(0, bodyH - baseH); // Cota superior de la puerta inferior
+                  const yBaseTop = Math.max(0, bodyH - baseH); // Cota superior de la puerta inferior / gavetas
                   const yOvenTop = Math.max(0, yBaseTop - ovenH); // Cota superior del nicho de horno
                   const yMicroTop = Math.max(0, yOvenTop - microH); // Cota superior del nicho microondas
                   const topDoorH = yMicroTop; // Altura restante puerta superior
 
                   return (
                     <g>
-                      {/* 1. Puerta Inferior (0 a 70cm) */}
-                      <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
-                      <path d={`M 0 ${(yBaseTop + bodyH) / 2} L ${cabW} ${yBaseTop} L ${cabW} ${bodyH} Z`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
-                      <text x={cabW / 2} y={(yBaseTop + bodyH) / 2 + 5} fontSize={Math.max(13, fSizeElev * 0.38)} fill="#c026d3" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Puerta Base</text>
+                      {/* 1. Zona Inferior (Puerta o 2 Gavetas Caceroleras) */}
+                      {cab.towerLowerType === 'drawers' ? (
+                        (() => {
+                          const singleDrawerH = baseH / 2;
+                          const yDrawerSplit = bodyH - singleDrawerH;
+                          return (
+                            <g>
+                              <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
+                              <line x1={0} y1={yDrawerSplit} x2={cabW} y2={yDrawerSplit} stroke="#0f172a" strokeWidth={strokeElev} />
+                              <line x1={cabW * 0.25} y1={yDrawerSplit + singleDrawerH / 2} x2={cabW * 0.75} y2={yDrawerSplit + singleDrawerH / 2} stroke="#3b82f6" strokeWidth={strokeElev * 1.5} />
+                              <line x1={cabW * 0.25} y1={yBaseTop + singleDrawerH / 2} x2={cabW * 0.75} y2={yBaseTop + singleDrawerH / 2} stroke="#3b82f6" strokeWidth={strokeElev * 1.5} />
+                              <text x={cabW / 2} y={yDrawerSplit + singleDrawerH / 2 - 6} fontSize={Math.max(11, fSizeElev * 0.34)} fill="#2563eb" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cacerolero 1 (30cm)</text>
+                              <text x={cabW / 2} y={yBaseTop + singleDrawerH / 2 - 6} fontSize={Math.max(11, fSizeElev * 0.34)} fill="#2563eb" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cacerolero 2 (30cm)</text>
+                            </g>
+                          );
+                        })()
+                      ) : (
+                        <g>
+                          <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
+                          <path d={`M 0 ${(yBaseTop + bodyH) / 2} L ${cabW} ${yBaseTop} L ${cabW} ${bodyH} Z`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
+                          <text x={cabW / 2} y={(yBaseTop + bodyH) / 2 + 5} fontSize={Math.max(13, fSizeElev * 0.38)} fill="#c026d3" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Puerta Base</text>
+                        </g>
+                      )}
 
                       {/* 2. Nicho Horno Empotrado (60cm) */}
                       <rect x={12} y={yOvenTop + 8} width={cabW - 24} height={ovenH - 16} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
@@ -3144,7 +3163,8 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 } else if (isTall && (cab.variant?.includes('oven') || cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent')) {
-                  const lowerDoorH = Math.min(bodyH * 0.35, 700 * elevScale);
+                  const baseRefMm = (cab.variant === 'tall_oven_micro') ? 600 : 700;
+                  const lowerDoorH = Math.min(bodyH * 0.35, baseRefMm * elevScale);
                   const ovenH = Math.min(bodyH * 0.30, 600 * elevScale);
                   const microH = Math.min(bodyH * 0.18, 380 * elevScale);
                   
@@ -3162,22 +3182,43 @@ export function KitchenBlueprint() {
                   return (
                     <g>
                       <line x1={cLeftX} y1={yLowerSplit} x2={cLeftX + cW} y2={yLowerSplit} stroke="#0f172a" strokeWidth={isStacked ? "0.6" : "0.8"} />
-                      {handleOnLeft ? (
-                        <path d={`M ${cLeftX + cW} ${yLowerSplit} L ${cLeftX} ${lowerDoorMidY} L ${cLeftX + cW} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                      {cab.towerLowerType === 'drawers' ? (
+                        (() => {
+                          const drawerSplitY = (yLowerSplit + bodyBottomY) / 2;
+                          const hMidW = Math.min(cW * 0.5, 40 * elevScale);
+                          const hMidX = cLeftX + (cW - hMidW) / 2;
+                          return (
+                            <g>
+                              <line x1={cLeftX} y1={drawerSplitY} x2={cLeftX + cW} y2={drawerSplitY} stroke="#0f172a" strokeWidth={isStacked ? "0.6" : "0.8"} />
+                              {showHandles && (
+                                <>
+                                  <rect x={hMidX} y={drawerSplitY + 4} width={hMidW} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                  <rect x={hMidX} y={yLowerSplit + 4} width={hMidW} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                </>
+                              )}
+                            </g>
+                          );
+                        })()
                       ) : (
-                        <path d={`M ${cLeftX} ${yLowerSplit} L ${cLeftX + cW} ${lowerDoorMidY} L ${cLeftX} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
-                      )}
-                      {showHandles && (
-                        <rect
-                          x={handleX}
-                          y={yLowerSplit + handleEdgeOffset}
-                          width={hThick}
-                          height={hLen}
-                          rx={0.5}
-                          fill={hColor}
-                          stroke="#0f172a"
-                          strokeWidth="0.3"
-                        />
+                        <>
+                          {handleOnLeft ? (
+                            <path d={`M ${cLeftX + cW} ${yLowerSplit} L ${cLeftX} ${lowerDoorMidY} L ${cLeftX + cW} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                          ) : (
+                            <path d={`M ${cLeftX} ${yLowerSplit} L ${cLeftX + cW} ${lowerDoorMidY} L ${cLeftX} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                          )}
+                          {showHandles && (
+                            <rect
+                              x={handleX}
+                              y={yLowerSplit + handleEdgeOffset}
+                              width={hThick}
+                              height={hLen}
+                              rx={0.5}
+                              fill={hColor}
+                              stroke="#0f172a"
+                              strokeWidth="0.3"
+                            />
+                          )}
+                        </>
                       )}
 
                       <rect
@@ -4348,7 +4389,8 @@ export function KitchenBlueprint() {
                               {isOvenTower && (
                                 <g stroke="#0f172a" strokeWidth="0.8">
                                   {(() => {
-                                    const yOven1 = yBodyBottom + 70;
+                                    const baseH = (cab.variant === 'tall_oven_micro') ? 60 : 70;
+                                    const yOven1 = yBodyBottom + baseH;
                                     const yOven2 = yOven1 + 60;
                                     const yMicro2 = yOven2 + 38;
                                     const po1_0 = toIsoSvg(x0, yOven1, z0);
@@ -4357,8 +4399,13 @@ export function KitchenBlueprint() {
                                     const po2_1 = toIsoSvg(x0, yOven2, z1);
                                     const pm2_0 = toIsoSvg(x0, yMicro2, z0);
                                     const pm2_1 = toIsoSvg(x0, yMicro2, z1);
+                                    const isDrawers = cab.towerLowerType === 'drawers';
+                                    const yDrawSplit = yBodyBottom + baseH / 2;
+                                    const pds_0 = toIsoSvg(x0, yDrawSplit, z0);
+                                    const pds_1 = toIsoSvg(x0, yDrawSplit, z1);
                                     return (
                                       <>
+                                        {isDrawers && <line x1={pds_0.x} y1={pds_0.y} x2={pds_1.x} y2={pds_1.y} stroke="#0f172a" strokeWidth="0.6" />}
                                         <line x1={po1_0.x} y1={po1_0.y} x2={po1_1.x} y2={po1_1.y} />
                                         <line x1={po2_0.x} y1={po2_0.y} x2={po2_1.x} y2={po2_1.y} />
                                         <line x1={pm2_0.x} y1={pm2_0.y} x2={pm2_1.x} y2={pm2_1.y} />
