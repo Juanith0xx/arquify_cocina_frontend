@@ -5370,31 +5370,69 @@ export function KitchenBlueprint() {
                         strokeWidth={3}
                       />
 
-                      {/* Calado de lavaplatos o encimera en líneas punteadas */}
-                      {p.hasCutout && p.widthMm > 600 && p.lengthMm > 350 && (
-                        <g>
-                          <rect
-                            x={p.x + (p.widthMm - (p.hasCutout === 'sink' ? 695 : 550)) / 2}
-                            y={p.y + (p.lengthMm - (p.hasCutout === 'sink' ? 400 : 470)) / 2}
-                            width={p.hasCutout === 'sink' ? 695 : 550}
-                            height={p.hasCutout === 'sink' ? 400 : 470}
-                            fill="#ffffff"
-                            stroke="#dc2626"
-                            strokeWidth={3}
-                            strokeDasharray="12,8"
-                          />
-                          <text
-                            x={p.x + p.widthMm / 2}
-                            y={p.y + p.lengthMm / 2 + 8}
-                            textAnchor="middle"
-                            fontSize={24}
-                            fontWeight="bold"
-                            fill="#dc2626"
-                          >
-                            {p.hasCutout === 'sink' ? 'CALADO ENCASTRE LAVAPLATOS' : 'CALADO ENCIMERA'}
-                          </text>
-                        </g>
-                      )}
+                      {/* Calado de lavaplatos o encimera en líneas punteadas rojas con dimensiones exactas */}
+                      {p.hasCutout && (() => {
+                        const isRot = p.rotated;
+                        const cW = p.cutoutWidthMm || (p.hasCutout === 'sink' ? 720 : 560);
+                        const cD = p.cutoutDepthMm || (p.hasCutout === 'sink' ? 400 : 490);
+
+                        const holeDrawW = isRot ? cD : cW;
+                        const holeDrawH = isRot ? cW : cD;
+
+                        const longLen = isRot ? p.lengthMm : p.widthMm;
+                        const shortLen = isRot ? p.widthMm : p.lengthMm;
+                        const centerLong = p.cutoutOffsetMm && p.cutoutOffsetMm > 0 && p.cutoutOffsetMm < longLen
+                          ? p.cutoutOffsetMm
+                          : longLen / 2;
+                        const centerShort = shortLen / 2;
+
+                        const holeX = isRot
+                          ? p.x + Math.max(10, Math.min(shortLen - holeDrawW - 10, centerShort - holeDrawW / 2))
+                          : p.x + Math.max(10, Math.min(longLen - holeDrawW - 10, centerLong - holeDrawW / 2));
+                        const holeY = isRot
+                          ? p.y + Math.max(10, Math.min(longLen - holeDrawH - 10, centerLong - holeDrawH / 2))
+                          : p.y + Math.max(10, Math.min(shortLen - holeDrawH - 10, centerShort - holeDrawH / 2));
+
+                        const labelTitle = p.hasCutout === 'sink' ? 'CALADO ENCASTRE LAVAPLATOS' : 'CALADO ENCIMERA';
+                        const labelDim = `${cW} x ${cD} mm`;
+
+                        return (
+                          <g>
+                            <rect
+                              x={holeX}
+                              y={holeY}
+                              width={holeDrawW}
+                              height={holeDrawH}
+                              fill="#fee2e2"
+                              fillOpacity={0.4}
+                              stroke="#dc2626"
+                              strokeWidth={3}
+                              strokeDasharray="12,8"
+                            />
+                            <text
+                              x={holeX + holeDrawW / 2}
+                              y={holeY + holeDrawH / 2 - 8}
+                              textAnchor="middle"
+                              fontSize={Math.max(16, Math.min(22, holeDrawW / 24))}
+                              fontWeight="bold"
+                              fill="#dc2626"
+                            >
+                              {labelTitle}
+                            </text>
+                            <text
+                              x={holeX + holeDrawW / 2}
+                              y={holeY + holeDrawH / 2 + 16}
+                              textAnchor="middle"
+                              fontSize={Math.max(14, Math.min(18, holeDrawW / 28))}
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                              fill="#991b1b"
+                            >
+                              {labelDim}
+                            </text>
+                          </g>
+                        );
+                      })()}
 
                       {/* Identificación y medidas de la pieza */}
                       {p.widthMm > 150 && p.lengthMm > 60 && (

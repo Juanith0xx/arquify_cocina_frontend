@@ -1748,7 +1748,6 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         activeCabinetId: newCabId,
         countertopConfig: {
           ...s.countertopConfig,
-          enabled: true,
           sinkModel: model,
           sinkCabinetId: newCabId,
         },
@@ -1764,7 +1763,6 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
     set((s) => ({
       countertopConfig: {
         ...s.countertopConfig,
-        enabled: true,
         sinkModel: model,
         sinkCabinetId: targetCab!.id,
       },
@@ -1840,7 +1838,6 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         activeCabinetId: newCabId,
         countertopConfig: {
           ...s.countertopConfig,
-          enabled: true,
           cooktopModel: model,
           cooktopCabinetId: newCabId,
         },
@@ -1856,7 +1853,6 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
     set((s) => ({
       countertopConfig: {
         ...s.countertopConfig,
-        enabled: true,
         cooktopModel: model,
         cooktopCabinetId: targetCab!.id,
       },

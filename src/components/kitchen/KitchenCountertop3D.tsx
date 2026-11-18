@@ -624,7 +624,157 @@ export function KitchenCountertop3D() {
     return detectContinuousCabinetRuns(cabinets, countertopConfig, walls, architecturalElements, roomConfig);
   }, [cabinets, countertopConfig, walls, architecturalElements, roomConfig]);
 
-  if (!countertopConfig.enabled || continuousRuns.length === 0) {
+  // Si la cubierta NO está habilitada en el proyecto, renderizar ÚNICAMENTE la cubierta simulada semitransparente
+  // de apoyo sobre los muebles con accesorios (lavaplatos o encimera) para que no floten en el aire y sea evidente
+  // para el cliente que se trata de un preview simulado y no de una cubierta de fabricación incluida.
+  if (!countertopConfig.enabled) {
+    const accessoryCabinets = cabinets.filter((c) =>
+      c.variant === 'base_sink_2_doors' ||
+      c.variant === 'sink_2_doors' ||
+      c.variant === 'sink_u_drawer' ||
+      c.id === countertopConfig.sinkCabinetId ||
+      c.variant === 'base_cooktop_3_drawers' ||
+      c.variant === 'cooktop_3_drawers' ||
+      c.id === countertopConfig.cooktopCabinetId
+    );
+
+    if (accessoryCabinets.length === 0) return null;
+
+    return (
+      <group name="kitchen-simulated-preview-countertops">
+        {accessoryCabinets.map((cab) => {
+          const isSink =
+            cab.variant === 'base_sink_2_doors' ||
+            cab.variant === 'sink_2_doors' ||
+            cab.variant === 'sink_u_drawer' ||
+            cab.id === countertopConfig.sinkCabinetId;
+
+          const isCooktop =
+            cab.variant === 'base_cooktop_3_drawers' ||
+            cab.variant === 'cooktop_3_drawers' ||
+            cab.id === countertopConfig.cooktopCabinetId;
+
+          const cabW = cab.width;
+          const cabH = cab.height;
+          const cabD = cab.depth || 60;
+          const ctDepth = cabD + 2;
+          const ctThick = 2.0;
+          const slabCenterY = cabH + ctThick / 2;
+          const localZShift = 1.0;
+
+          let cutoutW = 0;
+          let cutoutD = 0;
+          let sinkSpec: SinkSpec | null = null;
+          let cooktopSpec: any = null;
+
+          if (isSink) {
+            const model = (countertopConfig.sinkModel && countertopConfig.sinkModel !== 'none')
+              ? countertopConfig.sinkModel
+              : 'alfa_onec_3018';
+            sinkSpec = QSTONE_SINKS[model] || QSTONE_SINKS.alfa_onec_3018;
+            cutoutW = sinkSpec.cutoutWidthMm / 10;
+            cutoutD = sinkSpec.cutoutDepthMm / 10;
+          } else if (isCooktop) {
+            const model = (countertopConfig.cooktopModel && countertopConfig.cooktopModel !== 'none')
+              ? countertopConfig.cooktopModel
+              : 'fdv_design_60';
+            cooktopSpec = FDV_COOKTOPS[model] || FDV_COOKTOPS.fdv_design_60;
+            cutoutW = cooktopSpec.cutoutWidthMm / 10;
+            cutoutD = cooktopSpec.cutoutDepthMm / 10;
+          }
+
+          const leftPartW = Math.max(0, (cabW - cutoutW) / 2);
+          const rightPartW = Math.max(0, (cabW - cutoutW) / 2);
+
+          const ctBackZ = -cabD / 2;
+          const ctFrontZ = cabD / 2 + 2;
+          const holeBackZ = localZShift - cutoutD / 2;
+          const holeFrontZ = localZShift + cutoutD / 2;
+
+          const rearPartD = Math.max(0, holeBackZ - ctBackZ);
+          const rearPartZ = (ctBackZ + holeBackZ) / 2;
+
+          const frontPartD = Math.max(0, ctFrontZ - holeFrontZ);
+          const frontPartZ = (holeFrontZ + ctFrontZ) / 2;
+
+          const simMatProps = {
+            color: '#cbd5e1',
+            roughness: 0.2,
+            metalness: 0.05,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          };
+
+          return (
+            <group
+              key={`preview-ct-${cab.id}`}
+              position={[cab.position[0], cab.position[1] || 0, cab.position[2]]}
+              rotation={[0, cab.rotation || 0, 0]}
+            >
+              {leftPartW > 0.1 && (
+                <mesh position={[-cabW / 2 + leftPartW / 2, slabCenterY, localZShift]}>
+                  <boxGeometry args={[leftPartW, ctThick, ctDepth]} />
+                  <meshStandardMaterial {...simMatProps} />
+                  <Edges scale={1} threshold={15} color="#94a3b8" />
+                </mesh>
+              )}
+              {rightPartW > 0.1 && (
+                <mesh position={[cabW / 2 - rightPartW / 2, slabCenterY, localZShift]}>
+                  <boxGeometry args={[rightPartW, ctThick, ctDepth]} />
+                  <meshStandardMaterial {...simMatProps} />
+                  <Edges scale={1} threshold={15} color="#94a3b8" />
+                </mesh>
+              )}
+              {rearPartD > 0.1 && (
+                <mesh position={[0, slabCenterY, rearPartZ]}>
+                  <boxGeometry args={[cutoutW, ctThick, rearPartD]} />
+                  <meshStandardMaterial {...simMatProps} />
+                  <Edges scale={1} threshold={15} color="#94a3b8" />
+                </mesh>
+              )}
+              {frontPartD > 0.1 && (
+                <mesh position={[0, slabCenterY, frontPartZ]}>
+                  <boxGeometry args={[cutoutW, ctThick, frontPartD]} />
+                  <meshStandardMaterial {...simMatProps} />
+                  <Edges scale={1} threshold={15} color="#94a3b8" />
+                </mesh>
+              )}
+
+              {/* Artefacto instalado */}
+              {isSink && sinkSpec && (
+                <>
+                  {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
+                    <AlfaTwocF5858aRealistic
+                      position={[0, cabH + ctThick, localZShift]}
+                      stoneThicknessCm={ctThick}
+                    />
+                  ) : (
+                    <AlfaOnec3018Realistic
+                      position={[0, cabH + ctThick, localZShift]}
+                      stoneThicknessCm={ctThick}
+                    />
+                  )}
+                </>
+              )}
+
+              {isCooktop && (
+                <group position={[0, cabH + ctThick, localZShift]}>
+                  {countertopConfig.cooktopModel === 'fdv_design_90' ? (
+                    <FdvDesign90Model position={[0, 0, 0]} />
+                  ) : (
+                    <FdvDesign60Model position={[0, 0, 0]} />
+                  )}
+                </group>
+              )}
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  if (continuousRuns.length === 0) {
     return null;
   }
 
@@ -673,22 +823,26 @@ export function KitchenCountertop3D() {
 
         // Verificar si la corrida contiene el lavaplatos o la encimera
         const sinkCabinet = run.cabinets.find(
-          (c) => c.id === countertopConfig.sinkCabinetId
+          (c) => c.id === countertopConfig.sinkCabinetId ||
+                 c.variant === 'base_sink_2_doors' ||
+                 c.variant === 'sink_2_doors' ||
+                 c.variant === 'sink_u_drawer'
         );
         const cooktopCabinet = run.cabinets.find(
-          (c) => c.id === countertopConfig.cooktopCabinetId
+          (c) => c.id === countertopConfig.cooktopCabinetId ||
+                 c.variant === 'base_cooktop_3_drawers' ||
+                 c.variant === 'cooktop_3_drawers'
         );
 
         // Calcular posición relativa del lavaplatos dentro de la corrida
         const leftCoverOffsetCm = (run.leftCoverThickMm || 0) / 10;
         let sinkRelX: number | null = null;
         let sinkSpec: SinkSpec | null = null;
-        if (
-          sinkCabinet &&
-          countertopConfig.sinkModel &&
-          countertopConfig.sinkModel !== 'none'
-        ) {
-          sinkSpec = QSTONE_SINKS[countertopConfig.sinkModel];
+        if (sinkCabinet) {
+          const model = (countertopConfig.sinkModel && countertopConfig.sinkModel !== 'none')
+            ? countertopConfig.sinkModel
+            : 'alfa_onec_3018';
+          sinkSpec = QSTONE_SINKS[model] || QSTONE_SINKS.alfa_onec_3018;
           // Calcular distancia desde el extremo izquierdo de la corrida hasta el centro del gabinete del lavaplatos
           let currentDist = leftCoverOffsetCm;
           for (const cab of run.cabinets) {
@@ -703,11 +857,12 @@ export function KitchenCountertop3D() {
 
         // Posición relativa de la encimera dentro de la corrida
         let cooktopRelX: number | null = null;
-        if (
-          cooktopCabinet &&
-          countertopConfig.cooktopModel &&
-          countertopConfig.cooktopModel !== 'none'
-        ) {
+        let cooktopSpec: any = null;
+        if (cooktopCabinet) {
+          const model = (countertopConfig.cooktopModel && countertopConfig.cooktopModel !== 'none')
+            ? countertopConfig.cooktopModel
+            : 'fdv_design_60';
+          cooktopSpec = FDV_COOKTOPS[model] || FDV_COOKTOPS.fdv_design_60;
           let currentDist = leftCoverOffsetCm;
           for (const cab of run.cabinets) {
             if (cab.id === cooktopCabinet.id) {
@@ -754,15 +909,21 @@ export function KitchenCountertop3D() {
 
               const isLastSeg = segIdx === run.segmentLengthsMm.length - 1;
 
-              // Comprobar si el lavaplatos cae en este tramo
+              // Comprobar si el lavaplatos o la encimera caen en este tramo
               const hasSinkInSeg =
                 sinkRelX !== null &&
                 sinkSpec !== null &&
                 sinkRelX >= segLeft - 1 &&
                 sinkRelX <= segRight + 1;
 
-              const cutoutW = sinkSpec ? sinkSpec.cutoutWidthMm / 10 : 0;
-              const cutoutD = sinkSpec ? sinkSpec.cutoutDepthMm / 10 : 0;
+              const hasCooktopInSeg =
+                cooktopRelX !== null &&
+                cooktopSpec !== null &&
+                cooktopRelX >= segLeft - 1 &&
+                cooktopRelX <= segRight + 1;
+
+              const cutoutW = sinkSpec ? sinkSpec.cutoutWidthMm / 10 : (cooktopSpec ? cooktopSpec.cutoutWidthMm / 10 : 0);
+              const cutoutD = sinkSpec ? sinkSpec.cutoutDepthMm / 10 : (cooktopSpec ? cooktopSpec.cutoutDepthMm / 10 : 0);
 
               return (
                 <group key={`seg-${segIdx}`} position={[segCenterRelX, 0, 0]}>
@@ -866,8 +1027,104 @@ export function KitchenCountertop3D() {
                         </group>
                       );
                     })()
+                  ) : hasCooktopInSeg && cooktopSpec ? (
+                    (() => {
+                      const localCooktopX = cooktopRelX! - segCenterRelX;
+                      const cW = cooktopSpec.cutoutWidthMm / 10;
+                      const cD = cooktopSpec.cutoutDepthMm / 10;
+                      const holeLeft = localCooktopX - cW / 2;
+                      const holeRight = localCooktopX + cW / 2;
+                      const holeBack = localZShift - cD / 2;
+                      const holeFront = localZShift + cD / 2;
+
+                      const leftPartW = Math.max(0, holeLeft - (-totalSegSlabLenCm / 2));
+                      const rightPartW = Math.max(0, totalSegSlabLenCm / 2 - holeRight);
+                      const rearPartD = Math.max(0, holeBack - (-depthCm / 2));
+                      const frontPartD = Math.max(0, depthCm / 2 - holeFront);
+
+                      return (
+                        <group>
+                          {/* Pieza izquierda de la cubierta */}
+                          {leftPartW > 0.1 && (
+                            <mesh
+                              position={[
+                                -totalSegSlabLenCm / 2 + leftPartW / 2,
+                                slabCenterY,
+                                localZShift,
+                              ]}
+                              castShadow={!isTransparent}
+                              receiveShadow={!isTransparent}
+                            >
+                              <boxGeometry args={[leftPartW, stoneThicknessCm, depthCm]} />
+                              <meshStandardMaterial {...getCountertopMatProps()} />
+                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+                            </mesh>
+                          )}
+
+                          {/* Pieza derecha de la cubierta */}
+                          {rightPartW > 0.1 && (
+                            <mesh
+                              position={[
+                                totalSegSlabLenCm / 2 - rightPartW / 2,
+                                slabCenterY,
+                                localZShift,
+                              ]}
+                              castShadow={!isTransparent}
+                              receiveShadow={!isTransparent}
+                            >
+                              <boxGeometry args={[rightPartW, stoneThicknessCm, depthCm]} />
+                              <meshStandardMaterial {...getCountertopMatProps()} />
+                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+                            </mesh>
+                          )}
+
+                          {/* Pieza trasera de la cubierta */}
+                          {rearPartD > 0.1 && (
+                            <mesh
+                              position={[
+                                localCooktopX,
+                                slabCenterY,
+                                -depthCm / 2 + rearPartD / 2,
+                              ]}
+                              castShadow={!isTransparent}
+                              receiveShadow={!isTransparent}
+                            >
+                              <boxGeometry args={[cW, stoneThicknessCm, rearPartD]} />
+                              <meshStandardMaterial {...getCountertopMatProps()} />
+                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+                            </mesh>
+                          )}
+
+                          {/* Pieza delantera de la cubierta */}
+                          {frontPartD > 0.1 && (
+                            <mesh
+                              position={[
+                                localCooktopX,
+                                slabCenterY,
+                                depthCm / 2 - frontPartD / 2,
+                              ]}
+                              castShadow={!isTransparent}
+                              receiveShadow={!isTransparent}
+                            >
+                              <boxGeometry args={[cW, stoneThicknessCm, frontPartD]} />
+                              <meshStandardMaterial {...getCountertopMatProps()} />
+                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+                            </mesh>
+                          )}
+
+                          {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
+                          <group position={[localCooktopX, cabTopY + stoneThicknessCm, localZShift]}>
+                            {countertopConfig.cooktopModel === 'fdv_design_90' ? (
+                              <FdvDesign90Model position={[0, 0, 0]} />
+                            ) : (
+                              <FdvDesign60Model position={[0, 0, 0]} />
+                            )}
+                          </group>
+                        </group>
+                      );
+                    })()
                   ) : (
-                    /* SI NO TIENE LAVAPLATOS: Plancha corrida continua estándar cubriendo toda la superficie hasta el muro en esquinas */
+                    /* SI NO TIENE LAVAPLATOS NI ENCIMERA: Plancha corrida continua estándar cubriendo toda la superficie hasta el muro en esquinas */
                     <mesh position={[0, slabCenterY, localZShift]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
                       <boxGeometry
                         args={[totalSegSlabLenCm - (isLastSeg ? 0 : 0.05), stoneThicknessCm, depthCm]}
@@ -894,18 +1151,6 @@ export function KitchenCountertop3D() {
                 </group>
               );
             })}
-
-            {/* ENCIMERA A GAS FDV (si cae en esta corrida) */}
-            {cooktopRelX !== null && (
-              <group position={[cooktopRelX, cabTopY + stoneThicknessCm, localZShift]}>
-                {countertopConfig.cooktopModel === 'fdv_design_60' && (
-                  <FdvDesign60Model position={[0, 0, 0]} />
-                )}
-                {countertopConfig.cooktopModel === 'fdv_design_90' && (
-                  <FdvDesign90Model position={[0, 0, 0]} />
-                )}
-              </group>
-            )}
 
             {/* Faldón Delantero / Regrueso Continuo (de 0 a 5 cm) */}
             {regruesoCm > 0 && (() => {

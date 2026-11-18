@@ -14,6 +14,9 @@ export interface CountertopPiece {
   notes?: string;
   runId?: string;
   hasCutout?: 'sink' | 'cooktop';
+  cutoutWidthMm?: number;
+  cutoutDepthMm?: number;
+  cutoutOffsetMm?: number;
 }
 
 export interface NestedPiecePlacement {
@@ -27,6 +30,9 @@ export interface NestedPiecePlacement {
   rotated: boolean;
   slabIndex: number;
   hasCutout?: 'sink' | 'cooktop';
+  cutoutWidthMm?: number;
+  cutoutDepthMm?: number;
+  cutoutOffsetMm?: number;
 }
 
 export interface SlabLayout {
@@ -1035,6 +1041,9 @@ export function packPiecesIntoSlabs(
           rotated: pos.rotated,
           slabIndex: slab.index,
           hasCutout: piece.hasCutout,
+          cutoutWidthMm: piece.cutoutWidthMm,
+          cutoutDepthMm: piece.cutoutDepthMm,
+          cutoutOffsetMm: piece.cutoutOffsetMm,
         });
         slab.occupied.push([pos.x, pos.y, pos.x + actualW, pos.y + actualH]);
         placed = true;
@@ -1073,6 +1082,9 @@ export function packPiecesIntoSlabs(
         rotated: isRotated,
         slabIndex: newIndex,
         hasCutout: piece.hasCutout,
+        cutoutWidthMm: piece.cutoutWidthMm,
+        cutoutDepthMm: piece.cutoutDepthMm,
+        cutoutOffsetMm: piece.cutoutOffsetMm,
       });
       newSlab.occupied.push([margin, margin, margin + actualW, margin + actualH]);
       slabs.push(newSlab);
@@ -1156,12 +1168,50 @@ export function generateCountertopPieces(
           : (config.baseWaterfallRight ?? config.waterfallRight));
 
     // Chequear si esta corrida contiene encastre de lavaplatos o encimera
-    const hasSinkInRun = run.cabinets.some((c) => c.id === config.sinkCabinetId);
-    const hasCooktopInRun = run.cabinets.some((c) => c.id === config.cooktopCabinetId);
+    const sinkCab = run.cabinets.find((c) => c.id === config.sinkCabinetId || c.variant === 'base_sink_2_doors' || c.variant === 'sink_2_doors' || c.variant === 'sink_u_drawer');
+    const cooktopCab = run.cabinets.find((c) => c.id === config.cooktopCabinetId || c.variant === 'base_cooktop_3_drawers' || c.variant === 'cooktop_3_drawers');
 
+    let sinkDistFromRunLeftMm: number | null = null;
+    let sinkCutoutW = 720;
+    let sinkCutoutD = 400;
+    if (sinkCab) {
+      const sinkModel = (config.sinkModel && config.sinkModel !== 'none') ? config.sinkModel : 'alfa_onec_3018';
+      const spec = QSTONE_SINKS[sinkModel] || QSTONE_SINKS.alfa_onec_3018;
+      sinkCutoutW = spec.cutoutWidthMm;
+      sinkCutoutD = spec.cutoutDepthMm;
+      let d = (run.leftCoverThickMm || 0);
+      for (const cab of run.cabinets) {
+        if (cab.id === sinkCab.id) {
+          sinkDistFromRunLeftMm = d + (cab.width * 10) / 2;
+          break;
+        }
+        d += cab.width * 10;
+      }
+    }
+
+    let cooktopDistFromRunLeftMm: number | null = null;
+    let cooktopCutoutW = 560;
+    let cooktopCutoutD = 490;
+    if (cooktopCab) {
+      const cooktopModel = (config.cooktopModel && config.cooktopModel !== 'none') ? config.cooktopModel : 'fdv_design_60';
+      const spec = FDV_COOKTOPS[cooktopModel] || FDV_COOKTOPS.fdv_design_60;
+      cooktopCutoutW = spec.cutoutWidthMm;
+      cooktopCutoutD = spec.cutoutDepthMm;
+      let d = (run.leftCoverThickMm || 0);
+      for (const cab of run.cabinets) {
+        if (cab.id === cooktopCab.id) {
+          cooktopDistFromRunLeftMm = d + (cab.width * 10) / 2;
+          break;
+        }
+        d += cab.width * 10;
+      }
+    }
+
+    let currentSegStartMm = 0;
     // Si la corrida no supera la cota de transporte: ES UN ÚNICO TRAMO ENTERO CONTINUO
     for (let segIdx = 0; segIdx < run.segmentLengthsMm.length; segIdx++) {
       const segLengthMm = run.segmentLengthsMm[segIdx];
+      const segEndMm = currentSegStartMm + segLengthMm;
       const pieceId = `${prefix}-TOP-${pieceCounter}`;
       const isSingleSegment = run.segmentLengthsMm.length === 1;
 
@@ -1183,8 +1233,23 @@ export function generateCountertopPieces(
         : `Tramo Cubierta ${pieceId} (Seg. ${segIdx + 1}/${run.segmentLengthsMm.length} - ${totalSlabLengthMm}x${run.depthMm}mm)`;
 
       let cutoutType: 'sink' | 'cooktop' | undefined = undefined;
-      if (hasSinkInRun && segIdx === 0) cutoutType = 'sink';
-      else if (hasCooktopInRun) cutoutType = 'cooktop';
+      let cutoutWidthMm: number | undefined = undefined;
+      let cutoutDepthMm: number | undefined = undefined;
+      let cutoutOffsetMm: number | undefined = undefined;
+
+      if (sinkDistFromRunLeftMm !== null && sinkDistFromRunLeftMm >= currentSegStartMm - 10 && sinkDistFromRunLeftMm <= segEndMm + 10) {
+        cutoutType = 'sink';
+        cutoutWidthMm = sinkCutoutW;
+        cutoutDepthMm = sinkCutoutD;
+        cutoutOffsetMm = Math.round(sinkDistFromRunLeftMm - currentSegStartMm + extraLeft - trimLeft);
+      } else if (cooktopDistFromRunLeftMm !== null && cooktopDistFromRunLeftMm >= currentSegStartMm - 10 && cooktopDistFromRunLeftMm <= segEndMm + 10) {
+        cutoutType = 'cooktop';
+        cutoutWidthMm = cooktopCutoutW;
+        cutoutDepthMm = cooktopCutoutD;
+        cutoutOffsetMm = Math.round(cooktopDistFromRunLeftMm - currentSegStartMm + extraLeft - trimLeft);
+      }
+
+      currentSegStartMm += segLengthMm;
 
       // 1. Tramo horizontal de cubierta (cubre la totalidad de la superficie hasta el muro/pilar y voladizos)
       pieces.push({
@@ -1203,6 +1268,9 @@ export function generateCountertopPieces(
           : `Junta ortogonal a 90° rectificada con disco diamantado kerf 3.5mm${extraLeft || extraRight ? ' (incluye voladizo/extensión a muro/pilar/esquina)' : ''}.`,
         runId: run.id,
         hasCutout: cutoutType,
+        cutoutWidthMm,
+        cutoutDepthMm,
+        cutoutOffsetMm,
       });
 
       // 2. Faldón Delantero / Regrueso
