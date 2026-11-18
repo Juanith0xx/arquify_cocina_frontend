@@ -763,7 +763,7 @@ export function KitchenModuleContextMenu({
   const is4Drawers = variant === '4_drawers';
   const is2PotDrawers = variant === '2_pot_drawers';
   const is1Door1Drawer = variant === '1_door_1_drawer';
-  const is2Doors = variant === '2_doors' || variant === 'tall_2_doors' || variant === 'wall_2_doors';
+  const is2Doors = variant === '2_doors' || variant === 'tall_2_doors' || variant === 'wall_2_doors' || variant === 'base_sink_2_doors' || variant === 'sink_2_doors';
   const is1Door = variant === '1_door' || variant === 'wall_1_door' || variant === 'tall_1_door';
   const isSplit2Doors = variant === 'tall_split_2_doors';
   const isLiftUp = variant === 'wall_lift_up';
@@ -841,6 +841,9 @@ export function KitchenModuleContextMenu({
       elements.push({ id: 'drawer-0', label: 'Cajón 3 (Inferior)', type: 'drawer' });
     } else if (variant === '2_drawers_1_pot') {
       elements.push({ id: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
+    } else if (variant === 'base_cooktop_3_drawers' || variant === 'cooktop_3_drawers') {
       elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
       elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
     } else if (isSpiceRack) {

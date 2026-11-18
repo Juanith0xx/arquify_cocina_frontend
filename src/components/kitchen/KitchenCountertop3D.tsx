@@ -11,10 +11,10 @@ import { detectContinuousCabinetRuns, ContinuousRunInfo } from '../../utils/coun
 // =========================================================================
 function DeckMixerFaucet3D({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.95, roughness = 0.18) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.35,
+    roughness: isTransparent ? 0.1 : 0.3,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -89,10 +89,10 @@ function DeckMixerFaucet3D({ position }: { position: [number, number, number] })
 // =========================================================================
 function DrainBasketStrainer3D({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.92, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.3,
+    roughness: isTransparent ? 0.1 : 0.32,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -176,8 +176,8 @@ function OverflowSlots3D({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial
             key={isTransparent ? 'transp' : 'solid'}
             color={isTransparent ? '#cbd5e1' : '#e2e8f0'}
-            metalness={isTransparent ? 0.05 : 0.92}
-            roughness={isTransparent ? 0.1 : 0.2}
+            metalness={isTransparent ? 0.05 : 0.3}
+            roughness={isTransparent ? 0.1 : 0.3}
             transparent={isTransparent}
             opacity={isTransparent ? 0.3 : 1}
             depthWrite={!isTransparent}
@@ -206,10 +206,10 @@ function AlfaOnec3018Realistic({
   const h = 22; // 22 cm profundidad de bacin
   const wallThick = 0.35; // 3.5mm acero
 
-  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.28,
+    roughness: isTransparent ? 0.1 : 0.35,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -309,10 +309,10 @@ function AlfaTwocF5858aRealistic({
   const bowlW = (w - 2.5) / 2; // ~35.2 cm por cuba
   const wallThick = 0.35;
 
-  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.28,
+    roughness: isTransparent ? 0.1 : 0.35,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -396,10 +396,10 @@ function AlfaTwocF5858aRealistic({
 // =========================================================================
 function FdvDesign60Model({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.88, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.35,
+    roughness: isTransparent ? 0.1 : 0.3,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -465,10 +465,10 @@ function FdvDesign60Model({ position }: { position: [number, number, number] }) 
 
 function FdvDesign90Model({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.88, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.35,
+    roughness: isTransparent ? 0.1 : 0.3,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
