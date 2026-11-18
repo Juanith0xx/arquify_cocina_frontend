@@ -7,77 +7,264 @@ import { QSTONE_SINKS, FDV_COOKTOPS, SinkSpec } from '../../types/countertop';
 import { detectContinuousCabinetRuns, ContinuousRunInfo } from '../../utils/countertopNesting';
 
 // =========================================================================
-// 3D MODEL: GRIFERÍA MONOMANDO DE ALTA GAMA (L-NECK MIXER FAUCET)
+// =========================================================================
+// 3D MODEL: GRIFERÍA MONOMANDO FDV TOP PRO 4.0 (SAP: 15507)
+// Altura total: 51.7 cm (517 mm) | Fondo / Alcance al difusor: 25.0 cm (250 mm)
+// Terminación: Acero inoxidable satinado con resorte helicoidal y rociador extensible
 // =========================================================================
 function DeckMixerFaucet3D({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
+
+  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : 0.35,
-    roughness: isTransparent ? 0.1 : 0.3,
+    metalness: isTransparent ? 0.05 : metalness,
+    roughness: isTransparent ? 0.1 : roughness,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
   });
 
+  // Generación paramétrica exacta de la manguera flexible y el resorte helicoidal
+  const { hoseGeo, springGeo } = useMemo(() => {
+    // Parámetros dimensionales basados en la ficha técnica FDV TOP PRO 4.0 (Kitchen Center)
+    const startY = 22.0;       // Altura de inicio sobre la columna rígida
+    const centerArcY = 39.2;   // Centro del arco semicircular
+    const radiusArc = 12.5;    // Radio del arco (12.5 cm -> Cúspide exacta en Y = 39.2 + 12.5 = 51.7 cm)
+    const reachZ = 25.0;       // Alcance frontal al eje del cabezal (25.0 cm = 250 mm)
+    const endHoseY = 24.0;     // Altura final donde conecta al cabezal difusor
+    const endSpringY = 30.5;   // Altura donde remata el resorte helicoidal en su casquillo
+
+    // 1. Curva de la manguera flexible interior
+    const hosePoints: THREE.Vector3[] = [];
+    hosePoints.push(new THREE.Vector3(0, startY, 0));
+    hosePoints.push(new THREE.Vector3(0, 30.0, 0));
+    hosePoints.push(new THREE.Vector3(0, centerArcY, 0));
+
+    const arcSegments = 24;
+    for (let i = 1; i < arcSegments; i++) {
+      const theta = (Math.PI * i) / arcSegments;
+      const z = radiusArc - radiusArc * Math.cos(theta);
+      const y = centerArcY + radiusArc * Math.sin(theta);
+      hosePoints.push(new THREE.Vector3(0, y, z));
+    }
+
+    hosePoints.push(new THREE.Vector3(0, centerArcY, reachZ));
+    hosePoints.push(new THREE.Vector3(0, 32.0, reachZ));
+    hosePoints.push(new THREE.Vector3(0, endHoseY, reachZ));
+
+    const hoseCurve = new THREE.CatmullRomCurve3(hosePoints, false, 'centripetal');
+    const hGeo = new THREE.TubeGeometry(hoseCurve, 64, 0.65, 16, false);
+
+    // 2. Resorte helicoidal exterior continuo
+    const l1 = centerArcY - startY;      // 17.2 cm tramo vertical
+    const l2 = Math.PI * radiusArc;      // 39.27 cm tramo de arco
+    const l3 = centerArcY - endSpringY;  // 8.7 cm tramo descendente
+    const lTot = l1 + l2 + l3;
+
+    const numCoils = 24;                 // Número de vueltas de espiral
+    const springRadius = 1.35;           // Radio exterior de las espiras (abraza la manguera de radio 0.65)
+    const sampleSteps = 380;             // Muestreo denso para suavidad de la curva
+    const springPoints: THREE.Vector3[] = [];
+
+    for (let i = 0; i <= sampleSteps; i++) {
+      const u = i / sampleSteps;
+      const s = u * lTot;
+      let yc = 0;
+      let zc = 0;
+      let ny = 0;
+      let nz = 0;
+
+      if (s <= l1) {
+        // Vertical ascendente
+        yc = startY + s;
+        zc = 0;
+        ny = 0;
+        nz = 1;
+      } else if (s <= l1 + l2) {
+        // Arco semicircular
+        const theta = (s - l1) / radiusArc;
+        zc = radiusArc - radiusArc * Math.cos(theta);
+        yc = centerArcY + radiusArc * Math.sin(theta);
+        ny = -Math.sin(theta);
+        nz = Math.cos(theta);
+      } else {
+        // Vertical descendente
+        const dDown = s - (l1 + l2);
+        yc = centerArcY - dDown;
+        zc = reachZ;
+        ny = 0;
+        nz = -1;
+      }
+
+      const phi = 2 * Math.PI * numCoils * u;
+      const x = springRadius * Math.cos(phi);
+      const y = yc + springRadius * Math.sin(phi) * ny;
+      const z = zc + springRadius * Math.sin(phi) * nz;
+
+      springPoints.push(new THREE.Vector3(x, y, z));
+    }
+
+    const sCurve = new THREE.CatmullRomCurve3(springPoints, false, 'centripetal');
+    const sGeo = new THREE.TubeGeometry(sCurve, 280, 0.16, 6, false);
+
+    return { hoseGeo: hGeo, springGeo: sGeo };
+  }, []);
+
   return (
     <group position={position}>
-      {/* Base de fijación sobre cubierta */}
-      <mesh position={[0, 0.4, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[2.5, 2.7, 0.8, 32]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.16)} />
+      {/* 1. Base y anillo de asiento sobre cubierta */}
+      <mesh position={[0, 0.35, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.6, 2.7, 0.7, 32]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
       <mesh position={[0, 0.9, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[2.0, 2.4, 0.4, 32]} />
-        <meshStandardMaterial {...getMatProps('#94a3b8', 0.95, 0.2)} />
+        <cylinderGeometry args={[2.3, 2.5, 0.4, 32]} />
+        <meshStandardMaterial {...getMatProps('#94a3b8', 0.92, 0.22)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
 
-      {/* Columna vertical principal */}
-      <mesh position={[0, 9.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.7, 1.7, 17, 32]} />
+      {/* 2. Cuerpo cilíndrico principal inferior */}
+      <mesh position={[0, 5.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.2, 2.2, 8.8, 32]} />
         <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
-
-      {/* Caño horizontal en L hacia el centro de la poza */}
-      <mesh position={[0, 18, 9]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.2, 1.2, 18, 24]} />
-        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+      <mesh position={[0, 10.1, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.3, 2.3, 0.4, 32]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.92, 0.22)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
 
-      {/* Codo de unión 90° */}
-      <mesh position={[0, 18, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <sphereGeometry args={[1.6, 24, 24]} />
-        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-
-      {/* Puntera / Aireador direccionador de agua */}
-      <mesh position={[0, 15.5, 17.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.1, 1.3, 4, 24]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.15)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-      <mesh position={[0, 13.4, 17.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.0, 1.0, 0.3, 24]} />
-        <meshStandardMaterial {...getMatProps('#64748b', 0.4, 0.7)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-
-      {/* Manilla monomando lateral */}
-      <group position={[2.2, 6.5, 0]} rotation={[0, 0, -0.25]}>
-        <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-          <cylinderGeometry args={[1.2, 1.2, 1.2, 24]} />
-          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
+      {/* Maneta monomando lateral derecha (+X) */}
+      <group position={[2.2, 5.8, 0.4]} rotation={[0, -0.2, -0.3]}>
+        {/* Carcasa lateral del cartucho */}
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 1.25, 1.4, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
           {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
         </mesh>
-        <mesh position={[0.6, 3.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-          <cylinderGeometry args={[0.5, 0.5, 7, 20]} />
-          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.97, 0.15)} />
+        {/* Casquillo giratorio de la manilla */}
+        <mesh position={[1.1, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.15, 1.25, 0.9, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
           {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Palanca cilíndrica esbelta estilizada */}
+        <mesh position={[1.1, 3.6, 0.2]} rotation={[0.1, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[0.38, 0.38, 6.8, 16]} />
+          <meshStandardMaterial {...getMatProps('#f1f5f9', 0.98, 0.14)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Remate superior redondeado de la palanca */}
+        <mesh position={[1.1, 7.0, 0.2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <sphereGeometry args={[0.42, 16, 16]} />
+          <meshStandardMaterial {...getMatProps('#f1f5f9', 0.98, 0.14)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
+
+      {/* 3. Columna vertical rígida de acero */}
+      <mesh position={[0, 16.2, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.35, 1.35, 11.8, 32]} />
+        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* 4. Brazo horizontal de retención y soporte del cabezal */}
+      <group position={[0, 21.6, 0]}>
+        {/* Collarín giratorio de unión a la columna */}
+        <mesh position={[0, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.55, 1.55, 1.4, 28]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Barra horizontal orientada en +Z hacia el centro del lavaplatos */}
+        <mesh position={[0, 0, 11.5]} rotation={[Math.PI / 2, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[0.55, 0.55, 23.0, 20]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Soporte frontal / horquilla donde descansa el cabezal en Z = 25.0 */}
+        <mesh position={[0, 0, 23.6]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[1.4, 1.2, 1.6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        <mesh position={[0, 0, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.7, 1.7, 1.4, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
+
+      {/* 5. Muelle de soporte denso en la base (strain relief collar) */}
+      {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
+        <mesh key={`dense-ring-${idx}`} position={[0, 22.5 + idx * 0.45, 0]}>
+          <torusGeometry args={[1.35, 0.18, 8, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      ))}
+
+      {/* Manguera flexible interior trenzada (gris grafito) */}
+      <mesh geometry={hoseGeo} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <meshStandardMaterial {...getMatProps('#334155', 0.15, 0.65)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* Resorte helicoidal exterior continuo (acero inoxidable) */}
+      <mesh geometry={springGeo} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+      </mesh>
+
+      {/* Virola / casquillo de remate del resorte en Z = 25.0 */}
+      <mesh position={[0, 30.5, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.35, 1.45, 1.2, 24]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+      <mesh position={[0, 29.8, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.15, 1.35, 0.4, 24]} />
+        <meshStandardMaterial {...getMatProps('#94a3b8', 0.92, 0.22)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* 6. Cabezal difusor profesional (Spray Head) centrado en Z = 25.0 */}
+      <group position={[0, 0, 25.0]}>
+        {/* Casquillo superior de conexión a manguera */}
+        <mesh position={[0, 24.0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.1, 1.2, 1.2, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Cuello cilíndrico que calza en el anillo del soporte horizontal */}
+        <mesh position={[0, 22.4, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 1.25, 2.0, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Cuerpo cónico ergonómico acampanado */}
+        <mesh position={[0, 19.3, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 2.05, 4.2, 28]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Selector basculante negro mate de doble chorro (orientado hacia el frente) */}
+        <mesh position={[0, 19.3, 1.55]} rotation={[-0.1, 0, 0]} castShadow={!isTransparent}>
+          <boxGeometry args={[0.85, 2.2, 0.45]} />
+          <meshStandardMaterial {...getMatProps('#1e293b', 0.1, 0.7)} />
+        </mesh>
+        {/* Aro inferior cromado de la boquilla */}
+        <mesh position={[0, 17.0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[2.05, 1.9, 0.4, 28]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Placa difusora microperforada de salida de agua */}
+        <mesh position={[0, 16.75, 0]}>
+          <cylinderGeometry args={[1.75, 1.75, 0.12, 28]} />
+          <meshStandardMaterial {...getMatProps('#1e293b', 0.2, 0.5)} />
         </mesh>
       </group>
     </group>
