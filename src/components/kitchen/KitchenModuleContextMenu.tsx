@@ -1356,7 +1356,8 @@ export function KitchenModuleContextMenu({
                 activeCabinet.variant === 'tall_terminal_shelves' ? 40 :
                 activeCabinet.variant?.includes('wine_rack') ? 15 :
                 activeCabinet.variant?.startsWith('wall_corner_blind') ? 60 :
-                (activeCabinet.variant?.startsWith('corner_blind') ? 80 : 30)
+                (activeCabinet.variant?.startsWith('corner_blind') ? 80 :
+                 (activeCabinet.variant === 'base_sink_2_doors' || activeCabinet.variant === 'base_cooktop_3_drawers' ? 80 : 30))
               }
               maxCm={
                 activeCabinet.variant === 'wall_hood_new_flow' ? 60 :

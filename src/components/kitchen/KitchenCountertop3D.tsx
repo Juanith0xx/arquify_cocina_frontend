@@ -217,12 +217,33 @@ function AlfaOnec3018Realistic({
 
   return (
     <group position={position}>
-      {/* Pestaña perimetral superior que se fija BAJO la piedra (undermount flange) */}
-      <mesh position={[0, -stoneThicknessCm - 0.15, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <boxGeometry args={[w + 6, 0.3, d + 6]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
+      {/* Pestaña perimetral superior que se fija BAJO la piedra (undermount flange con vano abierto) */}
+      <group position={[0, -stoneThicknessCm - 0.15, 0]}>
+        {/* Tira izquierda de pestaña */}
+        <mesh position={[-w / 2 - 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira derecha de pestaña */}
+        <mesh position={[w / 2 + 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira frontal de pestaña */}
+        <mesh position={[0, 0, d / 2 + 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira trasera de pestaña */}
+        <mesh position={[0, 0, -d / 2 - 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
 
       {/* CUBA PRINCIPAL PROFUNDA */}
       <group position={[0, -stoneThicknessCm - h / 2, 0]}>
@@ -320,12 +341,33 @@ function AlfaTwocF5858aRealistic({
 
   return (
     <group position={position}>
-      {/* Pestaña perimetral superior */}
-      <mesh position={[0, -stoneThicknessCm - 0.15, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <boxGeometry args={[w + 6, 0.3, d + 6]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
+      {/* Pestaña perimetral superior con vano abierto */}
+      <group position={[0, -stoneThicknessCm - 0.15, 0]}>
+        {/* Tira izquierda de pestaña */}
+        <mesh position={[-w / 2 - 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira derecha de pestaña */}
+        <mesh position={[w / 2 + 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira frontal de pestaña */}
+        <mesh position={[0, 0, d / 2 + 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira trasera de pestaña */}
+        <mesh position={[0, 0, -d / 2 - 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
 
       {/* Puente divisor central entre las dos cubas */}
       <mesh position={[0, -stoneThicknessCm - 1.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>

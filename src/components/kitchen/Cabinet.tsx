@@ -2081,7 +2081,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                   <AnimatedDrawer 
                      openZOffset={drawerBoxLength - 3} 
                      forceOpen={isElementOpen(drawerKey)}
-                     onClickAction={() => setOpenElement(id, drawerKey, !isElementOpen(drawerKey))}
                   >
                      {/* Drawer Front */}
                      {isVeggie ? (
@@ -2433,7 +2432,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      forceOpen={isElementOpen('door-0')}
                      globalPosition={[position[0], position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
-                     onClickAction={() => setOpenElement(id, 'door-0', !isElementOpen('door-0'))}
                   />
                   {/* Repisas Interiores Paramétricas con Anti-Colisión */}
                   {(() => {
@@ -2949,7 +2947,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      forceOpen={isElementOpen('door-0')}
                      globalPosition={[position[0] + leftDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
-                     onClickAction={() => setOpenElement(id, 'door-0', !isElementOpen('door-0'))}
                   />
                   <AnimatedDoor
                      key="door-right"
@@ -2963,7 +2960,6 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      forceOpen={isElementOpen('door-1')}
                      globalPosition={[position[0] + rightDoorX, position[1] + doorY, position[2] + frontZ]}
                      handleConfig={handleConfig}
-                     onClickAction={() => setOpenElement(id, 'door-1', !isElementOpen('door-1'))}
                   />
                   {/* Repisas Interiores Paramétricas con Anti-Colisión */}
                   {(() => {
