@@ -4593,6 +4593,34 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                <>
                   {(() => {
                      const isWineRack = variant?.includes('wine_rack') || variant === 'base_wine_rack' || variant === 'wall_wine_rack' || variant === 'tall_wine_rack' || variant === 'island_wine_rack';
+                     const isSinkCabinet = effectiveVariant === 'base_sink_2_doors' || effectiveVariant === 'sink_2_doors' || effectiveVariant === 'sink_u_drawer';
+
+                     if (isSinkCabinet) {
+                        // Para mueble lavaplatos: amarre frontal ubicado de manera frontal (vertical/de canto) para no colisionar con la cubeta
+                        const railH = 10;
+                        const railY = height - railH / 2;
+                        const frontRailZ = isGolaActive
+                           ? (depth / 2 - thickness - 2.8 - thickness / 2)
+                           : (depth / 2 - thickness / 2);
+                        return (
+                           <>
+                              <Board 
+                                 position={[0, railY, frontRailZ]} 
+                                 args={[innerW, railH, thickness]} 
+                                 {...parseColor(cStructure, structureMaterial, 'top')} 
+                              />
+                              <AssemblyJoint 
+                                 position={[-innerW / 2, railY, frontRailZ]} 
+                                 length={railH} axis="y" pointing="right" thickness={thickness} count={1} 
+                              />
+                              <AssemblyJoint 
+                                 position={[innerW / 2, railY, frontRailZ]} 
+                                 length={railH} axis="y" pointing="left" thickness={thickness} count={1} 
+                              />
+                           </>
+                        );
+                     }
+
                      const frontRailZ = isWineRack ? (depth/2 - 5) : (isGolaActive ? (depth/2 - thickness - 2.8 - 5) : (depth/2 - thickness - 5));
                      return (
                         <>

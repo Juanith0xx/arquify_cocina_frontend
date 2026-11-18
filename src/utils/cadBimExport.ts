@@ -261,17 +261,18 @@ export function extractKitchen3dElements(
         th,
         10
       );
+      const isSinkForCad = v === 'base_sink_2_doors' || v === 'sink_2_doors' || v === 'sink_u_drawer';
       addLocalBox(
         'Amarre_Frontal',
         'carcass',
         'Melamina_Estructura',
         colorStructure,
         0,
-        legsH + cabH - th / 2,
-        depth / 2 - 5,
+        isSinkForCad ? (legsH + cabH - 5) : (legsH + cabH - th / 2),
+        isSinkForCad ? (depth / 2 - th / 2) : (depth / 2 - 5),
         width - 2 * th,
-        th,
-        10
+        isSinkForCad ? 10 : th,
+        isSinkForCad ? th : 10
       );
     }
 
