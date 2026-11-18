@@ -210,6 +210,7 @@ export function getSplitCabinetShelvesCounts(cab: CabinetType): { lower: number;
  */
 export function getDefaultShelvesCount(cab: CabinetType): number {
   const v = cab.variant || (cab.width > 60 ? '2_doors' : '1_door');
+  if (v === 'base_sink_2_doors' || v === 'sink_2_doors' || v === 'base_cooktop_3_drawers' || v === 'cooktop_3_drawers') return 0;
   if (v === 'closet_shelves') return 5;
   if (v === 'closet_walkin') return 3;
   if (v === 'closet_mixed') return 2;
@@ -1849,7 +1850,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
             notes: (doorLeaves === 2 ? 'Módulo > 60cm subdividido en 2 hojas (máx 600mm)' : 'Puerta batiente') + (isGola ? ' (Descuento 35mm p/ Riel Gola L x175)' : '')
         });
-    } else if (cab.variant === '2_doors' || cab.variant === 'tall_2_doors') {
+    } else if (cab.variant === '2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') {
         const isGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
         const ctConfig = kState.countertopConfig;
         const regruesoCm = (ctConfig?.enabled && (cab.type === 'base' || cab.type === 'island'))
@@ -2213,9 +2214,10 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
             notes: '2 repisas vistas interiores'
         });
-    } else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '1_door_1_drawer' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') {
+    } else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '1_door_1_drawer' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
         const isGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
         const isVeggie = cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie';
+        const isCooktop3D = cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers';
         let drawCount = 0;
         let drawerHeights: number[] = [];
         let isPotDrawer = cab.variant === '2_pot_drawers';
@@ -2238,7 +2240,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 drawerHeights = [(cabH - gap*3)/2, (cabH - gap*3)/2];
             }
         }
-        if (cab.variant === '2_drawers_1_pot') {
+        if (cab.variant === '2_drawers_1_pot' || isCooktop3D) {
             drawCount = 3;
             if (isGola) {
                 const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4);
@@ -2294,14 +2296,24 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
         const cutoutInnerPerimeterM = isVeggie ? (2 * (cutoutWMm - cutoutHMm) + Math.PI * cutoutHMm) / 1000 : 0;
         
         drawerHeights.forEach((dh, i) => {
-            const isOlleroFront = cab.variant === '2_drawers_1_pot' ? i === 0 : isPotDrawer;
+            const isOlleroFront = (cab.variant === '2_drawers_1_pot' || isCooktop3D) ? i === 0 : isPotDrawer;
             let partName = `Frente Cajón ${i+1} ${cabName}`;
-            if (cab.variant === '2_drawers_1_pot') {
+            if (isCooktop3D) {
+                partName = i === 2 
+                    ? `Frente Fijo Superior Encimera ${cabName}`
+                    : (i === 0 ? `Frente Cajón Ollero Inferior ${cabName}` : `Frente Cajón Medio ${cabName}`);
+            } else if (cab.variant === '2_drawers_1_pot') {
                 partName = i === 0 ? `Frente Cajón Ollero Inferior ${cabName}` : `Frente Cajón Superior ${i} ${cabName}`;
             } else if (isVeggie) {
                 const veggieLabels = ['Inferior (Papas/Hortalizas)', 'Medio (Cebollas/Frutas)', 'Superior (Cítricos/Menores)'];
                 partName = `Frente Cajón Verdulero ${veggieLabels[i] || i + 1} ${cabName}`;
             }
+
+            const notesText = isCooktop3D && i === 2
+                ? 'Frente Fijo / Ciego para encimera embutida (sin correderas, fijación con escuadras)'
+                : (isVeggie 
+                    ? `Perforación verdulero ${cutoutWMm}x${cutoutHMm}mm c/ tapacanto interior (+${cutoutInnerPerimeterM.toFixed(2)}m)` 
+                    : (isGola ? 'Tapacanto perimetral (Alineado a Riel Gola Provelcar)' : (isOlleroFront ? 'Frente cajón ollero de gran capacidad' : 'Tapacanto perimetral')));
 
             parts.push({
                 name: partName,
@@ -2314,9 +2326,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 material: cab.drawerFrontColor || frontMat,
                 edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
                 extraEdgeMeters: isVeggie ? cutoutInnerPerimeterM : undefined,
-                notes: isVeggie 
-                    ? `Perforación verdulero ${cutoutWMm}x${cutoutHMm}mm c/ tapacanto interior (+${cutoutInnerPerimeterM.toFixed(2)}m)` 
-                    : (isGola ? 'Tapacanto perimetral (Alineado a Riel Gola Provelcar)' : (isOlleroFront ? 'Frente cajón ollero de gran capacidad' : 'Tapacanto perimetral'))
+                notes: notesText
             });
         });
 
@@ -2361,10 +2371,11 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
         const drawerFrontBackLength = drawerBoxOuterWidth - (2 * thickness * 10);
         const cInnerMat = cab.drawerInnerColor || state.structureColor;
 
-        for (let i=0; i<drawCount; i++) {
+        const actualBoxesCount = isCooktop3D ? 2 : drawCount;
+        for (let i=0; i<actualBoxesCount; i++) {
             const currentSideH = isVeggie
                 ? (i === 0 ? 180 : (i === 1 ? 140 : 100))
-                : (cab.variant === '2_drawers_1_pot' ? (i === 0 ? 180 : 120) : (isPotDrawer ? 180 : 120));
+                : ((cab.variant === '2_drawers_1_pot' || isCooktop3D) ? (i === 0 ? 180 : 120) : (isPotDrawer ? 180 : 120));
             // Laterales cajon
             parts.push({
                 name: `Lateral Cajón ${cabName} (${i+1})`,
@@ -2714,7 +2725,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         if (cab.variant === '1_door' || cab.variant === '1_door_1_drawer' || cab.variant?.startsWith('corner_blind') || cab.variant === 'corner_blind' || cab.variant?.startsWith('wall_corner_blind')) {
             const leaves = 1;
             totalHinges += leaves * stdHingesPerLeaf;
-        } else if (cab.variant === '2_doors') {
+        } else if (cab.variant === '2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') {
             const leaves = Math.max(2, Math.ceil(cab.width / 60));
             totalHinges += leaves * stdHingesPerLeaf;
         } else if (cab.variant === 'wall_lift_up') {
@@ -2798,6 +2809,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         if (cab.variant === '4_drawers') cabDrawers = 4;
         if (cab.variant === '2_pot_drawers') cabDrawers = 2;
         if (cab.variant === '2_drawers_1_pot' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') cabDrawers = 3;
+        if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') cabDrawers = 2;
         if (cab.variant === '1_door_1_drawer') cabDrawers = 1;
         if (cab.variant === 'sink_u_drawer') cabDrawers = 2;
         if (cab.variant === 'tall_inner_drawers') cabDrawers = 4;

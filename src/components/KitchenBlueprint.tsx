@@ -1554,7 +1554,7 @@ export function KitchenBlueprint() {
     const COLOR_MAGENTA = "#d946ef";
 
     const isBaseGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
-    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' || cab.variant === 'sink_u_drawer');
+    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' || cab.variant === 'sink_u_drawer' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers');
     const golaColorHex = kState.golaSystem === 'black' ? '#18181b' : '#94a3b8';
 
     // Cálculo dinámico de altura útil y posición milimétrica exacta del perfil Gola C
@@ -1570,7 +1570,7 @@ export function KitchenBlueprint() {
       golaCY_lat = Math.round(35 + drH_4dr * 2 + 20);
     } else if (cab.variant === '1_door_1_drawer') {
       golaCY_lat = Math.round(35 + drH_1d1dr + 20);
-    } else if (cab.variant === '2_drawers_1_pot') {
+    } else if (cab.variant === '2_drawers_1_pot' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
       const topDrH = Math.round(golaAvailH * 0.25);
       golaCY_lat = Math.round(35 + topDrH * 2 + 20);
     } else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') {
@@ -1751,6 +1751,30 @@ export function KitchenBlueprint() {
                     <text x={cabW / 2} y={bodyH * 0.78} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón Ollero 2</text>
                   </g>
                 )
+              ) : (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') ? (
+                isBaseGola ? (
+                  (() => {
+                    const topDrH = Math.round(golaAvailH * 0.25);
+                    return (
+                      <g>
+                        <rect x={0} y={35} width={cabW} height={topDrH} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                        <text x={cabW / 2} y={35 + topDrH * 0.6} fontSize={Math.max(12, fSizeElev * 0.38)} fill="#0f172a" fontWeight="bold" textAnchor="middle" fontFamily="monospace">FRENTE FIJO ENCIMERA</text>
+                        <line x1={0} y1={35 + topDrH} x2={cabW} y2={35 + topDrH} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                        <text x={cabW / 2} y={35 + topDrH * 1.6} fontSize={Math.max(15, fSizeElev * 0.45)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cajón 2</text>
+                        <text x={cabW / 2} y={35 + topDrH * 2 + 40 + (bodyH - (35 + topDrH * 2 + 40)) * 0.58} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cajón Ollero</text>
+                      </g>
+                    );
+                  })()
+                ) : (
+                  <g>
+                    <rect x={0} y={0} width={cabW} height={bodyH * 0.25} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <line x1={0} y1={bodyH * 0.25} x2={cabW} y2={bodyH * 0.25} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <line x1={0} y1={bodyH * 0.5} x2={cabW} y2={bodyH * 0.5} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <text x={cabW / 2} y={bodyH * 0.15} fontSize={Math.max(12, fSizeElev * 0.38)} fill="#0f172a" fontWeight="bold" textAnchor="middle" fontFamily="monospace">FRENTE FIJO ENCIMERA</text>
+                    <text x={cabW / 2} y={bodyH * 0.40} fontSize={Math.max(14, fSizeElev * 0.42)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón 2</text>
+                    <text x={cabW / 2} y={bodyH * 0.78} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón Ollero</text>
+                  </g>
+                )
               ) : cab.variant === '2_drawers_1_pot' ? (
                 isBaseGola ? (
                   (() => {
@@ -1855,7 +1879,7 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 })()
-              ) : cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' ? (
+              ) : cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors' ? (
                 (() => {
                   const yDoorT = isBaseGola ? 35 : 0;
                   const yDoorMid = (yDoorT + bodyH) / 2;
@@ -4129,6 +4153,8 @@ export function KitchenBlueprint() {
                         else if (isTall) label = `TORRE ${Math.round(cab.width * 10)}`;
                         else if (isIsland) label = `ISLA ${Math.round(cab.width * 10)}`;
                         else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') label = `VERD ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') label = `LAV ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') label = `ENC ${Math.round(cab.width * 10)}`;
                         else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot') label = `CAJ ${Math.round(cab.width * 10)}`;
 
                         return (
@@ -4414,7 +4440,7 @@ export function KitchenBlueprint() {
                                   })()}
                                 </g>
                               )}
-                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow') && (
+                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') && (
                                 <g stroke="#0f172a" strokeWidth="0.7">
                                   {(() => {
                                     const midZ = (z0 + z1) / 2;

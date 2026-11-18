@@ -252,27 +252,15 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
       setCountertopSink('none');
       return;
     }
-    // Try to install on currently active cabinet if valid, else first valid cabinet
+    // Try to install on currently active cabinet if valid, else first valid cabinet, else auto-create
     const activeCab = cabinets.find((c) => c.id === activeCabinetId);
-    if (activeCab && (activeCab.type === 'base' || activeCab.type === 'island')) {
-      const res = setCountertopSink(sinkId, activeCab.id);
-      if (!res.success) {
-        setApplianceError(res.error || 'Error de validación');
-      }
-      return;
-    }
+    const cabIdToUse = (activeCab && validateCabinetForSink(activeCab, sinkId).valid)
+      ? activeCab.id
+      : (baseAndIslandCabs.find((c) => validateCabinetForSink(c, sinkId).valid)?.id || null);
 
-    // Auto-pick first eligible cabinet
-    const eligible = baseAndIslandCabs.find(
-      (c) => validateCabinetForSink(c, sinkId).valid
-    );
-    if (eligible) {
-      setCountertopSink(sinkId, eligible.id);
-    } else {
-      const spec = QSTONE_SINKS[sinkId];
-      setApplianceError(
-        `No hay ningún mueble base con ancho suficiente (mínimo ${spec.minCabinetWidthCm} cm) para la cubeta ${spec.name}. Modifica el ancho de un mueble a >= ${spec.minCabinetWidthCm} cm.`
-      );
+    const res = setCountertopSink(sinkId, cabIdToUse);
+    if (!res.success) {
+      setApplianceError(res.error || 'Error de validación');
     }
   };
 
@@ -283,25 +271,13 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
       return;
     }
     const activeCab = cabinets.find((c) => c.id === activeCabinetId);
-    if (activeCab && (activeCab.type === 'base' || activeCab.type === 'island')) {
-      const res = setCountertopCooktop(cooktopId, activeCab.id);
-      if (!res.success) {
-        setApplianceError(res.error || 'Error de validación');
-      }
-      return;
-    }
+    const cabIdToUse = (activeCab && activeCab.id !== countertopConfig.sinkCabinetId && validateCabinetForCooktop(activeCab, cooktopId).valid)
+      ? activeCab.id
+      : (baseAndIslandCabs.find((c) => c.id !== countertopConfig.sinkCabinetId && validateCabinetForCooktop(c, cooktopId).valid)?.id || null);
 
-    // Auto-pick first eligible cabinet
-    const eligible = baseAndIslandCabs.find(
-      (c) => c.id !== countertopConfig.sinkCabinetId && validateCabinetForCooktop(c, cooktopId).valid
-    );
-    if (eligible) {
-      setCountertopCooktop(cooktopId, eligible.id);
-    } else {
-      const spec = FDV_COOKTOPS[cooktopId];
-      setApplianceError(
-        `No hay ningún mueble disponible con ancho suficiente (mínimo ${spec.minCabinetWidthCm} cm) para la encimera ${spec.name}.`
-      );
+    const res = setCountertopCooktop(cooktopId, cabIdToUse);
+    if (!res.success) {
+      setApplianceError(res.error || 'Error de validación');
     }
   };
 

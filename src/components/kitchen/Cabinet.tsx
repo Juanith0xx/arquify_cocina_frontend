@@ -2925,7 +2925,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
             );
          }
          
-           if (effectiveVariant === '2_doors' || effectiveVariant === 'tall_2_doors' || effectiveVariant === 'wall_2_doors') {
+           if (effectiveVariant === '2_doors' || effectiveVariant === 'tall_2_doors' || effectiveVariant === 'wall_2_doors' || effectiveVariant === 'base_sink_2_doors' || effectiveVariant === 'sink_2_doors') {
             const doorW = (width - gap*3) / 2;
             const topDeduct = isGolaActive ? 3.5 : (isBaseOrIsland ? regruesoDeduct : 0);
             const doorH = Math.max(10, cabH - topDeduct - gap*2);
@@ -3155,6 +3155,63 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                   {renderUndermountDrawer('p0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0')}
                   {renderUndermountDrawer('d1', yMid, midDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1')}
                   {renderUndermountDrawer('d2', yTop, topDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-2'), 'drawer-2')}
+               </>
+            );
+         }
+
+         if (effectiveVariant === 'base_cooktop_3_drawers' || effectiveVariant === 'cooktop_3_drawers') {
+            if (isGolaActive) {
+               const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
+               const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);
+               const lowerH = availH * 0.5;
+               const upperH = availH * 0.25;
+               const yLower = legsHeight + gap + lowerH / 2;
+               const yGolaC = legsHeight + gap + lowerH + 2.0;
+               const yMid = legsHeight + gap + lowerH + 4.0 + gap + upperH / 2;
+               const yTop = legsHeight + gap + lowerH + 4.0 + gap + upperH + gap + upperH / 2;
+               return (
+                  <>
+                     {renderGolaL()}
+                     {renderGolaC(yGolaC)}
+                     {renderUndermountDrawer('p0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0')}
+                     {renderUndermountDrawer('d1', yMid, upperH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1')}
+                     {/* FRENTE FIJO SUPERIOR ENCIMERA (Sin correderas ni caja interior) */}
+                     <Board
+                        position={[0, yTop, frontZ]}
+                        args={[width - gap * 2, upperH, thickness]}
+                        {...parseColor(cDrawers, drawerFrontMaterial, 'drawer-2')}
+                        isFrontPanel={true}
+                        globalPosition={[position[0], position[1] + yTop, position[2] + frontZ]}
+                     />
+                  </>
+               );
+            }
+            const deduct = isBaseOrIsland ? regruesoDeduct : 0;
+            const availableH = cabH - gap * 4;
+            const lowerH = Math.round(availableH * 0.5 * 10) / 10;
+            const upperBaseH = (availableH - lowerH) / 2;
+            const topDrawerH = Math.max(8, upperBaseH - deduct);
+            const midDrawerH = upperBaseH;
+            const yLower = legsHeight + gap + lowerH / 2;
+            const yMid = legsHeight + gap + lowerH + gap + midDrawerH / 2;
+            const yTop = legsHeight + gap + lowerH + gap + midDrawerH + gap + topDrawerH / 2;
+            return (
+               <>
+                  {renderUndermountDrawer('p0', yLower, lowerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-0'), 'drawer-0')}
+                  {renderUndermountDrawer('d1', yMid, midDrawerH, parseColor(cDrawers, drawerFrontMaterial, 'drawer-1'), 'drawer-1')}
+                  {/* FRENTE FIJO SUPERIOR ENCIMERA (Sin correderas ni caja interior) */}
+                  <Board
+                     position={[0, yTop, frontZ]}
+                     args={[width - gap * 2, topDrawerH, thickness]}
+                     {...parseColor(cDrawers, drawerFrontMaterial, 'drawer-2')}
+                     isFrontPanel={true}
+                     globalPosition={[position[0], position[1] + yTop, position[2] + frontZ]}
+                  />
+                  {showHandle && (
+                     <group position={[0, yTop + (isPestanaHandle ? topDrawerH / 2 : (topDrawerH > 22 ? topDrawerH * 0.15 : 0)), frontZ + thickness / 2]}>
+                        <KitchenHandle3D config={handleConfig} orientation="horizontal" isUpper={false} thickness={thickness} />
+                     </group>
+                  )}
                </>
             );
          }
@@ -4651,7 +4708,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
 
       const isCornerBlind = variant?.startsWith('corner_blind') || variant === 'corner_blind' || variant?.startsWith('wall_corner_blind');
       const isWineRack = variant?.includes('wine_rack');
-      const doorCount = variant === '2_doors' ? 2 : (variant === '1_door' || variant === 'spice_rack' || isCornerBlind ? 1 : 0);
+      const doorCount = (variant === '2_doors' || variant === 'base_sink_2_doors' || variant === 'sink_2_doors') ? 2 : (variant === '1_door' || variant === 'spice_rack' || isCornerBlind ? 1 : 0);
       const perpCab = findPerpendicularCabinetForCorner(
          { id, type, variant, width, height, depth, position, rotation } as CabinetType,
          cabinets
@@ -4747,6 +4804,8 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                    variant === 'closet_walkin' ? 'WALK-IN CLOSET' :
                    variant === 'closet_inner_drawers' ? 'CLÓSET CAJONES OCULTOS' :
                    type === 'closet' ? 'CLÓSET MODULAR' :
+                   variant === 'base_sink_2_doors' ? 'BASE LAVAPLATOS (2 PTAS)' :
+                   variant === 'base_cooktop_3_drawers' ? 'BASE ENCIMERA (3 CAJONES)' :
                    variant?.startsWith('wall_corner_blind') ? 'AÉREO ESQUINERO' :
                    variant?.includes('wine_rack') ? 'BOTELLERO' :
                    (variant ? variant.replace(/_/g, ' ').toUpperCase() : type.toUpperCase())}
@@ -4910,7 +4969,7 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                      drawerFronts.push({ yCenter: -height / 2 + yLower, frontH: lowerH });
                      drawerFronts.push({ yCenter: -height / 2 + yUpper, frontH: upperH });
                   }
-               } else if (effVar === '2_drawers_1_pot') {
+               } else if (effVar === '2_drawers_1_pot' || effVar === 'base_cooktop_3_drawers' || effVar === 'cooktop_3_drawers') {
                   if (isGolaActive) {
                      const golaRegruesoDeduct = Math.max(0, rawRegruesoCm - 3.5);
                      const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);

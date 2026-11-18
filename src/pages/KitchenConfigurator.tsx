@@ -184,6 +184,14 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       openAction: false,
     });
 
+    if (tool === 'place_base_sink_2_doors') {
+      const currentSink = state.countertopConfig.sinkModel !== 'none' ? state.countertopConfig.sinkModel : 'alfa_onec_3018';
+      state.setCountertopSink(currentSink, newId);
+    } else if (tool === 'place_base_cooktop_3_drawers') {
+      const currentCooktop = state.countertopConfig.cooktopModel !== 'none' ? state.countertopConfig.cooktopModel : 'fdv_design_60';
+      state.setCountertopCooktop(currentCooktop, newId);
+    }
+
     state.setActiveCabinet(newId);
     state.setToolMode('select');
   };
@@ -1151,7 +1159,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                    {(() => {
                      const searchQ = moduleSearchQuery.trim().toLowerCase();
                      const matchesQ = (label: string) => !searchQ || label.toLowerCase().includes(searchQ);
-                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', '4 cajones', '2 olleros', 'fregadero', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
+                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 olleros', 'fregadero', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
                      const torresHasMatch = !searchQ || ['1 pta larga', '2 ptas', 'torre horno', 'torre hornos', 'despensa cajones', 'nicho micro', 'repisas a la vista', 'torre repisas', 'botellero despensa', 'despensa 2 puertas', 'torres'].some(s => s.includes(searchQ));
                      const muralesHasMatch = !searchQ || ['aéreo 1 puerta', 'aéreo 2 puertas', 'pta elevable', 'doble pta', 'nicho micro', 'repisas', 'esquinero', 'botellero', 'new flow 60', 'murales'].some(s => s.includes(searchQ));
                      const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
@@ -1173,16 +1181,18 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="bases"
                              title="1. Bases"
-                             count={11}
+                             count={13}
                              icon={<Box size={14} />}
                              isOpen={Boolean(moduleAccordions.bases || searchQ)}
                              onToggle={() => toggleModuleAccordion('bases')}
-                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
+                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_sink_2_doors', 'place_base_cooktop_3_drawers', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
                              isLight={isLight}
                            >
                              {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} icon={<Box size={14}/>} label="1 Puerta" />}
                              {matchesQ('1 Pta + 1 Cajón') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />}
                              {matchesQ('2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} icon={<Box size={14}/>} label="2 Puertas" />}
+                             {matchesQ('Lavaplatos (2 Puertas)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_2_doors'} onClick={() => handleInsertModule('place_base_sink_2_doors')} icon={<Box size={14}/>} label="Lavaplatos (2 Puertas)" />}
+                             {matchesQ('Encimera (3 Cajones, 1° Fijo)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_cooktop_3_drawers'} onClick={() => handleInsertModule('place_base_cooktop_3_drawers')} icon={<Box size={14}/>} label="Encimera (3 Cajones, 1° Fijo)" />}
                              {matchesQ('4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} icon={<Box size={14}/>} label="4 Cajones" />}
                              {matchesQ('Verdulero 3 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_3_drawers_veggie'} onClick={() => handleInsertModule('place_base_3_drawers_veggie')} icon={<Box size={14}/>} label="Verdulero 3 Cajones" />}
                              {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} icon={<Box size={14}/>} label="2 Olleros" />}

@@ -6,7 +6,8 @@ import {
   resolveCabinetsAgainstPillars, 
   getWallInwardNormal,
   findPerpendicularCabinetForCorner,
-  findCornerCabinetForPerpendicular
+  findCornerCabinetForPerpendicular,
+  findSmartWallPlacement
 } from '../utils/kitchenCollision';
 import { 
   CountertopConfig, 
@@ -44,6 +45,8 @@ export type ToolMode =
   | 'place_base_corner_blind' 
   | 'place_base_wine_rack'
   | 'place_base_sink_u_drawer'
+  | 'place_base_sink_2_doors'
+  | 'place_base_cooktop_3_drawers'
   | 'place_base_corner_l'
   | 'place_wall' 
   | 'place_wall_1_door'
@@ -191,6 +194,8 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'deco_plant') return 'Planta Interior';
   if (cab.variant === 'deco_dishwasher') return 'Lavavajillas FDV Active 12C';
   if (cab.variant === 'sink_u_drawer') return 'Fregadero Cajón en U';
+  if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') return 'Base Lavaplatos (2 Puertas)';
+  if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') return 'Base Encimera (3 Cajones, 1° Fijo)';
   if (cab.variant === 'corner_l' || cab.variant === 'base_corner_l') return 'Esquinero en L (90x90)';
   if (cab.variant?.startsWith('wall_corner_blind')) return 'Aéreo Esquinero Ciego';
   if (cab.variant?.startsWith('corner_blind')) return 'Esquinero Ciego';
@@ -1602,7 +1607,30 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
     const spec = QSTONE_SINKS[sinkModel];
     if (!spec) return { valid: true, minWidth: 0, actualWidth: cab.width };
 
-    // ALFA ONEC requires min 80cm, ALFA TWOC requires min 90cm
+    if (cab.type !== 'base' && cab.type !== 'island') {
+      return {
+        valid: false,
+        minWidth: spec.minCabinetWidthCm,
+        actualWidth: cab.width,
+        reason: 'El lavaplatos solo puede instalarse en un mueble base o isla.',
+      };
+    }
+
+    const isSinkCompatible =
+      cab.variant === 'base_sink_2_doors' ||
+      cab.variant === 'sink_2_doors' ||
+      cab.variant === 'sink_u_drawer' ||
+      cab.variant === '2_doors';
+
+    if (!isSinkCompatible) {
+      return {
+        valid: false,
+        minWidth: spec.minCabinetWidthCm,
+        actualWidth: cab.width,
+        reason: 'El lavaplatos solo puede cargarse en un Mueble Base Lavaplatos de 2 Puertas.',
+      };
+    }
+
     const minWidth = spec.minCabinetWidthCm;
     const actualWidth = cab.width;
     const valid = actualWidth >= minWidth;
@@ -1612,13 +1640,36 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
       actualWidth,
       reason: valid
         ? undefined
-        : `La cubeta ${spec.name} requiere un mueble base de al menos ${minWidth} cm de ancho (Encastre: ${(spec.cutoutWidthMm / 10).toFixed(1)} cm). El mueble seleccionado mide ${actualWidth} cm.`,
+        : `El lavaplatos ${spec.name} requiere un mueble de al menos ${minWidth} cm de ancho (Encastre: ${(spec.cutoutWidthMm / 10).toFixed(1)} cm). El mueble seleccionado mide ${actualWidth} cm.`,
     };
   },
   validateCabinetForCooktop: (cab, cooktopModel) => {
     if (cooktopModel === 'none') return { valid: true, minWidth: 0, actualWidth: cab.width };
     const spec = FDV_COOKTOPS[cooktopModel];
     if (!spec) return { valid: true, minWidth: 0, actualWidth: cab.width };
+
+    if (cab.type !== 'base' && cab.type !== 'island') {
+      return {
+        valid: false,
+        minWidth: spec.minCabinetWidthCm,
+        actualWidth: cab.width,
+        reason: 'La encimera solo puede instalarse en un mueble base o isla.',
+      };
+    }
+
+    const isCooktopCompatible =
+      cab.variant === 'base_cooktop_3_drawers' ||
+      cab.variant === 'cooktop_3_drawers' ||
+      cab.variant === '2_drawers_1_pot';
+
+    if (!isCooktopCompatible) {
+      return {
+        valid: false,
+        minWidth: spec.minCabinetWidthCm,
+        actualWidth: cab.width,
+        reason: 'La encimera solo puede cargarse en un Mueble Base Encimera (3 Cajones con primer cajón fijo).',
+      };
+    }
 
     const minWidth = spec.minCabinetWidthCm;
     const actualWidth = cab.width;
@@ -1634,51 +1685,181 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
   },
   setCountertopSink: (model, cabinetId) => {
     const state = useKitchenStore.getState();
-    const targetCabId = cabinetId !== undefined ? cabinetId : state.activeCabinetId;
     if (model === 'none') {
       set((s) => ({
         countertopConfig: { ...s.countertopConfig, sinkModel: 'none', sinkCabinetId: null },
       }));
       return { success: true };
     }
-    if (!targetCabId) {
-      return { success: false, error: 'Debes seleccionar un mueble base para instalar la cubeta.' };
+
+    const spec = QSTONE_SINKS[model];
+    if (!spec) return { success: false, error: 'Modelo de lavaplatos desconocido' };
+
+    let targetCab = cabinetId !== undefined && cabinetId !== null
+      ? state.cabinets.find((c) => c.id === cabinetId)
+      : (state.activeCabinetId ? state.cabinets.find((c) => c.id === state.activeCabinetId) : null);
+
+    // Si el mueble seleccionado no es compatible, buscar si ya existe uno compatible en la escena
+    if (!targetCab || !state.validateCabinetForSink(targetCab, model).valid) {
+      targetCab = state.cabinets.find((c) => state.validateCabinetForSink(c, model).valid) || null;
     }
-    const cab = state.cabinets.find((c) => c.id === targetCabId);
-    if (!cab || (cab.type !== 'base' && cab.type !== 'island')) {
-      return { success: false, error: 'Solo se puede instalar la cubeta en un mueble tipo Base o Isla.' };
+
+    // Si NO existe ningún mueble base lavaplatos en la escena, cargarlo automáticamente
+    if (!targetCab) {
+      const requiredW = Math.max(spec.minCabinetWidthCm, model === 'alfa_twoc_f5858a' ? 90 : 80);
+      const newCabId = `cab_sink_${Date.now()}`;
+      const toolSpecs = {
+        type: 'base' as const,
+        variant: 'base_sink_2_doors',
+        name: 'Base Lavaplatos (2 Puertas)',
+        width: requiredW,
+        height: 80,
+        depth: 60,
+        shelvesCount: 0,
+      };
+
+      const placement = findSmartWallPlacement(
+        toolSpecs,
+        state.cabinets,
+        state.walls,
+        state.roomConfig?.vertices,
+        state.architecturalElements
+      );
+
+      const newCabinet: CabinetType = {
+        id: newCabId,
+        type: 'base',
+        variant: 'base_sink_2_doors',
+        width: requiredW,
+        height: 80,
+        depth: 60,
+        position: placement.position,
+        rotation: placement.rotation,
+        color: state.cabinets[0]?.color || '#ffffff',
+        structureColor: state.structureColor,
+        doorColor: state.doorColor,
+        structureMaterial: state.structureMaterial,
+        doorMaterial: state.doorMaterial,
+        shelvesCount: 0,
+      };
+
+      set((s) => ({
+        cabinets: [...s.cabinets, newCabinet],
+        activeCabinetId: newCabId,
+        countertopConfig: {
+          ...s.countertopConfig,
+          enabled: true,
+          sinkModel: model,
+          sinkCabinetId: newCabId,
+        },
+      }));
+      return { success: true };
     }
-    const validation = state.validateCabinetForSink(cab, model);
+
+    const validation = state.validateCabinetForSink(targetCab, model);
     if (!validation.valid) {
       return { success: false, error: validation.reason };
     }
+
     set((s) => ({
-      countertopConfig: { ...s.countertopConfig, sinkModel: model, sinkCabinetId: targetCabId },
+      countertopConfig: {
+        ...s.countertopConfig,
+        enabled: true,
+        sinkModel: model,
+        sinkCabinetId: targetCab!.id,
+      },
     }));
     return { success: true };
   },
   setCountertopCooktop: (model, cabinetId) => {
     const state = useKitchenStore.getState();
-    const targetCabId = cabinetId !== undefined ? cabinetId : state.activeCabinetId;
     if (model === 'none') {
       set((s) => ({
         countertopConfig: { ...s.countertopConfig, cooktopModel: 'none', cooktopCabinetId: null },
       }));
       return { success: true };
     }
-    if (!targetCabId) {
-      return { success: false, error: 'Debes seleccionar un mueble base o isla para situar la encimera.' };
+
+    const spec = FDV_COOKTOPS[model];
+    if (!spec) return { success: false, error: 'Modelo de encimera desconocido' };
+
+    let targetCab = cabinetId !== undefined && cabinetId !== null
+      ? state.cabinets.find((c) => c.id === cabinetId)
+      : (state.activeCabinetId ? state.cabinets.find((c) => c.id === state.activeCabinetId) : null);
+
+    const sinkCabId = state.countertopConfig.sinkCabinetId;
+    if (!targetCab || targetCab.id === sinkCabId || !state.validateCabinetForCooktop(targetCab, model).valid) {
+      targetCab = state.cabinets.find((c) => c.id !== sinkCabId && state.validateCabinetForCooktop(c, model).valid) || null;
     }
-    const cab = state.cabinets.find((c) => c.id === targetCabId);
-    if (!cab || (cab.type !== 'base' && cab.type !== 'island')) {
-      return { success: false, error: 'Solo se puede instalar la encimera en un mueble tipo Base o Isla.' };
+
+    // Si NO existe ningún mueble base encimera en la escena, cargarlo automáticamente
+    if (!targetCab) {
+      const requiredW = Math.max(spec.minCabinetWidthCm, model === 'fdv_design_90' ? 90 : 80);
+      const newCabId = `cab_cooktop_${Date.now()}`;
+      const toolSpecs = {
+        type: 'base' as const,
+        variant: 'base_cooktop_3_drawers',
+        name: 'Base Encimera (3 Cajones, 1° Fijo)',
+        width: requiredW,
+        height: 80,
+        depth: 60,
+        drawersCount: 3,
+        shelvesCount: 0,
+      };
+
+      const placement = findSmartWallPlacement(
+        toolSpecs,
+        state.cabinets,
+        state.walls,
+        state.roomConfig?.vertices,
+        state.architecturalElements
+      );
+
+      const newCabinet: CabinetType = {
+        id: newCabId,
+        type: 'base',
+        variant: 'base_cooktop_3_drawers',
+        width: requiredW,
+        height: 80,
+        depth: 60,
+        position: placement.position,
+        rotation: placement.rotation,
+        color: state.cabinets[0]?.color || '#ffffff',
+        structureColor: state.structureColor,
+        drawerFrontColor: state.drawerFrontColor,
+        drawerInnerColor: state.drawerInnerColor,
+        structureMaterial: state.structureMaterial,
+        drawerFrontMaterial: state.drawerFrontMaterial,
+        drawerInnerMaterial: state.drawerInnerMaterial,
+        drawersCount: 3,
+        shelvesCount: 0,
+      };
+
+      set((s) => ({
+        cabinets: [...s.cabinets, newCabinet],
+        activeCabinetId: newCabId,
+        countertopConfig: {
+          ...s.countertopConfig,
+          enabled: true,
+          cooktopModel: model,
+          cooktopCabinetId: newCabId,
+        },
+      }));
+      return { success: true };
     }
-    const validation = state.validateCabinetForCooktop(cab, model);
+
+    const validation = state.validateCabinetForCooktop(targetCab, model);
     if (!validation.valid) {
       return { success: false, error: validation.reason };
     }
+
     set((s) => ({
-      countertopConfig: { ...s.countertopConfig, cooktopModel: model, cooktopCabinetId: targetCabId },
+      countertopConfig: {
+        ...s.countertopConfig,
+        enabled: true,
+        cooktopModel: model,
+        cooktopCabinetId: targetCab!.id,
+      },
     }));
     return { success: true };
   },
