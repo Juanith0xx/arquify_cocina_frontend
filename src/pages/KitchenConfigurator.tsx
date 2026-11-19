@@ -3203,11 +3203,11 @@ function ToolButton({ active, onClick, icon, label, isLight }: { active: boolean
         active 
           ? 'bg-orange-500/20 border-orange-500 text-orange-500 font-bold shadow-[0_0_10px_rgba(249,115,22,0.15)]' 
           : isLight 
-            ? 'bg-slate-50 border-slate-200 text-slate-800 font-semibold hover:bg-slate-100 hover:text-black hover:border-slate-300 shadow-xs' 
-            : 'bg-black/20 border-white/5 text-slate-300 hover:bg-white/5 hover:text-white font-medium'
+            ? 'bg-white border-slate-200/90 text-slate-700 font-medium hover:bg-orange-50/40 hover:text-orange-950 hover:border-orange-300 shadow-xs' 
+            : 'bg-black/20 border-white/5 text-slate-300 hover:bg-orange-500/10 hover:text-white hover:border-orange-500/30 font-normal'
       }`}
     >
-      <span className={`shrink-0 ${active ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}`}>{icon}</span>
+      <span className={`shrink-0 ${active ? 'text-orange-500' : isLight ? 'text-slate-500' : 'text-slate-400'}`}>{icon}</span>
       <span className="text-left leading-tight truncate">{label}</span>
     </button>
   );
@@ -3239,11 +3239,15 @@ function ModuleCategoryAccordion({
     <div className={`rounded-xl border transition-all overflow-hidden ${
       hasActiveTool
         ? isLight
-          ? 'border-orange-400 bg-orange-50/40 shadow-sm'
-          : 'border-orange-500/50 bg-orange-950/10 shadow-sm'
-        : isLight
-          ? 'border-slate-200 bg-white'
-          : 'border-white/10 bg-white/[0.02]'
+          ? 'border-orange-500 bg-orange-50/30 shadow-sm shadow-orange-500/5'
+          : 'border-orange-500/60 bg-orange-950/10 shadow-sm shadow-orange-500/10'
+        : isOpen
+          ? isLight
+            ? 'border-orange-400 bg-white shadow-xs'
+            : 'border-orange-500/50 bg-white/[0.02] shadow-xs'
+          : isLight
+            ? 'border-slate-200 bg-white hover:border-slate-300'
+            : 'border-white/10 bg-white/[0.02] hover:border-white/20'
     }`}>
       <button
         type="button"
@@ -3251,15 +3255,19 @@ function ModuleCategoryAccordion({
         className={`w-full flex items-center justify-between p-2.5 text-xs font-bold cursor-pointer select-none transition-colors ${
           hasActiveTool
             ? isLight
-              ? 'text-orange-800 bg-orange-100/70'
+              ? 'text-orange-900 bg-orange-100/70'
               : 'text-orange-400 bg-orange-500/20'
-            : isLight
-              ? 'text-slate-800 hover:bg-slate-50'
-              : 'text-slate-200 hover:bg-white/5'
+            : isOpen
+              ? isLight
+                ? 'text-orange-950 bg-orange-50/70 hover:bg-orange-100/50'
+                : 'text-orange-300 bg-orange-500/10 hover:bg-orange-500/15'
+              : isLight
+                ? 'text-slate-800 hover:bg-slate-50'
+                : 'text-slate-200 hover:bg-white/5'
         }`}
       >
         <div className="flex items-center gap-2 min-w-0 pr-1">
-          <span className={`shrink-0 ${hasActiveTool ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+          <span className={`shrink-0 ${hasActiveTool || isOpen ? 'text-orange-500' : isLight ? 'text-slate-600' : 'text-slate-400'}`}>
             {icon}
           </span>
           <span className="truncate">{title}</span>
@@ -3268,7 +3276,9 @@ function ModuleCategoryAccordion({
           <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
             hasActiveTool
               ? isLight ? 'bg-orange-200 text-orange-950 border border-orange-300' : 'bg-orange-500/40 text-orange-200 border border-orange-400/30'
-              : isLight ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-black/40 text-slate-400 border border-white/5'
+              : isOpen
+                ? isLight ? 'bg-orange-100 text-orange-900 border border-orange-200' : 'bg-orange-950/60 text-orange-300 border border-orange-500/30'
+                : isLight ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-black/40 text-slate-400 border border-white/5'
           }`}>
             {count}
           </span>
@@ -3278,7 +3288,7 @@ function ModuleCategoryAccordion({
 
       {isOpen && (
         <div className={`p-2 flex flex-col gap-1.5 border-t ${
-          isLight ? 'border-slate-100 bg-slate-50/60' : 'border-white/5 bg-black/20'
+          isLight ? 'border-orange-200/70 bg-slate-50/60' : 'border-orange-500/20 bg-black/20'
         }`}>
           {children}
         </div>
