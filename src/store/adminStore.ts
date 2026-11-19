@@ -6,6 +6,17 @@ import { useKitchenStore } from './kitchenStore';
 export type ProjectType = 'closet' | 'kitchen' | 'special' | 'hpl-bathroom' | 'office' | 'chair';
 export type ProjectStatus = 'designed' | 'quoted' | 'sold' | 'in_production';
 
+export interface ProjectAiRender {
+  id: string;
+  url: string;
+  createdAt: string;
+  propertyType?: string;
+  environment?: string;
+  lighting?: string;
+  hasPeople?: boolean;
+  hasProps?: boolean;
+}
+
 export interface ProjectItem {
   id: string;
   name: string;
@@ -26,6 +37,7 @@ export interface ProjectItem {
   userRubro?: string;
   userCity?: string;
   thumbnail?: string;
+  aiRenders?: ProjectAiRender[];
 }
 
 export type SupplyCategory = 
@@ -325,6 +337,8 @@ export interface AdminState {
 
   // Proyectos
   projects: ProjectItem[];
+  activeProjectId: string | null;
+  setActiveProjectId: (id: string | null) => void;
   saveProject: (project: Omit<ProjectItem, 'id' | 'date'>) => string;
   updateProject: (id: string, updates: Partial<ProjectItem>) => void;
   renameProject: (id: string, newName: string, newClient?: string) => void;
@@ -332,6 +346,8 @@ export interface AdminState {
   deleteProject: (id: string) => void;
   clearAllProjects: () => void;
   syncCloudProjects: () => Promise<void>;
+  addProjectAiRender: (projectId: string, render: Omit<ProjectAiRender, 'id' | 'createdAt'>) => void;
+  deleteProjectAiRender: (projectId: string, renderId: string) => void;
 
   // Estadísticas Anónimas para Proveedores
   getProviderStats: (providerIdOrName: string) => ProviderStats;
@@ -2392,6 +2408,10 @@ export const useAdminStore = create<AdminState>((set, get) => {
     },
 
     projects: initial.projects,
+    activeProjectId: null,
+    setActiveProjectId: (id: string | null) => {
+      set({ activeProjectId: id });
+    },
 
     saveProject: (projectData) => {
       const newId = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -2411,6 +2431,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       };
       const currentProjects = get().projects;
       persist({ projects: [newProj, ...currentProjects] });
+      set({ activeProjectId: newId });
       return newId;
     },
 
@@ -2455,6 +2476,38 @@ export const useAdminStore = create<AdminState>((set, get) => {
 
     clearAllProjects: () => {
       persist({ projects: [] });
+    },
+
+    addProjectAiRender: (projectId, renderData) => {
+      const newRender: ProjectAiRender = {
+        id: `render-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        createdAt: new Date().toISOString(),
+        ...renderData,
+      };
+      const currentProjects = get().projects.map((p) => {
+        if (p.id === projectId) {
+          const existing = p.aiRenders || [];
+          return {
+            ...p,
+            aiRenders: [newRender, ...existing],
+          };
+        }
+        return p;
+      });
+      persist({ projects: currentProjects });
+    },
+
+    deleteProjectAiRender: (projectId, renderId) => {
+      const currentProjects = get().projects.map((p) => {
+        if (p.id === projectId && p.aiRenders) {
+          return {
+            ...p,
+            aiRenders: p.aiRenders.filter((r) => r.id !== renderId),
+          };
+        }
+        return p;
+      });
+      persist({ projects: currentProjects });
     },
 
     syncCloudProjects: async () => {

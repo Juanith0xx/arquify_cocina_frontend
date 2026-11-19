@@ -29,9 +29,10 @@ interface NanoBananaRenderModalProps {
   isOpen: boolean;
   onClose: () => void;
   isLight?: boolean;
+  projectId?: string;
 }
 
-export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: NanoBananaRenderModalProps) {
+export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projectId }: NanoBananaRenderModalProps) {
   const { currentUser, getUserNanoBananaCredits, deductNanoBananaCredit } = useAdminStore();
   const supabaseUser = useSupabaseAuthStore((state) => state.user);
 
@@ -53,6 +54,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [resultImage, setResultImage] = useState<string | null>(null);
+  const [savedProjectName, setSavedProjectName] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
   const [showRechargeModal, setShowRechargeModal] = useState<boolean>(false);
@@ -187,6 +189,26 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
       });
 
       setResultImage(data.imageUrl);
+
+      // Guardar automáticamente el render AI en el proyecto activo
+      try {
+        const adminStore = useAdminStore.getState();
+        const targetId = projectId || adminStore.activeProjectId || (adminStore.projects.length > 0 ? adminStore.projects[0].id : null);
+        if (targetId) {
+          adminStore.addProjectAiRender(targetId, {
+            url: data.imageUrl,
+            propertyType,
+            environment,
+            lighting,
+            hasPeople,
+            hasProps,
+          });
+          const matched = adminStore.projects.find((p) => p.id === targetId);
+          if (matched) setSavedProjectName(matched.name);
+        }
+      } catch (saveErr) {
+        console.warn('Error al asociar render AI con el proyecto:', saveErr);
+      }
     } catch (err: any) {
       console.error('Error al generar render con NanoBanana:', err);
       let rawMsg = String(err?.message || err || '');
@@ -209,6 +231,27 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
 
   const handleDownloadImage = () => {
     if (!resultImage) return;
+
+    // Asegurar que quede guardado en el proyecto si aún no se había guardado
+    try {
+      const adminStore = useAdminStore.getState();
+      const targetId = projectId || adminStore.activeProjectId || (adminStore.projects.length > 0 ? adminStore.projects[0].id : null);
+      if (targetId) {
+        adminStore.addProjectAiRender(targetId, {
+          url: resultImage,
+          propertyType,
+          environment,
+          lighting,
+          hasPeople,
+          hasProps,
+        });
+        const matched = adminStore.projects.find((p) => p.id === targetId);
+        if (matched) setSavedProjectName(matched.name);
+      }
+    } catch (e) {
+      console.warn('Error al guardar render al descargar:', e);
+    }
+
     const a = document.createElement('a');
     a.href = resultImage;
     a.download = `render_nanobanana_${Date.now()}.png`;
@@ -293,10 +336,18 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false }: Nano
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl border bg-orange-500/5 border-orange-500/20">
-                <div className="flex items-center gap-2 text-xs font-semibold text-orange-400">
-                  <CheckCircle2 size={16} />
-                  <span>Render generado manteniendo intacta la cantidad y distribución de los muebles.</span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border bg-orange-500/5 border-orange-500/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-orange-400">
+                    <CheckCircle2 size={16} />
+                    <span>Render generado manteniendo intacta la cantidad y distribución de los muebles.</span>
+                  </div>
+                  {savedProjectName && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold pl-6">
+                      <Sparkles size={13} />
+                      <span>Guardado automáticamente en: <u>{savedProjectName}</u></span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => setResultImage(null)}
