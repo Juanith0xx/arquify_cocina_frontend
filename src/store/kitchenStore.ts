@@ -41,6 +41,7 @@ export type ToolMode =
   | 'place_base_4_drawers' 
   | 'place_base_3_drawers_veggie'
   | 'place_base_2_pot_drawers' 
+  | 'place_base_2_drawers_1_pot' 
   | 'place_base_spice_rack' 
   | 'place_base_corner_blind' 
   | 'place_base_wine_rack'

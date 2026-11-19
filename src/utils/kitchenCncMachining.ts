@@ -220,9 +220,9 @@ export function calculateCncMachiningForPart(
     }
 
     // 1.4 Perforaciones para Correderas Ocultas (Häfele Matrix Runner / Provelcar)
-    const isDrawerCab = cab && (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '1_door_1_drawer' || cab.variant === 'tall_inner_drawers');
+    const isDrawerCab = cab && (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '1_door_1_drawer' || cab.variant === 'tall_inner_drawers');
     if (isDrawerCab) {
-      const drawerCount = cab.variant === '4_drawers' ? 4 : cab.variant === '2_pot_drawers' ? 2 : cab.variant === 'tall_inner_drawers' ? 4 : 1;
+      const drawerCount = cab.variant === '4_drawers' ? 4 : cab.variant === '2_drawers_1_pot' ? 3 : cab.variant === '2_pot_drawers' ? 2 : cab.variant === 'tall_inner_drawers' ? 4 : 1;
       const drawerPitch = Math.round((pl - 40) / drawerCount);
       const slideX1 = pw - 37; // Primera fijación a 37 mm del frente
       const slideX2 = pw - 229; // Segunda fijación a 37 + 192 mm (múltiplo 32)
@@ -261,7 +261,7 @@ export function calculateCncMachiningForPart(
       });
 
       // Destaje Gola C Intermedio para cajones (68mm x 26mm)
-      const hasGolaC = cab && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers');
+      const hasGolaC = cab && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot');
       if (hasGolaC) {
         const golaCY = Math.round(pl * 0.65);
         pockets.push({

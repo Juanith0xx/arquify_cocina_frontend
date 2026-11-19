@@ -850,7 +850,7 @@ export function KitchenBlueprint() {
                 <text x={38} y={20} fontSize={Math.round(fSizeSm * 0.7)} fill="#b45309" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">CNC: REBAJE GOLA L 58x26</text>
 
                 {/* Rebaje Gola C Intermedio si corresponde a cajoneras */}
-                {(cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || part.notes?.includes('Gola C')) && (
+                {(cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || part.notes?.includes('Gola C')) && (
                   (() => {
                     const golaCY = Math.round(pl * 0.35);
                     return (
@@ -2066,6 +2066,31 @@ export function KitchenBlueprint() {
                       ))}
                     </g>
                   );
+                } else if (cab.variant === '2_drawers_1_pot') {
+                  const dH_top = bodyH * 0.25;
+                  const dH_bot = bodyH * 0.5;
+                  const handleYs = [
+                    dH_top * 0.35 - hThick / 2,
+                    dH_top + dH_top * 0.35 - hThick / 2,
+                    dH_top * 2 + dH_bot * 0.35 - hThick / 2
+                  ];
+                  return (
+                    <g key="front-handles">
+                      {handleYs.map((hy, di) => (
+                        <rect
+                          key={`pot-h-${di}`}
+                          x={cabW / 2 - hLen / 2}
+                          y={hy}
+                          width={hLen}
+                          height={hThick}
+                          rx={2}
+                          fill={hColor}
+                          stroke="#0f172a"
+                          strokeWidth={strokeElev * 0.6}
+                        />
+                      ))}
+                    </g>
+                  );
                 } else if (cab.variant === '1_door_1_drawer') {
                   const drwH = Math.round((bodyH - 15) / 4);
                   return (
@@ -2963,6 +2988,24 @@ export function KitchenBlueprint() {
                           strokeWidth="0.3"
                         />
                       ))}
+                    </g>
+                  );
+                } else if (cab.variant === '2_drawers_1_pot') {
+                  const dH_top = bodyH * 0.25;
+                  const dH_bot = bodyH * 0.50;
+                  return (
+                    <g>
+                      <g stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"}>
+                        <line x1={cLeftX} y1={cTopY + dH_top} x2={cLeftX + cW} y2={cTopY + dH_top} />
+                        <line x1={cLeftX} y1={cTopY + dH_top * 2} x2={cLeftX + cW} y2={cTopY + dH_top * 2} />
+                      </g>
+                      {showHandles && (
+                        <>
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top + dH_top * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top * 2 + dH_bot * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                        </>
+                      )}
                     </g>
                   );
                 } else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') {
@@ -4372,6 +4415,24 @@ export function KitchenBlueprint() {
                                     const pd1 = toIsoSvg(x0, yD, z1);
                                     return <line key={di} x1={pd0.x} y1={pd0.y} x2={pd1.x} y2={pd1.y} />;
                                   })}
+                                </g>
+                              )}
+                              {cab.variant === '2_drawers_1_pot' && (
+                                <g stroke="#0f172a" strokeWidth="0.6">
+                                  {(() => {
+                                    const yD1 = yBodyBottom + (cab.height - 10) * 0.50;
+                                    const yD2 = yBodyBottom + (cab.height - 10) * 0.75;
+                                    const pd0 = toIsoSvg(x0, yD1, z0);
+                                    const pd1 = toIsoSvg(x0, yD1, z1);
+                                    const pd2 = toIsoSvg(x0, yD2, z0);
+                                    const pd3 = toIsoSvg(x0, yD2, z1);
+                                    return (
+                                      <>
+                                        <line x1={pd0.x} y1={pd0.y} x2={pd1.x} y2={pd1.y} stroke="#0f172a" />
+                                        <line x1={pd2.x} y1={pd2.y} x2={pd3.x} y2={pd3.y} stroke="#0f172a" />
+                                      </>
+                                    );
+                                  })()}
                                 </g>
                               )}
                               {(cab.variant === '2_pot_drawers' || cab.variant === 'sink_u_drawer') && (

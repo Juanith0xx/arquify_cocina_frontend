@@ -1613,6 +1613,7 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     else if (v === '4_drawers') { w = 80; name = 'Base 4 Cajones'; }
     else if (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie') { w = 60; name = 'Base Verdulero (3 Cajones)'; variant = '3_drawers_veggie'; }
     else if (v === '2_pot_drawers') { w = 80; name = 'Base 2 Olleros'; }
+    else if (v === '2_drawers_1_pot') { w = 80; name = 'Base 2 Cajones + 1 Ollero'; }
     else if (v === 'sink_u_drawer') { w = 90; name = 'Fregadero Cajón en U'; }
     else if (v === 'sink_2_doors' || v === 'base_sink_2_doors') { w = 80; name = 'Base Lavaplatos (2 Puertas)'; variant = 'base_sink_2_doors'; }
     else if (v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers') { w = 80; name = 'Base Encimera (3 Cajones, 1° Fijo)'; variant = 'base_cooktop_3_drawers'; }
@@ -1629,7 +1630,7 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
       depth: d, 
       blindWidth: v === 'corner_blind' ? 60 : undefined,
       shelvesCount: (v === 'sink_2_doors' || v === 'base_sink_2_doors') ? 0 : undefined,
-      drawersCount: (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers') ? 3 : (v === '4_drawers' ? 4 : (v === '2_pot_drawers' ? 2 : undefined))
+      drawersCount: (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers' || v === '2_drawers_1_pot') ? 3 : (v === '4_drawers' ? 4 : (v === '2_pot_drawers' ? 2 : undefined))
     };
   }
 
