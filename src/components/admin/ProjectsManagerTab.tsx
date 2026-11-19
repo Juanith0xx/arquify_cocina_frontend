@@ -48,6 +48,7 @@ import { useOfficeStore } from '../../store/officeStore';
 import { calculateKitchenDualQuote } from '../../utils/kitchenB2BPricing';
 import { generateKitchenPartsList, generateKitchenHardwareList } from '../../utils/kitchenManufacturing';
 import { getFriendlyColorName } from '../../utils/colorNames';
+import { LivePricingBackofficeCard } from './LivePricingBackofficeCard';
 
 interface ProjectsManagerTabProps {
   onLoadProjectToModule: (route: 'kitchen' | 'closet' | 'special' | 'hpl-bathroom' | 'office' | 'chair') => void;
@@ -640,6 +641,9 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
           {feedbackMsg.text}
         </div>
       )}
+
+      {/* Control de Visualización en Vivo de Precios / Modo Cliente */}
+      <LivePricingBackofficeCard />
 
       {/* Vista de Usuario Gratuito vs Superadministrador */}
       {isFreeUserMode ? (

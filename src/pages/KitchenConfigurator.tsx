@@ -21,10 +21,11 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
+import { AdminBackofficeModal } from '../components/admin/AdminBackofficeModal';
 import { exportKitchenCommercialPdf } from '../utils/kitchenCommercialPdfGenerator';
 import { calculateKitchenDualQuote } from '../utils/kitchenB2BPricing';
 import { HANDLE_CATALOG } from '../types/handle';
@@ -108,6 +109,32 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const isLight = theme === 'light';
 
   const { viewMode, setViewMode, toolMode, setToolMode, cabinets, addCabinet, activeCabinetId, updateCabinet, removeCabinet, setActiveCabinet, applyGlobalTexture, showSocle, setShowSocle, socleFinish, setSocleFinish, socleHeight, setSocleHeight, roomConfig, setRoomPlannerOpen, walls, architecturalElements, activeArchElementId, addArchitecturalElement, updateArchitecturalElement, removeArchitecturalElement, setActiveArchElement, activeWallId, updateWall, removeWall, setActiveWall, golaSystem, setGolaSystem, countertopConfig, setCountertopConfig, qstoneCatalog, islandBackConfig, setIslandBackConfig, mepPoints, handleConfig, undo, redo, canUndo, canRedo } = useKitchenStore();
+
+  const [isBackofficeOpen, setIsBackofficeOpen] = useState(false);
+  const livePriceDisplayMode = useAdminStore((state) => state.livePriceDisplayMode);
+  const liveSaleMarginPercent = useAdminStore((state) => state.liveSaleMarginPercent);
+
+  // Cálculo reactivo en vivo del costo de fabricación o valor de venta al cliente
+  const livePriceQuote = useMemo(() => {
+    if (livePriceDisplayMode === 'none') return null;
+    if (!cabinets || cabinets.length === 0) {
+      return {
+        formatted: '$0',
+        mode: livePriceDisplayMode,
+      };
+    }
+    const quote = calculateKitchenDualQuote(liveSaleMarginPercent, 0, cabinets);
+    if (livePriceDisplayMode === 'cost') {
+      return {
+        formatted: `$${(quote.totalB2BBrutoClp || 0).toLocaleString('es-CL')}`,
+        mode: 'cost' as const,
+      };
+    }
+    return {
+      formatted: `$${(quote.totalPvpBrutoClp || 0).toLocaleString('es-CL')}`,
+      mode: 'sale' as const,
+    };
+  }, [livePriceDisplayMode, liveSaleMarginPercent, cabinets, countertopConfig, roomConfig, walls]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -612,6 +639,46 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             <span className="opacity-40">·</span>
             <span className="text-[10px] opacity-75 capitalize">{roomConfig.type === 'rectangular' ? 'Rectangular' : roomConfig.type === 'l_shape' ? 'Forma L' : roomConfig.type === 'five_corners' ? '5 Esquinas' : roomConfig.type === 'u_shape' ? 'Forma U' : 'Libre'}</span>
           </button>
+
+          {/* Badge de Precio / Costo en Vivo (Configurable desde Backoffice) */}
+          {livePriceQuote && (
+            <button
+              type="button"
+              onClick={() => setIsBackofficeOpen(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-bold font-mono transition-all cursor-pointer select-none animate-in fade-in duration-150 ${
+                livePriceQuote.mode === 'cost'
+                  ? isLight
+                    ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 shadow-xs'
+                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300'
+                  : isLight
+                  ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950 shadow-xs'
+                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-300'
+              }`}
+              title={
+                livePriceQuote.mode === 'cost'
+                  ? 'Costo industrial en vivo (Click para abrir Backoffice)'
+                  : `Valor de venta al cliente en vivo (+${liveSaleMarginPercent}% margen • Click para abrir Backoffice)`
+              }
+            >
+              {livePriceQuote.mode === 'cost' ? (
+                <>
+                  <Calculator size={12} className="text-amber-500 shrink-0" />
+                  <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 hidden sm:inline">
+                    Costo:
+                  </span>
+                  <span>{livePriceQuote.formatted}</span>
+                </>
+              ) : (
+                <>
+                  <DollarSign size={12} className="text-emerald-500 shrink-0" />
+                  <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 hidden sm:inline">
+                    Total:
+                  </span>
+                  <span>{livePriceQuote.formatted}</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Acciones para Móvil / Tablet (< lg) */}
@@ -854,6 +921,23 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                     </div>
                   </button>
                 )}
+
+                {/* Backoffice y Modo Cliente */}
+                <button
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    setIsBackofficeOpen(true);
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer border-t ${
+                    isLight ? 'border-slate-100 hover:bg-orange-50 hover:text-orange-600' : 'border-white/5 hover:bg-white/10 hover:text-orange-400'
+                  }`}
+                >
+                  <Sliders size={15} className="text-orange-500 shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Backoffice & Modo Cliente</span>
+                    <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Ajustar margen de venta y proyectos</span>
+                  </div>
+                </button>
               </div>
             )}
           </div>
@@ -989,6 +1073,14 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                 <span>Exportar 3D / BIM (.OBJ, .IFC, .DXF)</span>
               </button>
             )}
+
+            <button
+              onClick={() => { setIsMobileMenuOpen(false); setIsBackofficeOpen(true); }}
+              className="flex items-center gap-3 p-3 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
+            >
+              <Sliders size={16} />
+              <span>Backoffice & Modo Cliente</span>
+            </button>
 
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsSaveModalOpen(true); }}
@@ -3190,6 +3282,13 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
      isOpen={isStudioRenderModalOpen}
      onClose={() => setIsStudioRenderModalOpen(false)}
      isLight={isLight}
+   />
+
+   {/* Modal Backoffice & Modo Cliente */}
+   <AdminBackofficeModal
+     isOpen={isBackofficeOpen}
+     onClose={() => setIsBackofficeOpen(false)}
+     onNavigateToModule={() => setIsBackofficeOpen(false)}
    />
     </div>
    </StudioRenderProvider>

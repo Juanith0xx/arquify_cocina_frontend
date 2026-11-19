@@ -329,6 +329,12 @@ export interface AdminState {
   setThemeMode: (mode: 'dark' | 'light') => void;
   toggleThemeMode: () => void;
 
+  // Visualización en Vivo de Precios / Modo Cliente
+  livePriceDisplayMode: 'none' | 'cost' | 'sale';
+  setLivePriceDisplayMode: (mode: 'none' | 'cost' | 'sale') => void;
+  liveSaleMarginPercent: number; // Margen 0% a 500%
+  setLiveSaleMarginPercent: (margin: number) => void;
+
   // Proveedores
   providers: ProviderItem[];
   addProvider: (provider: Omit<ProviderItem, 'id' | 'createdAt'>) => string;
@@ -1636,6 +1642,13 @@ const getInitialState = () => {
         manufacturingRates: parsed.manufacturingRates
           ? { ...DEFAULT_MANUFACTURING_RATES, ...parsed.manufacturingRates }
           : DEFAULT_MANUFACTURING_RATES,
+        livePriceDisplayMode: (['none', 'cost', 'sale'].includes(parsed.livePriceDisplayMode)
+          ? parsed.livePriceDisplayMode
+          : 'none') as 'none' | 'cost' | 'sale',
+        liveSaleMarginPercent:
+          typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
       };
     }
   } catch (e) {
@@ -1651,6 +1664,8 @@ const getInitialState = () => {
     supplies: mergeTexturesIntoSupplies(DEFAULT_SUPPLIES, DEFAULT_CUSTOM_TEXTURES),
     textures: DEFAULT_CUSTOM_TEXTURES,
     manufacturingRates: DEFAULT_MANUFACTURING_RATES,
+    livePriceDisplayMode: 'none' as 'none' | 'cost' | 'sale',
+    liveSaleMarginPercent: 35,
   };
 };
 
@@ -1694,6 +1709,8 @@ const saveToLocalStorage = (state: {
   supplies: SupplyItem[];
   textures: CustomTextureItem[];
   manufacturingRates?: ManufacturingRateConfig;
+  livePriceDisplayMode?: 'none' | 'cost' | 'sale';
+  liveSaleMarginPercent?: number;
 }) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
 
@@ -1854,6 +1871,8 @@ export const useAdminStore = create<AdminState>((set, get) => {
         supplies: updated.supplies,
         textures: updated.textures,
         manufacturingRates: updated.manufacturingRates,
+        livePriceDisplayMode: updated.livePriceDisplayMode,
+        liveSaleMarginPercent: updated.liveSaleMarginPercent,
       });
       return updated;
     });
@@ -2860,6 +2879,17 @@ export const useAdminStore = create<AdminState>((set, get) => {
     },
     resetManufacturingRates: () => {
       persist({ manufacturingRates: DEFAULT_MANUFACTURING_RATES });
+    },
+
+    // Visualización en Vivo de Precios / Modo Cliente
+    livePriceDisplayMode: initial.livePriceDisplayMode || 'none',
+    setLivePriceDisplayMode: (mode) => {
+      persist({ livePriceDisplayMode: mode });
+    },
+    liveSaleMarginPercent: typeof initial.liveSaleMarginPercent === 'number' ? initial.liveSaleMarginPercent : 35,
+    setLiveSaleMarginPercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginPercent: clamped });
     },
   };
 });
