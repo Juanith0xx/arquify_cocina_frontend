@@ -332,8 +332,14 @@ export interface AdminState {
   // Visualización en Vivo de Precios / Modo Cliente
   livePriceDisplayMode: 'none' | 'cost' | 'sale';
   setLivePriceDisplayMode: (mode: 'none' | 'cost' | 'sale') => void;
-  liveSaleMarginPercent: number; // Margen 0% a 500%
+  liveSaleMarginPercent: number; // Margen unificado 0% a 500%
   setLiveSaleMarginPercent: (margin: number) => void;
+  liveSaleMarginFurniturePercent: number; // Margen muebles 0% a 500%
+  setLiveSaleMarginFurniturePercent: (margin: number) => void;
+  liveSaleMarginCountertopPercent: number; // Margen cubiertas 0% a 500%
+  setLiveSaleMarginCountertopPercent: (margin: number) => void;
+  differentiateMargins: boolean; // Si los márgenes de cubiertas y muebles están diferenciados
+  setDifferentiateMargins: (enabled: boolean) => void;
 
   // Proveedores
   providers: ProviderItem[];
@@ -1649,6 +1655,19 @@ const getInitialState = () => {
           typeof parsed.liveSaleMarginPercent === 'number'
             ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
             : 35,
+        liveSaleMarginFurniturePercent:
+          typeof parsed.liveSaleMarginFurniturePercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginFurniturePercent)))
+            : typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
+        liveSaleMarginCountertopPercent:
+          typeof parsed.liveSaleMarginCountertopPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginCountertopPercent)))
+            : typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
+        differentiateMargins: Boolean(parsed.differentiateMargins),
       };
     }
   } catch (e) {
@@ -1666,6 +1685,9 @@ const getInitialState = () => {
     manufacturingRates: DEFAULT_MANUFACTURING_RATES,
     livePriceDisplayMode: 'none' as 'none' | 'cost' | 'sale',
     liveSaleMarginPercent: 35,
+    liveSaleMarginFurniturePercent: 35,
+    liveSaleMarginCountertopPercent: 35,
+    differentiateMargins: false,
   };
 };
 
@@ -1711,6 +1733,9 @@ const saveToLocalStorage = (state: {
   manufacturingRates?: ManufacturingRateConfig;
   livePriceDisplayMode?: 'none' | 'cost' | 'sale';
   liveSaleMarginPercent?: number;
+  liveSaleMarginFurniturePercent?: number;
+  liveSaleMarginCountertopPercent?: number;
+  differentiateMargins?: boolean;
 }) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
 
@@ -1873,6 +1898,9 @@ export const useAdminStore = create<AdminState>((set, get) => {
         manufacturingRates: updated.manufacturingRates,
         livePriceDisplayMode: updated.livePriceDisplayMode,
         liveSaleMarginPercent: updated.liveSaleMarginPercent,
+        liveSaleMarginFurniturePercent: updated.liveSaleMarginFurniturePercent,
+        liveSaleMarginCountertopPercent: updated.liveSaleMarginCountertopPercent,
+        differentiateMargins: updated.differentiateMargins,
       });
       return updated;
     });
@@ -2889,7 +2917,21 @@ export const useAdminStore = create<AdminState>((set, get) => {
     liveSaleMarginPercent: typeof initial.liveSaleMarginPercent === 'number' ? initial.liveSaleMarginPercent : 35,
     setLiveSaleMarginPercent: (margin) => {
       const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
-      persist({ liveSaleMarginPercent: clamped });
+      persist({ liveSaleMarginPercent: clamped, liveSaleMarginFurniturePercent: clamped });
+    },
+    liveSaleMarginFurniturePercent: typeof initial.liveSaleMarginFurniturePercent === 'number' ? initial.liveSaleMarginFurniturePercent : 35,
+    setLiveSaleMarginFurniturePercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginFurniturePercent: clamped, liveSaleMarginPercent: clamped });
+    },
+    liveSaleMarginCountertopPercent: typeof initial.liveSaleMarginCountertopPercent === 'number' ? initial.liveSaleMarginCountertopPercent : 35,
+    setLiveSaleMarginCountertopPercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginCountertopPercent: clamped });
+    },
+    differentiateMargins: Boolean(initial.differentiateMargins),
+    setDifferentiateMargins: (enabled) => {
+      persist({ differentiateMargins: enabled });
     },
   };
 });

@@ -61,7 +61,8 @@ export interface DualQuoteCalculation {
 export function calculateKitchenDualQuote(
   customMarginPercent?: number,
   customAdditionalFee?: number,
-  overrideCabinets?: any[]
+  overrideCabinets?: any[],
+  customCountertopMarginPercent?: number
 ): DualQuoteCalculation {
   const kState = useKitchenStore.getState();
   const state = useStore.getState();
@@ -75,6 +76,9 @@ export function calculateKitchenDualQuote(
     ? customMarginPercent 
     : (rates.defaultDesignerMarginPercent || 35);
   const designerAdditionalFeeClp = customAdditionalFee || 0;
+  const countertopMarginPercent = customCountertopMarginPercent !== undefined
+    ? customCountertopMarginPercent
+    : designerMarginPercent;
 
   // 1. Generar despiece de producción
   const parts = generateKitchenPartsList(cabinets);
@@ -498,9 +502,10 @@ export function calculateKitchenDualQuote(
 
   // 10. GENERACIÓN DE COTIZACIÓN COMERCIAL CLIENTE FINAL (PVP)
   const marginMultiplier = 1 + (designerMarginPercent / 100);
+  const countertopMarginMultiplier = 1 + (countertopMarginPercent / 100);
   const basePvpMaterialsAndMfg = Math.round((subtotalMaterialsClp + subtotalEdgeBandingClp + subtotalManufacturingClp) * marginMultiplier);
   const basePvpHardware = Math.round(subtotalHardwareClp * marginMultiplier);
-  const basePvpCountertop = subtotalCountertopClp > 0 ? Math.round(subtotalCountertopClp * marginMultiplier) : 0;
+  const basePvpCountertop = subtotalCountertopClp > 0 ? Math.round(subtotalCountertopClp * countertopMarginMultiplier) : 0;
   const basePvpAssembly = subtotalPreAssemblyClp > 0 ? Math.round(subtotalPreAssemblyClp * marginMultiplier) : 0;
   const basePvpDecoration = subtotalDecorationClp > 0 ? Math.round(subtotalDecorationClp * marginMultiplier) : 0;
 

@@ -113,8 +113,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const [isBackofficeOpen, setIsBackofficeOpen] = useState(false);
   const livePriceDisplayMode = useAdminStore((state) => state.livePriceDisplayMode);
   const liveSaleMarginPercent = useAdminStore((state) => state.liveSaleMarginPercent);
+  const liveSaleMarginFurniturePercent = useAdminStore((state) => state.liveSaleMarginFurniturePercent);
+  const liveSaleMarginCountertopPercent = useAdminStore((state) => state.liveSaleMarginCountertopPercent);
+  const differentiateMargins = useAdminStore((state) => state.differentiateMargins);
 
-  // Cálculo reactivo en vivo del costo de fabricación o valor de venta al cliente
+  // Cálculo reactivo en vivo del costo de fabricación o valor de venta al cliente (unificado para el cliente)
   const livePriceQuote = useMemo(() => {
     if (livePriceDisplayMode === 'none') return null;
     if (!cabinets || cabinets.length === 0) {
@@ -123,7 +126,14 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
         mode: livePriceDisplayMode,
       };
     }
-    const quote = calculateKitchenDualQuote(liveSaleMarginPercent, 0, cabinets);
+    const marginFurniture = differentiateMargins
+      ? liveSaleMarginFurniturePercent
+      : liveSaleMarginPercent;
+    const marginCountertop = differentiateMargins
+      ? liveSaleMarginCountertopPercent
+      : liveSaleMarginPercent;
+
+    const quote = calculateKitchenDualQuote(marginFurniture, 0, cabinets, marginCountertop);
     if (livePriceDisplayMode === 'cost') {
       return {
         formatted: `$${(quote.totalB2BBrutoClp || 0).toLocaleString('es-CL')}`,
@@ -134,7 +144,17 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       formatted: `$${(quote.totalPvpBrutoClp || 0).toLocaleString('es-CL')}`,
       mode: 'sale' as const,
     };
-  }, [livePriceDisplayMode, liveSaleMarginPercent, cabinets, countertopConfig, roomConfig, walls]);
+  }, [
+    livePriceDisplayMode,
+    liveSaleMarginPercent,
+    liveSaleMarginFurniturePercent,
+    liveSaleMarginCountertopPercent,
+    differentiateMargins,
+    cabinets,
+    countertopConfig,
+    roomConfig,
+    walls,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

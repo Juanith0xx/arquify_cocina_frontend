@@ -7,6 +7,9 @@ import {
   TrendingUp,
   CheckCircle2,
   Info,
+  Layers,
+  Sparkles,
+  Split,
 } from 'lucide-react';
 import { useAdminStore } from '../../store/adminStore';
 
@@ -20,6 +23,12 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
     setLivePriceDisplayMode,
     liveSaleMarginPercent,
     setLiveSaleMarginPercent,
+    liveSaleMarginFurniturePercent,
+    setLiveSaleMarginFurniturePercent,
+    liveSaleMarginCountertopPercent,
+    setLiveSaleMarginCountertopPercent,
+    differentiateMargins,
+    setDifferentiateMargins,
     themeMode,
   } = useAdminStore();
 
@@ -38,19 +47,41 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
     } else if (mode === 'cost') {
       showToast('Modo activo: Costo industrial en vivo');
     } else {
-      showToast(`Modo activo: Valor de venta al cliente (+${liveSaleMarginPercent}%)`);
+      showToast('Modo activo: Valor de venta al cliente');
     }
   };
 
-  const handleMarginChange = (val: number) => {
+  const handleUnifiedMarginChange = (val: number) => {
     const clamped = Math.max(0, Math.min(500, Math.round(val)));
     setLiveSaleMarginPercent(clamped);
+    setLiveSaleMarginFurniturePercent(clamped);
+    setLiveSaleMarginCountertopPercent(clamped);
   };
 
-  const marginMultiplier = 1 + liveSaleMarginPercent / 100;
-  const exampleBaseCost = 1000000;
-  const exampleSalePriceNeto = Math.round(exampleBaseCost * marginMultiplier);
-  const exampleSalePriceBruto = Math.round(exampleSalePriceNeto * 1.19);
+  const handleFurnitureMarginChange = (val: number) => {
+    const clamped = Math.max(0, Math.min(500, Math.round(val)));
+    setLiveSaleMarginFurniturePercent(clamped);
+  };
+
+  const handleCountertopMarginChange = (val: number) => {
+    const clamped = Math.max(0, Math.min(500, Math.round(val)));
+    setLiveSaleMarginCountertopPercent(clamped);
+  };
+
+  const effectiveFurnitureMargin = differentiateMargins
+    ? liveSaleMarginFurniturePercent
+    : liveSaleMarginPercent;
+  const effectiveCountertopMargin = differentiateMargins
+    ? liveSaleMarginCountertopPercent
+    : liveSaleMarginPercent;
+
+  // Simulación: Muebles base $1.500.000 + Cubierta base $500.000 = $2.000.000 costo neto
+  const simCostFurniture = 1500000;
+  const simCostCountertop = 500000;
+  const simSaleFurnitureNeto = Math.round(simCostFurniture * (1 + effectiveFurnitureMargin / 100));
+  const simSaleCountertopNeto = Math.round(simCostCountertop * (1 + effectiveCountertopMargin / 100));
+  const simTotalSaleNeto = simSaleFurnitureNeto + simSaleCountertopNeto;
+  const simTotalSaleBruto = Math.round(simTotalSaleNeto * 1.19);
 
   const presets = [0, 20, 35, 50, 75, 100, 150, 200, 300, 500];
 
@@ -105,7 +136,10 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
           >
             {livePriceDisplayMode === 'none' && 'Oculto'}
             {livePriceDisplayMode === 'cost' && 'Costo en Vivo'}
-            {livePriceDisplayMode === 'sale' && `Venta (+${liveSaleMarginPercent}%)`}
+            {livePriceDisplayMode === 'sale' &&
+              (differentiateMargins
+                ? `Venta (M:${effectiveFurnitureMargin}% | C:${effectiveCountertopMargin}%)`
+                : `Venta (+${effectiveFurnitureMargin}%)`)}
           </span>
         </div>
       </div>
@@ -221,111 +255,306 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
           <div>
             <h4 className="text-sm font-bold">3. Mostrar Valor de Venta (Modo Cliente)</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-              Muestra el precio de venta final al cliente. Ideal si estás sentado con tu cliente al lado.
+              Muestra el precio de venta final al cliente. Configura el margen libremente para muebles y cubiertas.
             </p>
           </div>
         </button>
       </div>
 
-      {/* SECCIÓN DESPLEGABLE: Slider / Scroll de Margen (0% a 500%) */}
+      {/* SECCIÓN DESPLEGABLE: Configuración de Margen de Venta (Muebles vs Cubiertas) */}
       {livePriceDisplayMode === 'sale' && (
         <div
-          className={`mt-6 p-5 rounded-xl border transition-all animate-in fade-in slide-in-from-top-3 ${
+          className={`mt-6 p-5 sm:p-6 rounded-xl border transition-all animate-in fade-in slide-in-from-top-3 ${
             isLight ? 'bg-emerald-50/40 border-emerald-200' : 'bg-emerald-950/15 border-emerald-800/40'
           }`}
         >
-          {/* Header del Slider de Margen */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+          {/* Barra de Modo de Margen: Unificado vs Diferenciado */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-emerald-500/20">
             <div className="flex items-center gap-2">
               <TrendingUp size={18} className="text-emerald-500" />
               <span className="text-sm font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Margen Comercial de Venta (Scroll / Slider)
+                Margen Comercial de Venta (Scroll / Slider 0% a 500%)
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                Factor multiplicador: <strong className="text-emerald-500 font-bold">×{marginMultiplier.toFixed(2)}</strong>
-              </span>
-              <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-lg">
+            {/* Toggle para Diferenciar Margen Muebles vs Cubiertas */}
+            <div className="flex items-center gap-2 bg-white/70 dark:bg-black/40 p-1 rounded-xl border border-emerald-500/30">
+              <button
+                type="button"
+                onClick={() => setDifferentiateMargins(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  !differentiateMargins
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : isLight
+                    ? 'text-zinc-600 hover:text-zinc-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Margen Unificado
+              </button>
+              <button
+                type="button"
+                onClick={() => setDifferentiateMargins(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  differentiateMargins
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : isLight
+                    ? 'text-zinc-600 hover:text-zinc-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Split size={14} />
+                <span>Diferenciar Muebles / Cubiertas</span>
+              </button>
+            </div>
+          </div>
+
+          {/* CASO A: Margen Unificado (aplica por igual a muebles y cubiertas) */}
+          {!differentiateMargins && (
+            <div className="mt-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Margen General del Proyecto:
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-mono">
+                    Factor: <strong className="text-emerald-500">×{(1 + liveSaleMarginPercent / 100).toFixed(2)}</strong>
+                  </span>
+                  <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-lg">
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="1"
+                      value={liveSaleMarginPercent}
+                      onChange={(e) => handleUnifiedMarginChange(Number(e.target.value))}
+                      className="w-16 bg-transparent text-right font-mono font-extrabold text-base text-emerald-600 dark:text-emerald-400 focus:outline-none"
+                    />
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slider Unificado */}
+              <input
+                type="range"
+                min="0"
+                max="500"
+                step="1"
+                value={liveSaleMarginPercent}
+                onChange={(e) => handleUnifiedMarginChange(Number(e.target.value))}
+                className="w-full h-3 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition-all"
+              />
+              <div className="flex justify-between text-[11px] font-mono text-slate-400 px-0.5">
+                <span>0% (Al costo)</span>
+                <span>35% (Estándar B2B)</span>
+                <span>100% (2x)</span>
+                <span>250%</span>
+                <span>500% (Máximo)</span>
+              </div>
+
+              {/* Presets Unificados */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Presets:</span>
+                {presets.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleUnifiedMarginChange(preset)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      liveSaleMarginPercent === preset
+                        ? 'bg-emerald-500 text-white shadow-sm'
+                        : isLight
+                        ? 'bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700'
+                        : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-slate-300'
+                    }`}
+                  >
+                    {preset}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CASO B: Márgenes Diferenciados (1. Muebles vs 2. Cubiertas) */}
+          {differentiateMargins && (
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* SLIDER 1: MUEBLES (Melamina + Herrajes + Manufactura) */}
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  isLight ? 'bg-white/90 border-emerald-200' : 'bg-black/40 border-emerald-800/40'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-500/15 text-amber-500 rounded-lg">
+                      <Layers size={16} />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-extrabold uppercase tracking-wider text-amber-500">
+                        1. Margen para Muebles
+                      </h5>
+                      <span className="text-[10px] text-slate-400">Tableros, cantos, herrajes y mecanizados</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="1"
+                      value={liveSaleMarginFurniturePercent}
+                      onChange={(e) => handleFurnitureMarginChange(Number(e.target.value))}
+                      className="w-14 bg-transparent text-right font-mono font-extrabold text-sm text-amber-500 focus:outline-none"
+                    />
+                    <span className="font-extrabold text-amber-500 text-sm">%</span>
+                  </div>
+                </div>
+
                 <input
-                  type="number"
+                  type="range"
                   min="0"
                   max="500"
                   step="1"
-                  value={liveSaleMarginPercent}
-                  onChange={(e) => handleMarginChange(Number(e.target.value))}
-                  className="w-16 bg-transparent text-right font-mono font-extrabold text-base text-emerald-600 dark:text-emerald-400 focus:outline-none"
+                  value={liveSaleMarginFurniturePercent}
+                  onChange={(e) => handleFurnitureMarginChange(Number(e.target.value))}
+                  className="w-full h-2.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition-all"
                 />
-                <span className="font-extrabold text-emerald-600 dark:text-emerald-400">%</span>
+                <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                  <span>0%</span>
+                  <span>35%</span>
+                  <span>100%</span>
+                  <span>500%</span>
+                </div>
+
+                {/* Presets rápidos para Muebles */}
+                <div className="flex flex-wrap items-center gap-1 pt-1">
+                  {[0, 20, 35, 50, 75, 100, 150, 200, 500].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleFurnitureMarginChange(p)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                        liveSaleMarginFurniturePercent === p
+                          ? 'bg-amber-500 text-zinc-950 font-extrabold'
+                          : isLight
+                          ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-slate-300'
+                      }`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Slider Principal 0% a 500% */}
-          <div className="mt-4 space-y-2">
-            <input
-              type="range"
-              min="0"
-              max="500"
-              step="1"
-              value={liveSaleMarginPercent}
-              onChange={(e) => handleMarginChange(Number(e.target.value))}
-              className="w-full h-3 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition-all"
-            />
-            {/* Marcas de referencia */}
-            <div className="flex justify-between text-[11px] font-mono text-slate-400 px-0.5">
-              <span>0% (Al costo)</span>
-              <span>35% (Estándar B2B)</span>
-              <span>100% (2x)</span>
-              <span>250%</span>
-              <span>500% (Máximo)</span>
-            </div>
-          </div>
-
-          {/* Botones de Acceso Rápido (Presets) */}
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Presets:</span>
-            {presets.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => handleMarginChange(preset)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-                  liveSaleMarginPercent === preset
-                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/20'
-                    : isLight
-                    ? 'bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700'
-                    : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-slate-300'
+              {/* SLIDER 2: CUBIERTAS (Piedras, Cuarzo, Granito Qstone) */}
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  isLight ? 'bg-white/90 border-emerald-200' : 'bg-black/40 border-emerald-800/40'
                 }`}
               >
-                {preset}%
-              </button>
-            ))}
-          </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-sky-500/15 text-sky-500 rounded-lg">
+                      <Sparkles size={16} />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-extrabold uppercase tracking-wider text-sky-400">
+                        2. Margen para Cubiertas
+                      </h5>
+                      <span className="text-[10px] text-slate-400">Piedras sinterizadas y cuarzo Qstone</span>
+                    </div>
+                  </div>
 
-          {/* Cuadro Simulador Informativo en Vivo */}
+                  <div className="flex items-center gap-1 bg-sky-500/10 border border-sky-500/30 px-2.5 py-1 rounded-lg">
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="1"
+                      value={liveSaleMarginCountertopPercent}
+                      onChange={(e) => handleCountertopMarginChange(Number(e.target.value))}
+                      className="w-14 bg-transparent text-right font-mono font-extrabold text-sm text-sky-400 focus:outline-none"
+                    />
+                    <span className="font-extrabold text-sky-400 text-sm">%</span>
+                  </div>
+                </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="500"
+                  step="1"
+                  value={liveSaleMarginCountertopPercent}
+                  onChange={(e) => handleCountertopMarginChange(Number(e.target.value))}
+                  className="w-full h-2.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400 hover:accent-sky-300 transition-all"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                  <span>0%</span>
+                  <span>25%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                  <span>500%</span>
+                </div>
+
+                {/* Presets rápidos para Cubiertas */}
+                <div className="flex flex-wrap items-center gap-1 pt-1">
+                  {[0, 15, 25, 35, 50, 75, 100, 150, 500].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleCountertopMarginChange(p)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                        liveSaleMarginCountertopPercent === p
+                          ? 'bg-sky-500 text-white font-extrabold'
+                          : isLight
+                          ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-slate-300'
+                      }`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cuadro Informativo de Valor Unificado al Cliente */}
           <div
-            className={`mt-4 p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${
-              isLight ? 'bg-white/80 border-emerald-200 text-zinc-800' : 'bg-black/30 border-emerald-500/20 text-slate-200'
+            className={`mt-5 p-4 rounded-xl border flex flex-wrap items-center justify-between gap-4 ${
+              isLight ? 'bg-white/90 border-emerald-300 text-zinc-900' : 'bg-black/50 border-emerald-500/30 text-slate-100'
             }`}
           >
-            <div className="flex items-start gap-2.5 max-w-xl">
-              <Info size={16} className="text-emerald-500 shrink-0 mt-0.5" />
-              <div className="text-xs leading-relaxed">
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">Simulación de Visualización:</span>
-                <p className="text-slate-500 dark:text-slate-400 mt-0.5">
-                  Por cada <strong className="font-mono text-zinc-800 dark:text-slate-200">$1.000.000 CLP</strong> de costo industrial, el cliente verá en pantalla:
+            <div className="flex items-start gap-3 max-w-xl">
+              <Info size={18} className="text-emerald-500 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed space-y-1">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider text-[11px]">
+                  Lo que verá tu cliente en vivo: Solo el Total Unificado
+                </span>
+                <p className="text-slate-500 dark:text-slate-400">
+                  En el configurador 3D la cifra aparece <strong>completamente consolidada y sin desglose</strong>, protegiendo tus márgenes individuales de muebles y cubiertas ante el cliente sentado a tu lado.
                 </p>
+                {differentiateMargins && (
+                  <div className="text-[11px] font-mono text-slate-400 pt-1 flex flex-wrap gap-x-4">
+                    <span>Muebles: +{effectiveFurnitureMargin}%</span>
+                    <span>Cubiertas: +{effectiveCountertopMargin}%</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="text-right shrink-0">
-              <div className="text-lg font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                ${exampleSalePriceBruto.toLocaleString('es-CL')} CLP
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                Total Venta Proyecto (Simulación)
+              </span>
+              <div className="text-xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+                ${simTotalSaleBruto.toLocaleString('es-CL')} CLP
               </div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-                (IVA Inc. • Margen +{liveSaleMarginPercent}%)
+              <span className="text-[10px] text-slate-400 font-semibold block">
+                (IVA 19% Incluido • Cifra Unificada)
               </span>
             </div>
           </div>
