@@ -216,7 +216,18 @@ export function calculateKitchenDualQuote(
         unitPrice = match ? getEffectiveSupplyPrice(match) : 450;
       } else {
         // Excluir patas que incluyan clip zócalo en el nombre para tomar la tira de zócalo real
-        const match = supplies.find((s) => (s.id === 'zocalo-aluminio-3m' || (s.name.toLowerCase().includes('zócalo') && !s.name.toLowerCase().includes('pata'))));
+        let match: SupplyItem | undefined;
+        const isNegro = itemLower.includes('negro') || itemLower.includes('black');
+        if (itemLower.includes('100')) {
+          match = supplies.find((s) => s.id === (isNegro ? 'zocalo-negro-100-3m' : 'zocalo-alu-100-3m'));
+        } else if (itemLower.includes('120')) {
+          match = supplies.find((s) => s.id === (isNegro ? 'zocalo-negro-120-3m' : 'zocalo-alu-120-3m'));
+        } else if (itemLower.includes('150')) {
+          match = supplies.find((s) => s.id === (isNegro ? 'zocalo-negro-150-3m' : 'zocalo-alu-150-3m'));
+        }
+        if (!match) {
+          match = supplies.find((s) => (s.id === 'zocalo-aluminio-3m' || (s.name.toLowerCase().includes('zócalo') && !s.name.toLowerCase().includes('pata'))));
+        }
         unitPrice = match ? getEffectiveSupplyPrice(match) : 12500;
       }
     }
@@ -241,6 +252,15 @@ export function calculateKitchenDualQuote(
       if (itemLower.includes('free flap') || itemLower.includes('free fold') || itemLower.includes('häfele')) {
         const match = supplies.find((s) => s.id === 'sistema-elevable-hafele-free');
         unitPrice = match ? getEffectiveSupplyPrice(match) : 38000;
+      } else if (itemLower.includes('60n') || itemLower.includes('60 n')) {
+        const match = supplies.find((s) => s.id === 'piston-gas-elevador-60n');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 3200;
+      } else if (itemLower.includes('80n') || itemLower.includes('80 n')) {
+        const match = supplies.find((s) => s.id === 'piston-gas-elevador-80n');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 3400;
+      } else if (itemLower.includes('120n') || itemLower.includes('120 n')) {
+        const match = supplies.find((s) => s.id === 'piston-gas-elevador-120n');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 3800;
       } else {
         const match = supplies.find((s) => s.id === 'piston-gas-elevador-100n');
         unitPrice = match ? getEffectiveSupplyPrice(match) : 3500;
@@ -284,6 +304,12 @@ export function calculateKitchenDualQuote(
       } else if (itemLower.includes('gran ángulo') || itemLower.includes('gran angulo') || itemLower.includes('170') || itemLower.includes('165')) {
         const match = supplies.find((s) => s.id === 'bisagra-gran-angulo-170');
         unitPrice = match ? getEffectiveSupplyPrice(match) : 7800;
+      } else if (itemLower.includes('semicurva') || itemLower.includes('codo 9') || itemLower.includes('codo9')) {
+        const match = supplies.find((s) => s.id === 'bisagra-semicurva-110');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 2950;
+      } else if (itemLower.includes('curva') || itemLower.includes('codo 18') || itemLower.includes('codo18') || itemLower.includes('embutida')) {
+        const match = supplies.find((s) => s.id === 'bisagra-curva-110');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 3100;
       } else {
         const match = supplies.find((s) => s.id === 'bisagra-cierre-suave' || s.id.includes('bisagra') || s.name.toLowerCase().includes('bisagra'));
         unitPrice = match ? getEffectiveSupplyPrice(match) : 2850;
@@ -291,61 +317,74 @@ export function calculateKitchenDualQuote(
     }
     // 10. CORREDERAS (Por largo nominal y ocultas)
     else if (itemLower.includes('corredera') || catLower.includes('corredera')) {
+      const lenMatch = itemLower.match(/(\d+)\s*mm/);
+      const len = lenMatch ? lenMatch[1] : null;
+
       if (itemLower.includes('oculta') || itemLower.includes('tandem') || itemLower.includes('matrix')) {
-        const match = supplies.find((s) => s.id === 'corr-oculta-soft');
+        let match = len ? supplies.find((s) => s.id === `corr-oculta-${len}`) : undefined;
+        if (!match) match = supplies.find((s) => s.id === 'corr-oculta-soft');
         unitPrice = match ? getEffectiveSupplyPrice(match) : 18500;
-      } else if (itemLower.includes('300')) {
-        const match = supplies.find((s) => s.id === 'corr-tel-300');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 6900;
-      } else if (itemLower.includes('350')) {
-        const match = supplies.find((s) => s.id === 'corr-tel-350');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 7400;
-      } else if (itemLower.includes('400')) {
-        const match = supplies.find((s) => s.id === 'corr-tel-400');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 7900;
-      } else if (itemLower.includes('450')) {
-        const match = supplies.find((s) => s.id === 'corr-tel-450');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 8400;
-      } else if (itemLower.includes('550')) {
-        const match = supplies.find((s) => s.id === 'corr-tel-550');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 9800;
       } else {
-        const match = supplies.find((s) => s.id === 'corredera-telescopica-soft' || s.id.includes('corredera'));
+        let match = len ? supplies.find((s) => s.id === `corr-tel-${len}`) : undefined;
+        if (!match && itemLower.includes('250')) match = supplies.find((s) => s.id === 'corr-tel-250');
+        if (!match && itemLower.includes('300')) match = supplies.find((s) => s.id === 'corr-tel-300');
+        if (!match && itemLower.includes('350')) match = supplies.find((s) => s.id === 'corr-tel-350');
+        if (!match && itemLower.includes('400')) match = supplies.find((s) => s.id === 'corr-tel-400');
+        if (!match && itemLower.includes('450')) match = supplies.find((s) => s.id === 'corr-tel-450');
+        if (!match && itemLower.includes('500')) match = supplies.find((s) => s.id === 'corr-tel-500' || s.id === 'corredera-telescopica-soft');
+        if (!match && itemLower.includes('550')) match = supplies.find((s) => s.id === 'corr-tel-550');
+        if (!match) match = supplies.find((s) => s.id === 'corredera-telescopica-soft' || s.id.includes('corredera'));
         unitPrice = match ? getEffectiveSupplyPrice(match) : 8900;
       }
     }
     // 11. PATAS REGULABLES
     else if (itemLower.includes('pata') || itemLower.includes('nivelador')) {
-      const match = supplies.find((s) => s.id.includes('pata') || s.name.toLowerCase().includes('pata'));
-      unitPrice = match ? getEffectiveSupplyPrice(match) : 850;
-    }
-    // 12. TIRADORES (Por modelo de catálogo)
-    else if (itemLower.includes('tirador') || itemLower.includes('manilla') || itemLower.includes('perilla') || catLower.includes('tirador')) {
-      if (itemLower.includes('forza')) {
-        const match = supplies.find((s) => s.id === 'tirador-forza');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 4800;
-      } else if (itemLower.includes(' ce ') || itemLower.endsWith(' ce') || itemLower.includes('perfil')) {
-        const match = supplies.find((s) => s.id === 'tirador-ce');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 5200;
-      } else if (itemLower.includes('madrid')) {
-        const match = supplies.find((s) => s.id === 'tirador-madrid');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 4500;
-      } else if (itemLower.includes('balín') || itemLower.includes('balin')) {
-        const match = supplies.find((s) => s.id === 'tirador-balin');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 3200;
-      } else if (itemLower.includes('denver')) {
-        const match = supplies.find((s) => s.id === 'tirador-denver');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 5800;
-      } else if (itemLower.includes('berlín') || itemLower.includes('berlin')) {
-        const match = supplies.find((s) => s.id === 'tirador-berlin');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 3600;
-      } else if (itemLower.includes('oslo')) {
-        const match = supplies.find((s) => s.id === 'tirador-oslo');
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 4900;
+      if (itemLower.includes('60') || itemLower.includes('80')) {
+        const match = supplies.find((s) => s.id === 'patas-regulables-60');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 750;
+      } else if (itemLower.includes('150') || itemLower.includes('180')) {
+        const match = supplies.find((s) => s.id === 'patas-regulables-150');
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 950;
       } else {
-        const match = supplies.find((s) => s.id.includes('tirador') || s.name.toLowerCase().includes('tirador'));
-        unitPrice = match ? getEffectiveSupplyPrice(match) : 4500;
+        const match = supplies.find((s) => s.id === 'patas-regulables-100' || s.id.includes('pata') || s.name.toLowerCase().includes('pata'));
+        unitPrice = match ? getEffectiveSupplyPrice(match) : 850;
       }
+    }
+    // 12. TIRADORES (Por modelo y medida de catálogo)
+    else if (itemLower.includes('tirador') || itemLower.includes('manilla') || itemLower.includes('perilla') || catLower.includes('tirador')) {
+      const lenMatch = itemLower.match(/(\d+)\s*mm/);
+      const len = lenMatch ? lenMatch[1] : null;
+
+      let modelKey = '';
+      if (itemLower.includes('forza')) modelKey = 'forza';
+      else if (itemLower.includes(' ce ') || itemLower.endsWith(' ce') || itemLower.includes('perfil')) modelKey = 'ce';
+      else if (itemLower.includes('madrid')) modelKey = 'madrid';
+      else if (itemLower.includes('balín') || itemLower.includes('balin')) modelKey = 'balin';
+      else if (itemLower.includes('denver')) modelKey = 'denver';
+      else if (itemLower.includes('berlín') || itemLower.includes('berlin')) modelKey = 'berlin';
+      else if (itemLower.includes('oslo')) modelKey = 'oslo';
+
+      let match: SupplyItem | undefined;
+      if (modelKey && len) {
+        match = supplies.find((s) => s.id === `tirador-${modelKey}-${len}`);
+      }
+      if (!match && modelKey) {
+        match = supplies.find((s) => s.id === `tirador-${modelKey}`);
+      }
+      if (!match) {
+        match = supplies.find((s) => s.id.includes('tirador') || s.name.toLowerCase().includes('tirador'));
+      }
+
+      const defaultFallback = modelKey === 'forza' ? 4800
+        : modelKey === 'ce' ? 5200
+        : modelKey === 'madrid' ? 4500
+        : modelKey === 'balin' ? 3200
+        : modelKey === 'denver' ? 5800
+        : modelKey === 'berlin' ? 3600
+        : modelKey === 'oslo' ? 4900
+        : 4500;
+
+      unitPrice = match ? getEffectiveSupplyPrice(match) : defaultFallback;
     }
     // 13. MINIFIX Y TARUGOS
     else if (itemLower.includes('minifix')) {
