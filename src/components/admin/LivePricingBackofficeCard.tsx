@@ -75,12 +75,25 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
     ? liveSaleMarginCountertopPercent
     : liveSaleMarginPercent;
 
-  // Simulación: Muebles base $1.500.000 + Cubierta base $500.000 = $2.000.000 costo neto
-  const simCostFurniture = 1500000;
-  const simCostCountertop = 500000;
-  const simSaleFurnitureNeto = Math.round(simCostFurniture * (1 + effectiveFurnitureMargin / 100));
-  const simSaleCountertopNeto = Math.round(simCostCountertop * (1 + effectiveCountertopMargin / 100));
-  const simTotalSaleNeto = simSaleFurnitureNeto + simSaleCountertopNeto;
+  // Simulación referencial editable (solo estado local, no afecta proyectos reales)
+  const [simUnifiedCostNeto, setSimUnifiedCostNeto] = useState<number>(2000000);
+  const [simCostFurniture, setSimCostFurniture] = useState<number>(1500000);
+  const [simCostCountertop, setSimCostCountertop] = useState<number>(500000);
+
+  const parseSimCost = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    return cleaned === '' ? 0 : Math.min(999999999, Number(cleaned));
+  };
+
+  const simMarginFurnitureNeto = Math.round(simCostFurniture * (effectiveFurnitureMargin / 100));
+  const simMarginCountertopNeto = Math.round(simCostCountertop * (effectiveCountertopMargin / 100));
+  const simTotalCostNeto = differentiateMargins
+    ? simCostFurniture + simCostCountertop
+    : simUnifiedCostNeto;
+  const simTotalMarginNeto = differentiateMargins
+    ? simMarginFurnitureNeto + simMarginCountertopNeto
+    : Math.round(simUnifiedCostNeto * (effectiveFurnitureMargin / 100));
+  const simTotalSaleNeto = simTotalCostNeto + simTotalMarginNeto;
   const simTotalSaleBruto = Math.round(simTotalSaleNeto * 1.19);
 
   const presets = [0, 20, 35, 50, 75, 100, 150, 200, 300, 500];
@@ -522,20 +535,20 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
             </div>
           )}
 
-          {/* Cuadro Informativo de Valor Unificado al Cliente */}
+          {/* Cuadro Informativo de Valor Unificado al Cliente y Simulación Editable */}
           <div
-            className={`mt-5 p-4 rounded-xl border flex flex-wrap items-center justify-between gap-4 ${
+            className={`mt-5 p-4 rounded-xl border space-y-4 ${
               isLight ? 'bg-white/90 border-emerald-300 text-zinc-900' : 'bg-black/50 border-emerald-500/30 text-slate-100'
             }`}
           >
-            <div className="flex items-start gap-3 max-w-xl">
+            <div className="flex items-start gap-3">
               <Info size={18} className="text-emerald-500 shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed space-y-1">
                 <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider text-[11px]">
                   Lo que verá tu cliente en vivo: Solo el Total Unificado
                 </span>
                 <p className="text-slate-500 dark:text-slate-400">
-                  En el configurador 3D la cifra aparece <strong>completamente consolidada y sin desglose</strong>, protegiendo tus márgenes individuales de muebles y cubiertas ante el cliente sentado a tu lado.
+                  En el configurador 3D la cifra aparece <strong>completamente consolidada y sin desglose</strong>, protegiendo tus márgenes individuales de muebles y cubiertas ante el cliente sentado a tu lado. Los montos de abajo son solo una <strong>simulación referencial editable</strong> y no modifican ningún proyecto real.
                 </p>
                 {differentiateMargins && (
                   <div className="text-[11px] font-mono text-slate-400 pt-1 flex flex-wrap gap-x-4">
@@ -546,16 +559,141 @@ export function LivePricingBackofficeCard({ className = '' }: LivePricingBackoff
               </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
-                Total Venta Proyecto (Simulación)
-              </span>
-              <div className="text-xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-                ${simTotalSaleBruto.toLocaleString('es-CL')} CLP
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-emerald-500/20">
+              {/* 1. Costo Base de Simulación (Neto, Editable) */}
+              <div
+                className={`p-3 rounded-xl border space-y-2 ${
+                  isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/60 border-zinc-800'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold">
+                    Costo Base Simulación (Neto)
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-200/80 dark:bg-zinc-800 text-zinc-600 dark:text-slate-300">
+                    Editable
+                  </span>
+                </div>
+
+                {!differentiateMargins ? (
+                  <div className="space-y-1">
+                    <div
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
+                        isLight
+                          ? 'bg-white border-zinc-300 focus-within:border-emerald-500'
+                          : 'bg-black/40 border-zinc-700 focus-within:border-emerald-500'
+                      }`}
+                    >
+                      <span className="text-xs font-mono font-bold text-slate-400">$</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        aria-label="Costo neto base de simulación"
+                        value={simUnifiedCostNeto.toLocaleString('es-CL')}
+                        onChange={(e) => setSimUnifiedCostNeto(parseSimCost(e.target.value))}
+                        className="w-full bg-transparent text-right font-mono font-bold text-sm focus:outline-none"
+                      />
+                      <span className="text-[10px] font-mono text-slate-400">CLP</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block">
+                      Monto referencial neto para probar el margen
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-1 block">
+                        <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 block">
+                          Muebles (Neto)
+                        </span>
+                        <div
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg border ${
+                            isLight
+                              ? 'bg-white border-zinc-300 focus-within:border-amber-500'
+                              : 'bg-black/40 border-zinc-700 focus-within:border-amber-500'
+                          }`}
+                        >
+                          <span className="text-[11px] font-mono text-slate-400">$</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            aria-label="Costo neto simulado muebles"
+                            value={simCostFurniture.toLocaleString('es-CL')}
+                            onChange={(e) => setSimCostFurniture(parseSimCost(e.target.value))}
+                            className="w-full bg-transparent text-right font-mono font-bold text-xs focus:outline-none"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="space-y-1 block">
+                        <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 block">
+                          Cubiertas (Neto)
+                        </span>
+                        <div
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg border ${
+                            isLight
+                              ? 'bg-white border-zinc-300 focus-within:border-sky-500'
+                              : 'bg-black/40 border-zinc-700 focus-within:border-sky-500'
+                          }`}
+                        >
+                          <span className="text-[11px] font-mono text-slate-400">$</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            aria-label="Costo neto simulado cubiertas"
+                            value={simCostCountertop.toLocaleString('es-CL')}
+                            onChange={(e) => setSimCostCountertop(parseSimCost(e.target.value))}
+                            className="w-full bg-transparent text-right font-mono font-bold text-xs focus:outline-none"
+                          />
+                        </div>
+                      </label>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 block">
+                      Total base neto: ${simTotalCostNeto.toLocaleString('es-CL')} CLP
+                    </span>
+                  </div>
+                )}
               </div>
-              <span className="text-[10px] text-slate-400 font-semibold block">
-                (IVA 19% Incluido • Cifra Unificada)
-              </span>
+
+              {/* 2. Monto del Margen Comercial (Ganancia Neta) */}
+              <div
+                className={`p-3 rounded-xl border flex flex-col justify-between ${
+                  isLight ? 'bg-amber-50/60 border-amber-200' : 'bg-amber-950/20 border-amber-500/30'
+                }`}
+              >
+                <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wider font-bold block">
+                  Monto del Margen (Neto)
+                </span>
+                <div className="text-xl font-extrabold font-mono text-amber-600 dark:text-amber-400 my-1">
+                  +${simTotalMarginNeto.toLocaleString('es-CL')} CLP
+                </div>
+                {differentiateMargins ? (
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
+                    M: +${simMarginFurnitureNeto.toLocaleString('es-CL')} • C: +${simMarginCountertopNeto.toLocaleString('es-CL')}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                    Ganancia comercial (+{effectiveFurnitureMargin}% sobre costo neto)
+                  </span>
+                )}
+              </div>
+
+              {/* 3. Valor Final de Venta al Cliente (Bruto con IVA) */}
+              <div
+                className={`p-3 rounded-xl border flex flex-col justify-between ${
+                  isLight ? 'bg-emerald-50/70 border-emerald-300' : 'bg-emerald-950/25 border-emerald-500/40'
+                }`}
+              >
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wider font-bold block">
+                  Valor Final de Venta (Simulación)
+                </span>
+                <div className="text-xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 my-1">
+                  ${simTotalSaleBruto.toLocaleString('es-CL')} CLP
+                </div>
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
+                  Neto ${simTotalSaleNeto.toLocaleString('es-CL')} + IVA 19% • Cifra Unificada
+                </span>
+              </div>
             </div>
           </div>
         </div>
