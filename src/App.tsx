@@ -1,7 +1,8 @@
-import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { Home } from './pages/Home';
 import { ClosetConfigurator } from './pages/ClosetConfigurator';
 import { KitchenConfigurator } from './pages/KitchenConfigurator';
+import { KitchenAssemblyViewer } from './pages/KitchenAssemblyViewer';
 import { SpecialFurnitureConfigurator } from './pages/SpecialFurnitureConfigurator';
 import { HplBathroomConfigurator } from './pages/HplBathroomConfigurator';
 import OfficeConfigurator from './pages/OfficeConfigurator';
@@ -57,9 +58,37 @@ export default function App() {
   const [route, setRoute] = useState<'home' | 'kitchen'>('home');
   const checkSession = useSupabaseAuthStore((state) => state.checkSession);
 
+  const assemblyParams = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const snapshotId = params.get('assembly');
+    if (!snapshotId) return null;
+    return {
+      snapshotId,
+      cabinetId: params.get('cab') || '',
+      partKey: params.get('part') || '__cabinet__',
+      partCode: params.get('code') || undefined,
+    };
+  }, []);
+
   useEffect(() => {
-    checkSession();
-  }, [checkSession]);
+    if (!assemblyParams) {
+      checkSession();
+    }
+  }, [checkSession, assemblyParams]);
+
+  if (assemblyParams) {
+    return (
+      <ErrorBoundary>
+        <KitchenAssemblyViewer
+          snapshotId={assemblyParams.snapshotId}
+          cabinetId={assemblyParams.cabinetId}
+          partKey={assemblyParams.partKey}
+          partCode={assemblyParams.partCode}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

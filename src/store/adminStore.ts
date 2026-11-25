@@ -6,6 +6,17 @@ import { useKitchenStore } from './kitchenStore';
 export type ProjectType = 'closet' | 'kitchen' | 'special' | 'hpl-bathroom' | 'office' | 'chair';
 export type ProjectStatus = 'designed' | 'quoted' | 'sold' | 'in_production';
 
+export interface ProjectAiRender {
+  id: string;
+  url: string;
+  createdAt: string;
+  propertyType?: string;
+  environment?: string;
+  lighting?: string;
+  hasPeople?: boolean;
+  hasProps?: boolean;
+}
+
 export interface ProjectItem {
   id: string;
   name: string;
@@ -26,6 +37,7 @@ export interface ProjectItem {
   userRubro?: string;
   userCity?: string;
   thumbnail?: string;
+  aiRenders?: ProjectAiRender[];
 }
 
 export type SupplyCategory = 
@@ -317,6 +329,18 @@ export interface AdminState {
   setThemeMode: (mode: 'dark' | 'light') => void;
   toggleThemeMode: () => void;
 
+  // Visualización en Vivo de Precios / Modo Cliente
+  livePriceDisplayMode: 'none' | 'cost' | 'sale';
+  setLivePriceDisplayMode: (mode: 'none' | 'cost' | 'sale') => void;
+  liveSaleMarginPercent: number; // Margen unificado 0% a 500%
+  setLiveSaleMarginPercent: (margin: number) => void;
+  liveSaleMarginFurniturePercent: number; // Margen muebles 0% a 500%
+  setLiveSaleMarginFurniturePercent: (margin: number) => void;
+  liveSaleMarginCountertopPercent: number; // Margen cubiertas 0% a 500%
+  setLiveSaleMarginCountertopPercent: (margin: number) => void;
+  differentiateMargins: boolean; // Si los márgenes de cubiertas y muebles están diferenciados
+  setDifferentiateMargins: (enabled: boolean) => void;
+
   // Proveedores
   providers: ProviderItem[];
   addProvider: (provider: Omit<ProviderItem, 'id' | 'createdAt'>) => string;
@@ -325,6 +349,8 @@ export interface AdminState {
 
   // Proyectos
   projects: ProjectItem[];
+  activeProjectId: string | null;
+  setActiveProjectId: (id: string | null) => void;
   saveProject: (project: Omit<ProjectItem, 'id' | 'date'>) => string;
   updateProject: (id: string, updates: Partial<ProjectItem>) => void;
   renameProject: (id: string, newName: string, newClient?: string) => void;
@@ -332,6 +358,8 @@ export interface AdminState {
   deleteProject: (id: string) => void;
   clearAllProjects: () => void;
   syncCloudProjects: () => Promise<void>;
+  addProjectAiRender: (projectId: string, render: Omit<ProjectAiRender, 'id' | 'createdAt'>) => void;
+  deleteProjectAiRender: (projectId: string, renderId: string) => void;
 
   // Estadísticas Anónimas para Proveedores
   getProviderStats: (providerIdOrName: string) => ProviderStats;
@@ -1110,6 +1138,1292 @@ export const DEFAULT_SUPPLIES: SupplyItem[] = [
     supplier: 'Sika Chile',
     stockRef: 180,
     notes: 'Barrera de agua y vapor en solera basal'
+  },
+
+  // --- TIRADORES Y MANILLAS DE CATÁLOGO ---
+  {
+    id: 'tirador-forza',
+    category: 'herrajes',
+    name: 'Tirador Forza (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 96-320mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa para frentes y puertas'
+  },
+  {
+    id: 'tirador-ce',
+    category: 'herrajes',
+    name: 'Tirador CE (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto 100-400mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior en reverso de puerta/frente'
+  },
+  {
+    id: 'tirador-madrid',
+    category: 'herrajes',
+    name: 'Tirador Madrid (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm con postes entrecentros 96-320mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador barra tubular clásico'
+  },
+  {
+    id: 'tirador-balin',
+    category: 'herrajes',
+    name: 'Tirador Balín (Pomo Cilíndrico Aluminio)',
+    code: 'HER-TIR-BALIN',
+    spec: 'Pomo cilíndrico compacto de aluminio Ø22-28mm con muesca ergonómica',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Punto único de fijación'
+  },
+  {
+    id: 'tirador-denver',
+    category: 'herrajes',
+    name: 'Tirador Denver (Asa Prismática Zinc Alloy)',
+    code: 'HER-TIR-DENVER',
+    spec: 'Asa prismática recta de aleación de zinc con patas macizas integradas',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador moderno para puertas y gavetas'
+  },
+  {
+    id: 'tirador-berlin',
+    category: 'herrajes',
+    name: 'Perilla Berlín (Pomo Esférico Ø25mm)',
+    code: 'HER-TIR-BERLIN',
+    spec: 'Perilla esférica clásica de Ø25mm con peana cónica torneada',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación punto único con tornillo M4'
+  },
+  {
+    id: 'tirador-oslo',
+    category: 'herrajes',
+    name: 'Tirador Oslo (Perfil Empotrado)',
+    code: 'HER-TIR-OSLO',
+    spec: 'Perfil tirador empotrado con pestaña de agarre discreto',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación posterior para frentes de 15/18mm'
+  },
+
+  // --- PERFILERÍA Y ACCESORIOS GOLA ---
+  {
+    id: 'gola-perfil-l-3m',
+    category: 'herrajes',
+    name: 'Perfil Gola Superior "L" Provelcar x175 (Tira 3m)',
+    code: 'HER-GOLA-L-3M',
+    spec: 'Perfil gola horizontal bajo cubierta en aluminio anodizado/negro tira 3000mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 60,
+    notes: 'Bajo cubierta muebles base e islas'
+  },
+  {
+    id: 'gola-perfil-c-3m',
+    category: 'herrajes',
+    name: 'Perfil Gola Intermedio "C" Provelcar x176 (Tira 3m)',
+    code: 'HER-GOLA-C-3M',
+    spec: 'Perfil gola horizontal intermedio paso de cajón tira 3000mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 60,
+    notes: 'Paso intermedio entre gavetas'
+  },
+  {
+    id: 'gola-escuadra-fijacion',
+    category: 'herrajes',
+    name: 'Escuadras de Fijación Trasera para Perfil Gola',
+    code: 'HER-GOLA-ESC',
+    spec: 'Escuadra metálica con regulación para fijación de perfil Gola al casco',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 200,
+    notes: '2 por módulo para Gola L y 2 por cada tramo Gola C'
+  },
+  {
+    id: 'gola-conector-esquinero-90',
+    category: 'herrajes',
+    name: 'Conector Esquinero Interior 90° para Gola',
+    code: 'HER-GOLA-ESQ-90',
+    spec: 'Accesorio de unión inglete 90° para perfiles Gola en esquinas',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 80,
+    notes: 'Encuentros en L de muebles base'
+  },
+
+  // --- BISAGRAS ESPECIALES Y SISTEMAS ELEVABLES ---
+  {
+    id: 'bisagra-155-codo-cero',
+    category: 'herrajes',
+    name: 'Bisagras Especiales 155°/165° Codo Cero (Apertura Libre Gavetero)',
+    code: 'HER-BIS-155-CC',
+    spec: 'Bisagra codo cero 155° para extracción total de cajones interiores',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Häfele',
+    stockRef: 50,
+    notes: 'Torres despenseras y gaveteros interiores'
+  },
+  {
+    id: 'bisagra-bifold-rincon',
+    category: 'herrajes',
+    name: 'Bisagras Rincón Bi-Fold Articuladas (Puerta Plegable Esquinero)',
+    code: 'HER-BIS-BIFOLD',
+    spec: 'Bisagra de unión intermedia articulada para dos hojas en L',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Häfele',
+    stockRef: 40,
+    notes: 'Mueble esquinero en L'
+  },
+  {
+    id: 'bisagra-gran-angulo-170',
+    category: 'herrajes',
+    name: 'Bisagras Gran Ángulo 165°/170° Cierre Suave (Anclaje a Mueble)',
+    code: 'HER-BIS-ANG-170',
+    spec: 'Bisagra gran angular 170° con amortiguación integrada para lateral',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Häfele',
+    stockRef: 40,
+    notes: 'Hoja principal de mueble esquinero'
+  },
+  {
+    id: 'piston-gas-elevador-100n',
+    category: 'herrajes',
+    name: 'Pistones a Gas / Sistema Elevador Aventos (100N / Cierre Suave)',
+    code: 'HER-PIST-100N',
+    spec: 'Pistón neumático de fuerza 100N para puertas abatibles basculantes',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 60,
+    notes: 'Muebles aéreos abatibles superiores'
+  },
+  {
+    id: 'sistema-elevable-hafele-free',
+    category: 'herrajes',
+    name: 'Sistema Elevable Häfele Free Flap / Free Fold (Soft-Close)',
+    code: 'HER-FREE-FLAP',
+    spec: 'Mecanismo elevable multiposición con freno y cierre suave integrado',
+    unit: 'Juegos',
+    priceClp: 0,
+    supplier: 'Häfele',
+    stockRef: 30,
+    notes: 'Puertas abatibles dobles o pesadas'
+  },
+
+  // --- CORREDERAS TELESCÓPICAS POR LARGO NOMINAL (NL) ---
+  {
+    id: 'corr-tel-300',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (300mm NL)',
+    code: 'HER-CORR-TEL-300',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 300mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 80,
+    notes: 'Para muebles de profundidad reducida'
+  },
+  {
+    id: 'corr-tel-350',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (350mm NL)',
+    code: 'HER-CORR-TEL-350',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 350mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 80,
+    notes: 'Para muebles de profundidad 400mm'
+  },
+  {
+    id: 'corr-tel-400',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (400mm NL)',
+    code: 'HER-CORR-TEL-400',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 400mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 80,
+    notes: 'Para muebles de profundidad 450mm'
+  },
+  {
+    id: 'corr-tel-450',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (450mm NL)',
+    code: 'HER-CORR-TEL-450',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 450mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 120,
+    notes: 'Para muebles de profundidad 500mm'
+  },
+  {
+    id: 'corr-tel-550',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (550mm NL)',
+    code: 'HER-CORR-TEL-550',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 550mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 80,
+    notes: 'Para muebles profundos e islas 600-650mm'
+  },
+  {
+    id: 'corr-oculta-soft',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Cierre Suave',
+    code: 'HER-CORR-OCULTA',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium de madera y vitrinas'
+  },
+
+  // --- ACCESORIOS DE CLÓSET Y VENTILACIÓN ---
+  {
+    id: 'closet-barra-ovalada-3m',
+    category: 'herrajes',
+    name: 'Barra de Colgar Ovalada Cromada 30x15mm (Tira 3000mm)',
+    code: 'HER-BARRA-OVAL-3M',
+    spec: 'Tubo de acero cromado ovalado de alta resistencia espesor 1.0mm tira 3m',
+    unit: 'Tiras (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 50,
+    notes: 'Colgado de ropa en clósets y vestidores'
+  },
+  {
+    id: 'closet-brida-lateral',
+    category: 'herrajes',
+    name: 'Soportes Laterales / Bridas para Tubo Ovalado Cromado',
+    code: 'HER-BRIDA-OVAL',
+    spec: 'Soporte zamak niquelado para atornillar a lateral de clóset',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 150,
+    notes: 'Fijación de barra ovalada'
+  },
+  {
+    id: 'rejilla-ventilacion-aluminio',
+    category: 'herrajes',
+    name: 'Rejilla de Ventilación Técnica Aluminio Anodizado (Ranurada Convección)',
+    code: 'HER-REJ-VENT-ALU',
+    spec: 'Rejilla de flujo convectivo para nicho de hornos empotrados 500x80mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar',
+    stockRef: 40,
+    notes: 'Ventilación térmica para torre de hornos'
+  },
+
+  // --- EQUIPAMIENTO: LAVAPLATOS Y ENCIMERAS ---
+  {
+    id: 'lava-alfa-onec-3018',
+    category: 'cubiertas_qstone',
+    name: 'Lavaplatos ALFA ONEC 3018 (Acero Inox 304 Bajo Cubierta)',
+    code: 'ALFA-ONEC-3018',
+    spec: 'Lavaplatos 1 cubeta 775x480x230mm espesor 1.2mm con radio R15',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Sysprotec / Qstone',
+    stockRef: 15,
+    notes: 'Para muebles base lavaplatos de 80cm o más'
+  },
+  {
+    id: 'lava-alfa-twoc-f5858a',
+    category: 'cubiertas_qstone',
+    name: 'Lavaplatos ALFA TWOC F5858A (2 Cubetas Acero Inox 304)',
+    code: 'ALFA-TWOC-F5858A',
+    spec: 'Lavaplatos 2 cubetas 810x480x210mm espesor 1.2mm bajo cubierta',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Sysprotec / Qstone',
+    stockRef: 15,
+    notes: 'Para muebles base lavaplatos de 90cm o más'
+  },
+  {
+    id: 'enci-fdv-design-60',
+    category: 'cubiertas_qstone',
+    name: 'Encimera FDV DESIGN 60 2.0 (4 Quemadores Gas)',
+    code: 'FDV-DES-60',
+    spec: 'Encimera a gas 4 quemadores acero inox parrillas fierro fundido 580x500mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 15,
+    notes: 'Calado 550x470mm en cubierta de cocina'
+  },
+  {
+    id: 'enci-fdv-design-90',
+    category: 'cubiertas_qstone',
+    name: 'Encimera FDV DESIGN 90 2.0 (5 Quemadores Gas Triple Corona)',
+    code: 'FDV-DES-90',
+    spec: 'Encimera a gas 5 quemadores acero inox quemador triple corona 860x500mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 15,
+    notes: 'Calado 830x470mm en cubierta de cocina'
+  },
+
+  // --- ELECTRODOMÉSTICOS EMPOTRABLES Y LIBRES ---
+  {
+    id: 'elec-horno-emp-60',
+    category: 'herrajes',
+    name: 'Horno Eléctrico Empotrable 60cm',
+    code: 'ELEC-HORNO-60',
+    spec: 'Horno eléctrico multifunción empotrable 60cm convección forzada',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 10,
+    notes: 'Instalación en torre de hornos o bajo encimera'
+  },
+  {
+    id: 'elec-micro-emp-38',
+    category: 'herrajes',
+    name: 'Microondas Empotrado con Marco de Acero 38cm',
+    code: 'ELEC-MICRO-EMP',
+    spec: 'Microondas con grill y marco de empotre en acero inoxidable nicho 38cm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 10,
+    notes: 'Torre de hornos superior'
+  },
+  {
+    id: 'elec-micro-portatil',
+    category: 'herrajes',
+    name: 'Microondas Portátil / Sobremesa 25L',
+    code: 'ELEC-MICRO-PORT',
+    spec: 'Microondas sobremesa 25L para nicho abierto',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 10,
+    notes: 'Módulo aéreo con nicho microondas'
+  },
+  {
+    id: 'elec-campana-conic-90',
+    category: 'herrajes',
+    name: 'Campana FDV New Conic 90 (Acero Inox 780 m3/h)',
+    code: 'ELEC-CAMP-CONIC90',
+    spec: 'Campana mural de acero inoxidable 90cm extracción 780 m3/h con filtro antigrasa',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 10,
+    notes: 'Instalación mural vista sobre encimera 90cm'
+  },
+  {
+    id: 'elec-campana-neuflow-60',
+    category: 'herrajes',
+    name: 'Campana Kubli Neu Flow 60 (Extraíble Telescópica 210 m3/h)',
+    code: 'ELEC-CAMP-NEU60',
+    spec: 'Campana empotrada telescópica para mueble aéreo 60cm con frente inox',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 15,
+    notes: 'Módulo aéreo campana empotrada'
+  },
+  {
+    id: 'elec-lavavajillas-12c',
+    category: 'herrajes',
+    name: 'Lavavajillas FDV Active 12C Silver (12 Cubiertos)',
+    code: 'ELEC-LAVAVAJ-12C',
+    spec: 'Lavavajillas bajo cubierta libre instalación 12 cubiertos 598x600x845mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 8,
+    notes: 'Nicho bajo cubierta 60cm'
+  },
+  {
+    id: 'elec-refrigerador-sbs',
+    category: 'herrajes',
+    name: 'Refrigerador FDV SBS SIGNATURE 2.0 513L (Dark Inox)',
+    code: 'ELEC-REFRI-SBS',
+    spec: 'Refrigerador Side by Side No Frost 513L acabado Dark Inox',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 6,
+    notes: 'Espacio refrigerador Side by Side'
+  },
+  {
+    id: 'elec-cocina-unique-90',
+    category: 'herrajes',
+    name: 'Cocina FDV FS UNIQUE 90 (5 Quemadores + Horno 107L)',
+    code: 'ELEC-COCINA-90',
+    spec: 'Cocina de pie acero inox 5 quemadores a gas con horno eléctrico 107L',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'FDV / Kitchen Center',
+    stockRef: 6,
+    notes: 'Espacio cocina de pie 90cm'
+  },
+
+  // --- MUEBLES ESPECIALES Y VITRINAS ---
+  {
+    id: 'vitrina-perfil-acero-25',
+    category: 'herrajes',
+    name: 'Bastidor / Perfil de Acero Cuadrado 25x25x1.5mm (Base Metálica)',
+    code: 'MET-TUB-25X25',
+    spec: 'Perfil estructural tubular de acero 25x25x1.5mm soldado y esmaltado negro mate',
+    unit: 'Metro Lineal',
+    priceClp: 0,
+    supplier: 'Metalmecánica',
+    stockRef: 40,
+    notes: 'Bastidor metálico inferior soldado para muebles especiales'
+  },
+  {
+    id: 'vitrina-cristal-fume-4mm',
+    category: 'herrajes',
+    name: 'Cristal Templado 4mm Bronce / Fumé (Puertas y Repisas)',
+    code: 'GLS-TEM-FUME-4',
+    spec: 'Vidrio templado de seguridad 4mm color fumé cantos pulidos al diamante',
+    unit: 'm²',
+    priceClp: 0,
+    supplier: 'Vidriería',
+    stockRef: 30,
+    notes: 'Puertas de vitrina y repisas transparentes'
+  },
+  {
+    id: 'vitrina-soporte-pelicano',
+    category: 'herrajes',
+    name: 'Soportes de Repisa Pelícano / Perno con Ventosa de Goma',
+    code: 'HER-SOP-PELICANO',
+    spec: 'Soporte niquelado d=5mm con ventosa de silicona transparente antideslizante',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Häfele',
+    stockRef: 120,
+    notes: 'Soporte para repisas de cristal'
+  },
+  {
+    id: 'vitrina-regaton-m8',
+    category: 'herrajes',
+    name: 'Regatones Niveladores Articulados M8 con Base Inox/Goma',
+    code: 'HER-REGATON-M8',
+    spec: 'Espárrago roscado M8x35mm base circular d=30mm pad antirralladuras',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Häfele',
+    stockRef: 60,
+    notes: 'Nivelación de bases metálicas'
+  },
+  {
+    id: 'tornillo-confirmat-7x50',
+    category: 'herrajes',
+    name: 'Pernos Confirmat 7x50mm para Mueble RTA',
+    code: 'INS-CONFIRMAT-7X50',
+    spec: 'Tornillo de ensamble estructural confirmat cabeza allen niquelado',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Häfele',
+    stockRef: 500,
+    notes: 'Ensamble directo de alta firmeza'
+  },
+
+  // --- CABINAS SANITARIAS HPL BAÑO ---
+  {
+    id: 'hpl-pata-inox-jnf',
+    category: 'herrajes',
+    name: 'Pie Regulable H120-150mm Acero Inox AISI 304 (JNF SM.017)',
+    code: 'JNF-SM-017',
+    spec: 'Base regulable para panel HPL al suelo en acero inoxidable AISI 304/316',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 40,
+    notes: 'Cabinas sanitarias para separador y pilastras'
+  },
+  {
+    id: 'hpl-bisagra-inox-jnf',
+    category: 'herrajes',
+    name: 'Bisagras Especiales Acero Inox para Panel HPL 10-13mm (JNF SM.006.B)',
+    code: 'JNF-SM-006B',
+    spec: 'Bisagra de alta resistencia acero inox con retorno y cierre por gravedad',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 50,
+    notes: 'Puertas de cubículos sanitarios HPL'
+  },
+  {
+    id: 'hpl-cerrojo-libre-ocupado',
+    category: 'herrajes',
+    name: 'Cerrojo con Indicador Libre/Ocupado Inox (JNF IN.20.730)',
+    code: 'JNF-IN-20730',
+    spec: 'Cerrojo de seguridad con visor libre/ocupado y desbloqueo de emergencia exterior',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 20,
+    notes: 'Cierre de privacidad para cubículos de baño'
+  },
+  {
+    id: 'hpl-pomo-inox-doble',
+    category: 'herrajes',
+    name: 'Pomo / Tirador Inox Doble para Puerta HPL (JNF IN.00.024)',
+    code: 'JNF-IN-00024',
+    spec: 'Pomo tirador doble pasante en acero inoxidable satinado Ø20mm',
+    unit: 'Juego',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 25,
+    notes: 'Apertura interior/exterior en cabinas HPL'
+  },
+  {
+    id: 'hpl-abrazadera-mural',
+    category: 'herrajes',
+    name: 'Abrazaderas / Escuadras Murales Inox para HPL (JNF SM.010)',
+    code: 'JNF-SM-010',
+    spec: 'Escuadra pinza en acero inoxidable para fijación de paneles HPL a muro',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 60,
+    notes: 'Fijación de divisiones a muros perimetrales'
+  },
+  {
+    id: 'hpl-tubo-estabilizador',
+    category: 'herrajes',
+    name: 'Barra Estabilizadora Superior Tubo Ø25mm Inox (JNF SM.015)',
+    code: 'JNF-SM-015',
+    spec: 'Tubo estabilizador superior de rigidización en acero inoxidable tira 3000mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 15,
+    notes: 'Rigidización frontal superior de batería de cubículos'
+  }
+,
+
+  // --- TIRADORES POR MEDIDA (CATÁLOGO ARQUIFY) ---
+  // Tirador Forza (Asa Recta Aluminio)
+  {
+    id: 'tirador-forza-96',
+    category: 'herrajes',
+    name: 'Tirador Forza 96mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-96',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 96mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa frentes reducidos'
+  },
+  {
+    id: 'tirador-forza-128',
+    category: 'herrajes',
+    name: 'Tirador Forza 128mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-128',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 128mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa estándar'
+  },
+  {
+    id: 'tirador-forza-160',
+    category: 'herrajes',
+    name: 'Tirador Forza 160mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-160',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 160mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa para cajones medianos'
+  },
+  {
+    id: 'tirador-forza-192',
+    category: 'herrajes',
+    name: 'Tirador Forza 192mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-192',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 192mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa para gaveteros'
+  },
+  {
+    id: 'tirador-forza-256',
+    category: 'herrajes',
+    name: 'Tirador Forza 256mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-256',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 256mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa para gaveteros anchos'
+  },
+  {
+    id: 'tirador-forza-320',
+    category: 'herrajes',
+    name: 'Tirador Forza 320mm (Asa Recta Aluminio)',
+    code: 'HER-TIR-FORZA-320',
+    spec: 'Asa recta de aluminio con retorno 90° entrecentros 320mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tipo asa para frentes gran formato y despenseros'
+  },
+
+  // Tirador CE (Perfil Pestaña sobre Canto)
+  {
+    id: 'tirador-ce-100',
+    category: 'herrajes',
+    name: 'Tirador CE 100mm (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE-100',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto largo 100mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior en reverso frentes angostos'
+  },
+  {
+    id: 'tirador-ce-150',
+    category: 'herrajes',
+    name: 'Tirador CE 150mm (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE-150',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto largo 150mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior estándar'
+  },
+  {
+    id: 'tirador-ce-200',
+    category: 'herrajes',
+    name: 'Tirador CE 200mm (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE-200',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto largo 200mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior para puertas y gavetas medianas'
+  },
+  {
+    id: 'tirador-ce-300',
+    category: 'herrajes',
+    name: 'Tirador CE 300mm (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE-300',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto largo 300mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior para gaveteros anchos'
+  },
+  {
+    id: 'tirador-ce-400',
+    category: 'herrajes',
+    name: 'Tirador CE 400mm (Perfil Pestaña sobre Canto)',
+    code: 'HER-TIR-CE-400',
+    spec: 'Perfil pestaña plana atornillado posterior sobre canto largo 400mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Montaje posterior para frentes de gran dimensión'
+  },
+
+  // Tirador Madrid (Barra Tubular Inox)
+  {
+    id: 'tirador-madrid-96',
+    category: 'herrajes',
+    name: 'Tirador Madrid 96mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-96',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 96mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular frentes angostos'
+  },
+  {
+    id: 'tirador-madrid-128',
+    category: 'herrajes',
+    name: 'Tirador Madrid 128mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-128',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 128mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular clásico estándar'
+  },
+  {
+    id: 'tirador-madrid-160',
+    category: 'herrajes',
+    name: 'Tirador Madrid 160mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-160',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 160mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular cajones medianos'
+  },
+  {
+    id: 'tirador-madrid-192',
+    category: 'herrajes',
+    name: 'Tirador Madrid 192mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-192',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 192mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular gaveteros'
+  },
+  {
+    id: 'tirador-madrid-256',
+    category: 'herrajes',
+    name: 'Tirador Madrid 256mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-256',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 256mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular gavetas anchas'
+  },
+  {
+    id: 'tirador-madrid-320',
+    category: 'herrajes',
+    name: 'Tirador Madrid 320mm (Barra Tubular Inox)',
+    code: 'HER-TIR-MADRID-320',
+    spec: 'Barra cilíndrica de acero inoxidable Ø12mm entrecentros 320mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Tirador tubular puertas altas y columnas'
+  },
+
+  // Tirador Balín (Pomo Cilíndrico Aluminio)
+  {
+    id: 'tirador-balin-22',
+    category: 'herrajes',
+    name: 'Tirador Balín Ø22mm (Pomo Cilíndrico Aluminio)',
+    code: 'HER-TIR-BALIN-22',
+    spec: 'Pomo cilíndrico de aluminio Ø22mm con muesca ergonómica punto único',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Punto único fijación tornillo M4'
+  },
+  {
+    id: 'tirador-balin-25',
+    category: 'herrajes',
+    name: 'Tirador Balín Ø25mm (Pomo Cilíndrico Aluminio)',
+    code: 'HER-TIR-BALIN-25',
+    spec: 'Pomo cilíndrico de aluminio Ø25mm con muesca ergonómica punto único',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Punto único estándar fijación tornillo M4'
+  },
+  {
+    id: 'tirador-balin-28',
+    category: 'herrajes',
+    name: 'Tirador Balín Ø28mm (Pomo Cilíndrico Aluminio)',
+    code: 'HER-TIR-BALIN-28',
+    spec: 'Pomo cilíndrico de aluminio Ø28mm con muesca ergonómica punto único',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Punto único formato mayor fijación tornillo M4'
+  },
+
+  // Tirador Denver (Asa Prismática Zinc Alloy)
+  {
+    id: 'tirador-denver-64',
+    category: 'herrajes',
+    name: 'Tirador Denver 64mm (Asa Prismática Zinc Alloy)',
+    code: 'HER-TIR-DENVER-64',
+    spec: 'Asa prismática de zinc alloy con patas integradas a 90° entrecentros 64mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Asa compacta frentes reducidos'
+  },
+  {
+    id: 'tirador-denver-96',
+    category: 'herrajes',
+    name: 'Tirador Denver 96mm (Asa Prismática Zinc Alloy)',
+    code: 'HER-TIR-DENVER-96',
+    spec: 'Asa prismática de zinc alloy con patas integradas a 90° entrecentros 96mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Asa moderna entrecentros 96mm'
+  },
+  {
+    id: 'tirador-denver-128',
+    category: 'herrajes',
+    name: 'Tirador Denver 128mm (Asa Prismática Zinc Alloy)',
+    code: 'HER-TIR-DENVER-128',
+    spec: 'Asa prismática de zinc alloy con patas integradas a 90° entrecentros 128mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Asa moderna estándar entrecentros 128mm'
+  },
+  {
+    id: 'tirador-denver-160',
+    category: 'herrajes',
+    name: 'Tirador Denver 160mm (Asa Prismática Zinc Alloy)',
+    code: 'HER-TIR-DENVER-160',
+    spec: 'Asa prismática de zinc alloy con patas integradas a 90° entrecentros 160mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Asa moderna cajones anchos entrecentros 160mm'
+  },
+
+  // Perilla Berlín (Pomo Esférico Ø25mm)
+  {
+    id: 'tirador-berlin-25',
+    category: 'herrajes',
+    name: 'Perilla Berlín Ø25mm (Pomo Esférico Zinc Alloy)',
+    code: 'HER-TIR-BERLIN-25',
+    spec: 'Perilla esférica de Ø25mm con peana cónica torneada en zinc alloy',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Punto único con tornillo M4'
+  },
+
+  // Tirador Oslo (Perfil Empotrado Aluminio)
+  {
+    id: 'tirador-oslo-100',
+    category: 'herrajes',
+    name: 'Tirador Oslo 100mm (Perfil Empotrado Aluminio)',
+    code: 'HER-TIR-OSLO-100',
+    spec: 'Perfil tirador empotrado con pestaña de agarre discreto largo 100mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación posterior frentes pequeños'
+  },
+  {
+    id: 'tirador-oslo-150',
+    category: 'herrajes',
+    name: 'Tirador Oslo 150mm (Perfil Empotrado Aluminio)',
+    code: 'HER-TIR-OSLO-150',
+    spec: 'Perfil tirador empotrado con pestaña de agarre discreto largo 150mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación posterior frentes estándar'
+  },
+  {
+    id: 'tirador-oslo-200',
+    category: 'herrajes',
+    name: 'Tirador Oslo 200mm (Perfil Empotrado Aluminio)',
+    code: 'HER-TIR-OSLO-200',
+    spec: 'Perfil tirador empotrado con pestaña de agarre discreto largo 200mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación posterior gavetas medianas'
+  },
+  {
+    id: 'tirador-oslo-300',
+    category: 'herrajes',
+    name: 'Tirador Oslo 300mm (Perfil Empotrado Aluminio)',
+    code: 'HER-TIR-OSLO-300',
+    spec: 'Perfil tirador empotrado con pestaña de agarre discreto largo 300mm',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Catálogo Tiradores',
+    stockRef: 100,
+    notes: 'Fijación posterior gavetas grandes'
+  },
+
+  // --- CORREDERAS POR LARGO NOMINAL (TELESCÓPICAS Y OCULTAS) ---
+  {
+    id: 'corr-tel-250',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (250mm NL)',
+    code: 'HER-CORR-TEL-250',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 250mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar / DTC',
+    stockRef: 60,
+    notes: 'Para muebles de profundidad ultra compacta'
+  },
+  {
+    id: 'corr-tel-500',
+    category: 'herrajes',
+    name: 'Corredera Telescópica 45mm Cierre Suave (500mm NL)',
+    code: 'HER-CORR-TEL-500-NL',
+    spec: 'Extracción total con rodamientos de bolas y amortiguación hidráulica 500mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Provelcar / DTC',
+    stockRef: 150,
+    notes: 'Para muebles estándar de profundidad 550-600mm'
+  },
+  {
+    id: 'corr-oculta-300',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (300mm NL)',
+    code: 'HER-CORR-OCU-300',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 300mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium profundidad 350mm'
+  },
+  {
+    id: 'corr-oculta-350',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (350mm NL)',
+    code: 'HER-CORR-OCU-350',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 350mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium profundidad 400mm'
+  },
+  {
+    id: 'corr-oculta-400',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (400mm NL)',
+    code: 'HER-CORR-OCU-400',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 400mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium profundidad 450mm'
+  },
+  {
+    id: 'corr-oculta-450',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (450mm NL)',
+    code: 'HER-CORR-OCU-450',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 450mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium profundidad 500mm'
+  },
+  {
+    id: 'corr-oculta-500',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (500mm NL)',
+    code: 'HER-CORR-OCU-500',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 500mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 50,
+    notes: 'Cajones premium profundidad estándar 550-600mm'
+  },
+  {
+    id: 'corr-oculta-550',
+    category: 'herrajes',
+    name: 'Corredera Oculta Bajo Fondo Sincronizada Soft-Close (550mm NL)',
+    code: 'HER-CORR-OCU-550',
+    spec: 'Montaje bajo fondo con clip de extracción rápida y regulación 3D 550mm',
+    unit: 'Juego (Par)',
+    priceClp: 0,
+    supplier: 'Häfele / Blum',
+    stockRef: 40,
+    notes: 'Cajones premium islas y muebles profundos'
+  },
+
+  // --- ZÓCALOS POR ALTURA Y ACABADO ---
+  {
+    id: 'zocalo-alu-100-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=100mm Anodizado Natural (Tira 3m)',
+    code: 'ZOC-ALU-100-3M',
+    spec: 'Perfil de PVC coextruido con lámina de aluminio anodizado y labio sello de agua H=100mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 40,
+    notes: 'Zócalo bajo muebles cocina estándar'
+  },
+  {
+    id: 'zocalo-negro-100-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=100mm Negro Mate (Tira 3m)',
+    code: 'ZOC-NEG-100-3M',
+    spec: 'Perfil de PVC con lámina de aluminio negro mate y labio sello de agua H=100mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 40,
+    notes: 'Zócalo muebles cocina acabado negro'
+  },
+  {
+    id: 'zocalo-alu-120-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=120mm Anodizado Natural (Tira 3m)',
+    code: 'ZOC-ALU-120-3M',
+    spec: 'Perfil de PVC coextruido con lámina de aluminio anodizado y labio sello de agua H=120mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 30,
+    notes: 'Zócalo intermedio muebles cocina'
+  },
+  {
+    id: 'zocalo-negro-120-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=120mm Negro Mate (Tira 3m)',
+    code: 'ZOC-NEG-120-3M',
+    spec: 'Perfil de PVC con lámina de aluminio negro mate y labio sello de agua H=120mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 30,
+    notes: 'Zócalo intermedio muebles cocina acabado negro'
+  },
+  {
+    id: 'zocalo-alu-150-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=150mm Anodizado Natural (Tira 3m)',
+    code: 'ZOC-ALU-150-3M',
+    spec: 'Perfil de PVC coextruido con lámina de aluminio anodizado y labio sello de agua H=150mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 30,
+    notes: 'Zócalo alto muebles cocina y ergonomía'
+  },
+  {
+    id: 'zocalo-negro-150-3m',
+    category: 'herrajes',
+    name: 'Zócalo PVC/Aluminio H=150mm Negro Mate (Tira 3m)',
+    code: 'ZOC-NEG-150-3M',
+    spec: 'Perfil de PVC con lámina de aluminio negro mate y labio sello de agua H=150mm',
+    unit: 'Tira (3m)',
+    priceClp: 0,
+    supplier: 'Provelcar / Volpato',
+    stockRef: 30,
+    notes: 'Zócalo alto muebles cocina acabado negro'
+  },
+
+  // --- PATAS REGULABLES POR ALTURA ---
+  {
+    id: 'patas-regulables-60',
+    category: 'herrajes',
+    name: 'Pata Plástica Regulable H=60-80mm (Zócalo Bajo / Clóset)',
+    code: 'HER-PATA-REG-60',
+    spec: 'Polímero reforzado altura regulable 60 a 80mm soporta 150 kg/pata',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Häfele / Provelcar',
+    stockRef: 200,
+    notes: 'Módulos con zócalo bajo y bases de clóset'
+  },
+  {
+    id: 'patas-regulables-150',
+    category: 'herrajes',
+    name: 'Pata Plástica Regulable H=150-180mm (Zócalo Alto)',
+    code: 'HER-PATA-REG-150',
+    spec: 'Polímero reforzado altura regulable 150 a 180mm soporta 150 kg/pata',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Häfele / Provelcar',
+    stockRef: 200,
+    notes: 'Módulos con zócalo de 150mm para lavavajillas y ergonomía'
+  },
+
+  // --- BISAGRAS CAZOLETA POR CODO / MONTAJE ---
+  {
+    id: 'bisagra-semicurva-110',
+    category: 'herrajes',
+    name: 'Bisagra Cazoleta 35mm Semicurva Clip-On 110° Cierre Suave (Codo 9)',
+    code: 'HER-BIS-CS-SEMI',
+    spec: 'Montaje semi-solapado codo 9mm con pistón hidráulico y base 3D',
+    unit: 'Par',
+    priceClp: 0,
+    supplier: 'DTC / Blum / Häfele',
+    stockRef: 150,
+    notes: 'Para puertas intermedias en montantes compartidos'
+  },
+  {
+    id: 'bisagra-curva-110',
+    category: 'herrajes',
+    name: 'Bisagra Cazoleta 35mm Curva Clip-On 110° Cierre Suave (Codo 18)',
+    code: 'HER-BIS-CS-CURVA',
+    spec: 'Montaje interior embutido codo 18mm con pistón hidráulico y base 3D',
+    unit: 'Par',
+    priceClp: 0,
+    supplier: 'DTC / Blum / Häfele',
+    stockRef: 150,
+    notes: 'Para puertas embutidas al interior del vano del casco'
+  },
+
+  // --- PISTONES A GAS POR FUERZA (NEWTONS) ---
+  {
+    id: 'piston-gas-elevador-60n',
+    category: 'herrajes',
+    name: 'Pistón a Gas Elevador 60N Cierre Suave (Puertas Livianas)',
+    code: 'HER-PIST-60N',
+    spec: 'Pistón neumático de fuerza 60N carrera estándar para abatibles pequeños',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 40,
+    notes: 'Puertas abatibles superiores de formato chico o vidriadas'
+  },
+  {
+    id: 'piston-gas-elevador-80n',
+    category: 'herrajes',
+    name: 'Pistón a Gas Elevador 80N Cierre Suave (Puertas Medianas)',
+    code: 'HER-PIST-80N',
+    spec: 'Pistón neumático de fuerza 80N carrera estándar para abatibles medianos',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 50,
+    notes: 'Puertas abatibles superiores estándar de 60-80cm'
+  },
+  {
+    id: 'piston-gas-elevador-120n',
+    category: 'herrajes',
+    name: 'Pistón a Gas Elevador 120N Cierre Suave (Puertas Pesadas)',
+    code: 'HER-PIST-120N',
+    spec: 'Pistón neumático de fuerza 120N carrera reforzada para abatibles pesados',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'Provelcar / Ducasse',
+    stockRef: 40,
+    notes: 'Puertas abatibles superiores de gran formato 90-120cm'
+  },
+
+  // --- TAPACANTOS POR ESPESOR Y ANCHO ---
+  {
+    id: 'canto-pvc-10',
+    category: 'herrajes',
+    name: 'Tapacanto PVC 1.00 mm x 22 mm Semi-Grueso',
+    code: 'CANTO-PVC-100',
+    spec: 'PVC rígido semigrueso 1.0mm con primer para cantos vistos de uso medio',
+    unit: 'Metro lineal',
+    priceClp: 0,
+    supplier: 'Provelcar / Rehau',
+    stockRef: 800,
+    notes: 'Cantos de repisas y frentes alternativos'
+  },
+  {
+    id: 'canto-pvc-45',
+    category: 'herrajes',
+    name: 'Tapacanto PVC 2.00 mm x 45 mm para Frentes Engrosados y Cubiertas',
+    code: 'CANTO-PVC-200X45',
+    spec: 'PVC rígido biselado ancho 45mm espesor 2mm para paneles regruesados de 30-36mm',
+    unit: 'Metro lineal',
+    priceClp: 0,
+    supplier: 'Provelcar / Rehau',
+    stockRef: 500,
+    notes: 'Cubiertas melamínicas engrosadas y frentes robustos'
+  },
+
+  // --- CUBIERTAS QSTONE (MANO DE OBRA Y REGRUESO) ---
+  {
+    id: 'qs-canto-inglete-4cm',
+    category: 'cubiertas_qstone',
+    name: 'Faldón Ingleteado a 45° Regrueso 40mm Cubierta Cuarzo/Sintetizado',
+    code: 'QS-INGLETE-40',
+    spec: 'Corte inglete a 45° y pegado con resina epóxica para dar efecto de faldón regruesado de 4cm',
+    unit: 'Metro lineal',
+    priceClp: 0,
+    supplier: 'Mano de Obra Taller Cubiertas',
+    stockRef: 100,
+    notes: 'Faldones vistos en cubiertas de cuarzo y piedra sinterizada'
+  },
+
+  // --- CABINAS HPL BAÑO (PATAS Y ELEMENTOS DIMENSIONALES JNF) ---
+  {
+    id: 'hpl-pata-sm017-xl',
+    category: 'herrajes',
+    name: 'Pie Regulable H150-180mm Acero Inox AISI 304 (JNF SM.017.XL)',
+    code: 'JNF-SM-017-XL',
+    spec: 'Base regulable para panel HPL al suelo altura extendida 150-180mm inox AISI 304',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 30,
+    notes: 'Cabinas sanitarias para recintos con pendientes de desagüe acentuadas'
+  },
+  {
+    id: 'hpl-pata-sm070',
+    category: 'herrajes',
+    name: 'Pie Cuadrado 20x20mm H150mm Acero Inox AISI 304 (JNF SM.070)',
+    code: 'JNF-SM-070',
+    spec: 'Base de sección cuadrada 20x20mm diseño minimalista inox AISI 304',
+    unit: 'Unid.',
+    priceClp: 0,
+    supplier: 'JNF Portugal',
+    stockRef: 30,
+    notes: 'Cabinas sanitarias de diseño arquitectónico premium'
   }
 ];
 
@@ -1620,6 +2934,26 @@ const getInitialState = () => {
         manufacturingRates: parsed.manufacturingRates
           ? { ...DEFAULT_MANUFACTURING_RATES, ...parsed.manufacturingRates }
           : DEFAULT_MANUFACTURING_RATES,
+        livePriceDisplayMode: (['none', 'cost', 'sale'].includes(parsed.livePriceDisplayMode)
+          ? parsed.livePriceDisplayMode
+          : 'none') as 'none' | 'cost' | 'sale',
+        liveSaleMarginPercent:
+          typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
+        liveSaleMarginFurniturePercent:
+          typeof parsed.liveSaleMarginFurniturePercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginFurniturePercent)))
+            : typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
+        liveSaleMarginCountertopPercent:
+          typeof parsed.liveSaleMarginCountertopPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginCountertopPercent)))
+            : typeof parsed.liveSaleMarginPercent === 'number'
+            ? Math.max(0, Math.min(500, Math.round(parsed.liveSaleMarginPercent)))
+            : 35,
+        differentiateMargins: Boolean(parsed.differentiateMargins),
       };
     }
   } catch (e) {
@@ -1635,6 +2969,11 @@ const getInitialState = () => {
     supplies: mergeTexturesIntoSupplies(DEFAULT_SUPPLIES, DEFAULT_CUSTOM_TEXTURES),
     textures: DEFAULT_CUSTOM_TEXTURES,
     manufacturingRates: DEFAULT_MANUFACTURING_RATES,
+    livePriceDisplayMode: 'none' as 'none' | 'cost' | 'sale',
+    liveSaleMarginPercent: 35,
+    liveSaleMarginFurniturePercent: 35,
+    liveSaleMarginCountertopPercent: 35,
+    differentiateMargins: false,
   };
 };
 
@@ -1678,6 +3017,11 @@ const saveToLocalStorage = (state: {
   supplies: SupplyItem[];
   textures: CustomTextureItem[];
   manufacturingRates?: ManufacturingRateConfig;
+  livePriceDisplayMode?: 'none' | 'cost' | 'sale';
+  liveSaleMarginPercent?: number;
+  liveSaleMarginFurniturePercent?: number;
+  liveSaleMarginCountertopPercent?: number;
+  differentiateMargins?: boolean;
 }) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
 
@@ -1838,6 +3182,11 @@ export const useAdminStore = create<AdminState>((set, get) => {
         supplies: updated.supplies,
         textures: updated.textures,
         manufacturingRates: updated.manufacturingRates,
+        livePriceDisplayMode: updated.livePriceDisplayMode,
+        liveSaleMarginPercent: updated.liveSaleMarginPercent,
+        liveSaleMarginFurniturePercent: updated.liveSaleMarginFurniturePercent,
+        liveSaleMarginCountertopPercent: updated.liveSaleMarginCountertopPercent,
+        differentiateMargins: updated.differentiateMargins,
       });
       return updated;
     });
@@ -2392,6 +3741,10 @@ export const useAdminStore = create<AdminState>((set, get) => {
     },
 
     projects: initial.projects,
+    activeProjectId: null,
+    setActiveProjectId: (id: string | null) => {
+      set({ activeProjectId: id });
+    },
 
     saveProject: (projectData) => {
       const newId = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -2411,6 +3764,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       };
       const currentProjects = get().projects;
       persist({ projects: [newProj, ...currentProjects] });
+      set({ activeProjectId: newId });
       return newId;
     },
 
@@ -2455,6 +3809,38 @@ export const useAdminStore = create<AdminState>((set, get) => {
 
     clearAllProjects: () => {
       persist({ projects: [] });
+    },
+
+    addProjectAiRender: (projectId, renderData) => {
+      const newRender: ProjectAiRender = {
+        id: `render-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        createdAt: new Date().toISOString(),
+        ...renderData,
+      };
+      const currentProjects = get().projects.map((p) => {
+        if (p.id === projectId) {
+          const existing = p.aiRenders || [];
+          return {
+            ...p,
+            aiRenders: [newRender, ...existing],
+          };
+        }
+        return p;
+      });
+      persist({ projects: currentProjects });
+    },
+
+    deleteProjectAiRender: (projectId, renderId) => {
+      const currentProjects = get().projects.map((p) => {
+        if (p.id === projectId && p.aiRenders) {
+          return {
+            ...p,
+            aiRenders: p.aiRenders.filter((r) => r.id !== renderId),
+          };
+        }
+        return p;
+      });
+      persist({ projects: currentProjects });
     },
 
     syncCloudProjects: async () => {
@@ -2807,6 +4193,31 @@ export const useAdminStore = create<AdminState>((set, get) => {
     },
     resetManufacturingRates: () => {
       persist({ manufacturingRates: DEFAULT_MANUFACTURING_RATES });
+    },
+
+    // Visualización en Vivo de Precios / Modo Cliente
+    livePriceDisplayMode: initial.livePriceDisplayMode || 'none',
+    setLivePriceDisplayMode: (mode) => {
+      persist({ livePriceDisplayMode: mode });
+    },
+    liveSaleMarginPercent: typeof initial.liveSaleMarginPercent === 'number' ? initial.liveSaleMarginPercent : 35,
+    setLiveSaleMarginPercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginPercent: clamped, liveSaleMarginFurniturePercent: clamped });
+    },
+    liveSaleMarginFurniturePercent: typeof initial.liveSaleMarginFurniturePercent === 'number' ? initial.liveSaleMarginFurniturePercent : 35,
+    setLiveSaleMarginFurniturePercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginFurniturePercent: clamped, liveSaleMarginPercent: clamped });
+    },
+    liveSaleMarginCountertopPercent: typeof initial.liveSaleMarginCountertopPercent === 'number' ? initial.liveSaleMarginCountertopPercent : 35,
+    setLiveSaleMarginCountertopPercent: (margin) => {
+      const clamped = Math.max(0, Math.min(500, Math.round(Number(margin) || 0)));
+      persist({ liveSaleMarginCountertopPercent: clamped });
+    },
+    differentiateMargins: Boolean(initial.differentiateMargins),
+    setDifferentiateMargins: (enabled) => {
+      persist({ differentiateMargins: enabled });
     },
   };
 });

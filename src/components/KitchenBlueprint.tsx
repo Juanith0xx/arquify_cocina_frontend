@@ -488,12 +488,17 @@ export function KitchenBlueprint() {
    * Calibrado para que la pieza y cotas ocupen ~80% del recuadro disponible con tipografías legibles (mínimo 9-11pt).
    */
   const renderUnifiedPartSVG = (part: Part, cab: CabinetType) => {
-    const isFrenteCajon = part.name.includes("Frente Cajón");
-    // En despiece industrial estándar, length es la dimensión longitudinal (ancho del frente de cajón) y width es la altura
+    const isContrafrente = part.name.toLowerCase().includes("contrafrente");
+    const isFrenteCajon = (part.name.includes("Frente Cajón") || part.name.includes("Frente")) && !isContrafrente;
+    // En despiece industrial estándar, length es la dimensión longitudinal (ancho del frente o contrafrente de cajón) y width es la altura
     // Para visualización técnica horizontal en plano: pw debe ser la dimensión horizontal y pl la vertical
-    const pw = Math.round(isFrenteCajon && part.length > part.width ? part.length : part.width);
-    const pl = Math.round(isFrenteCajon && part.length > part.width ? part.width : part.length);
+    const pw = Math.round((isFrenteCajon || isContrafrente) && part.length > part.width ? part.length : part.width);
+    const pl = Math.round((isFrenteCajon || isContrafrente) && part.length > part.width ? part.width : part.length);
     const baseDim = Math.max(pw, pl, 200);
+
+    const isVeggieCab = cab ? (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') : false;
+    const isVeggieFront = isFrenteCajon && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
+    const isVeggieContrafrente = isContrafrente && (part.name.toLowerCase().includes('verdulero') || part.notes?.toLowerCase().includes('calado ovalado') || part.notes?.toLowerCase().includes('verdulero') || isVeggieCab);
 
     const isLateral = part.name.includes("Lateral") && !part.name.includes("Cajón");
     const isPiso = part.name.includes("Piso") || (part.name.includes("Base") && !part.name.includes("Soporte Horno"));
@@ -506,8 +511,8 @@ export function KitchenBlueprint() {
     const isMinifix = state.assemblyType === 'minifix';
 
     // Detección de mecanizados por cara para cálculo de paddings
-    const hasTopMachining = isLateral || isFrenteCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
-    const hasLeftMachining = isPuerta || isLateral || isFrenteCajon || isLateralCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
+    const hasTopMachining = isLateral || isFrenteCajon || isContrafrente || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
+    const hasLeftMachining = isPuerta || isLateral || isFrenteCajon || isContrafrente || isLateralCajon || ((isPiso || isTecho || isBarraAmarre) && isMinifix);
 
     const vMax = Math.max(pw, pl, 300);
 
@@ -845,7 +850,7 @@ export function KitchenBlueprint() {
                 <text x={38} y={20} fontSize={Math.round(fSizeSm * 0.7)} fill="#b45309" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">CNC: REBAJE GOLA L 58x26</text>
 
                 {/* Rebaje Gola C Intermedio si corresponde a cajoneras */}
-                {(cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || part.notes?.includes('Gola C')) && (
+                {(cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || part.notes?.includes('Gola C')) && (
                   (() => {
                     const golaCY = Math.round(pl * 0.35);
                     return (
@@ -1218,11 +1223,11 @@ export function KitchenBlueprint() {
             <line x1={-padL * 0.50} y1={35} x2={15} y2={35} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
             <text x={-padL * 0.62} y={18 + fSizeSm * 0.35} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">35</text>
 
-            {/* Perforaciones de Tirador Paramétrico */}
+            {/* Perforaciones de Tirador Paramétrico (Omitido en verdulero ya que el calado ovalado actúa como tirador) */}
             {(() => {
               const hConf = kState.handleConfig;
               const isGola = kState.golaSystem !== 'none';
-              if (isGola || !hConf || hConf.model === 'none') return null;
+              if (isGola || !hConf || hConf.model === 'none' || isVeggieFront) return null;
 
               const isSingleHole = hConf.model === 'balin' || hConf.model === 'berlin';
               const isRearPestana = hConf.model === 'ce' || hConf.model === 'oslo';
@@ -1265,6 +1270,177 @@ export function KitchenBlueprint() {
                   <line x1={cx2} y1={cy - 24} x2={cx2} y2={cy} stroke="#2563eb" strokeWidth={strokeThin} />
                   <text x={pw / 2} y={cy - 22} fontSize={Math.round(fSizeSm * 0.85)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{hLen}</text>
                   <text x={pw / 2} y={cy + 18} fontSize={Math.round(fSizeSm * 0.8)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold">2x Ø4.5 Tirador ({hLen}mm)</text>
+                </g>
+              );
+            })()}
+
+            {/* Rebaje Ovalado Verdulero con Cotas y Tapacanto Interior */}
+            {isVeggieFront && (() => {
+              let cutW = Math.min(360, Math.max(220, Math.round(pw * 0.55)));
+              let cutH = 70;
+              const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+              if (noteMatch) {
+                cutW = parseInt(noteMatch[1], 10);
+                cutH = parseInt(noteMatch[2], 10);
+              }
+              const cutX = (pw - cutW) / 2;
+              const cutY = (pl - cutH) / 2;
+              const cutR = cutH / 2;
+              const cotaTopCutY = Math.max(12, cutY - 14);
+
+              return (
+                <g key="cnc-calado-frente-verdulero">
+                  {/* Calado Ovalado Stadium / Pasante */}
+                  <rect 
+                    x={cutX} 
+                    y={cutY} 
+                    width={cutW} 
+                    height={cutH} 
+                    rx={cutR} 
+                    ry={cutR} 
+                    fill="#e2e8f0" 
+                    stroke="#0f172a" 
+                    strokeWidth={strokeMed} 
+                  />
+                  {/* Indicador de Tapacanto Interior Rojo Discontinuo */}
+                  <rect 
+                    x={cutX + 1.5} 
+                    y={cutY + 1.5} 
+                    width={cutW - 3} 
+                    height={cutH - 3} 
+                    rx={cutR - 1.5} 
+                    ry={cutR - 1.5} 
+                    fill="none" 
+                    stroke="#e11d48" 
+                    strokeWidth={strokeThin} 
+                    strokeDasharray="4,2" 
+                  />
+
+                  {/* Ejes de Simetría */}
+                  <line x1={cutX - 16} y1={pl / 2} x2={cutX + cutW + 16} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+                  <line x1={pw / 2} y1={cutY - 12} x2={pw / 2} y2={cutY + cutH + 12} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+
+                  {/* Centros de radio R35 */}
+                  <line x1={cutX + cutR - 5} y1={pl / 2} x2={cutX + cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutR} y1={pl / 2 - 5} x2={cutX + cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR - 5} y1={pl / 2} x2={cutX + cutW - cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR} y1={pl / 2 - 5} x2={cutX + cutW - cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+
+                  {/* Cota de Ancho del Calado (cutW) */}
+                  <line x1={cutX} y1={cotaTopCutY} x2={cutX + cutW} y2={cotaTopCutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX} y1={cutY} x2={cutX} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX - 3} y1={cotaTopCutY + 3} x2={cutX + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW - 3} y1={cotaTopCutY + 3} x2={cutX + cutW + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={pw / 2} y={cotaTopCutY - 4} fontSize={Math.round(fSizeSm * 0.9)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{cutW}</text>
+
+                  {/* Cota de Altura del Calado (cutH) al costado derecho */}
+                  <line x1={cutX + cutW + 14} y1={cutY} x2={cutX + cutW + 14} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW + 18} y2={cutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY + cutH} x2={cutX + cutW + 18} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW + 11} y1={cutY + 3} x2={cutX + cutW + 17} y2={cutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW + 11} y1={cutY + cutH + 3} x2={cutX + cutW + 17} y2={cutY + cutH - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={cutX + cutW + 24} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.85)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">{cutH}</text>
+
+                  {/* Indicación de Radio R */}
+                  <text x={cutX + 10} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.8)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">R{cutR}</text>
+
+                  {/* Texto Técnico de Rotulado */}
+                  <text x={pw / 2} y={pl / 2 + 3} fontSize={Math.round(fSizeSm * 0.85)} fill="#0f172a" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">CALADO VERDULERO {cutW}x{cutH}mm</text>
+                  <text x={pw / 2} y={pl / 2 + fSizeSm * 0.85 + 4} fontSize={Math.round(fSizeSm * 0.65)} fill="#e11d48" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">(TAPACANTO INTERIOR)</text>
+                </g>
+              );
+            })()}
+          </g>
+        )}
+
+        {/* Contrafrentes de Cajón: Calado Estructural CNC en Verdulero */}
+        {isContrafrente && (
+          <g key="machining-contrafrente-cajon">
+            {/* Ejes de fijación tornillos a 15mm de bordes laterales */}
+            <line x1={15} y1={0} x2={15} y2={pl} stroke={COLOR_DETALLE} strokeWidth={strokeThin} strokeDasharray="4,2" />
+            <line x1={pw - 15} y1={0} x2={pw - 15} y2={pl} stroke={COLOR_DETALLE} strokeWidth={strokeThin} strokeDasharray="4,2" />
+            <circle cx={15} cy={Math.min(35, Math.round(pl * 0.25))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={15} cy={Math.max(pl - 35, Math.round(pl * 0.75))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={pw - 15} cy={Math.min(35, Math.round(pl * 0.25))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+            <circle cx={pw - 15} cy={Math.max(pl - 35, Math.round(pl * 0.75))} r={Math.max(4, Math.round(vMax * 0.012))} fill={COLOR_SPAX} />
+
+            {/* Cota horizontal 15mm */}
+            <line x1={0} y1={-padT * 0.38} x2={15} y2={-padT * 0.38} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={0} y1={-padT * 0.50} x2={0} y2={0} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={15} y1={-padT * 0.50} x2={15} y2={Math.min(35, Math.round(pl * 0.25))} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <text x={7.5} y={-padT * 0.38 - 6} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">15</text>
+
+            <line x1={pw - 15} y1={-padT * 0.38} x2={pw} y2={-padT * 0.38} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={pw - 15} y1={-padT * 0.50} x2={pw - 15} y2={Math.min(35, Math.round(pl * 0.25))} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <line x1={pw} y1={-padT * 0.50} x2={pw} y2={0} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+            <text x={pw - 7.5} y={-padT * 0.38 - 6} fontSize={fSizeSm} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" strokeLinejoin="round" textAnchor="middle" fontWeight="900" fontFamily="monospace" textRendering="geometricPrecision">15</text>
+
+            {isVeggieContrafrente && (() => {
+              const baseFrontW = cab ? (cab.width * 10 - 6) : pw;
+              const baseVeggieW = Math.min(360, Math.max(220, Math.round(baseFrontW * 0.55)));
+              let cutW = baseVeggieW + 40;
+              let cutH = Math.min(pl - 10, 70 + 40);
+              const noteMatch = part.notes?.match(/(\d+)x(\d+)mm/);
+              if (noteMatch) {
+                cutW = parseInt(noteMatch[1], 10);
+                cutH = parseInt(noteMatch[2], 10);
+              }
+              if (cutW > pw - 20) cutW = pw - 20;
+              if (cutH > pl - 10) cutH = Math.max(30, pl - 10);
+
+              const cutX = (pw - cutW) / 2;
+              const cutY = (pl - cutH) / 2;
+              const cutR = cutH / 2;
+              const cotaTopCutY = Math.max(12, cutY - 14);
+
+              return (
+                <g key="cnc-calado-contrafrente-verdulero">
+                  {/* Calado Estructural Interior CNC Agrandado (+20mm contorno) */}
+                  <rect 
+                    x={cutX} 
+                    y={cutY} 
+                    width={cutW} 
+                    height={cutH} 
+                    rx={cutR} 
+                    ry={cutR} 
+                    fill="#e2e8f0" 
+                    stroke="#0f172a" 
+                    strokeWidth={strokeMed} 
+                  />
+
+                  {/* Ejes de Simetría */}
+                  <line x1={cutX - 16} y1={pl / 2} x2={cutX + cutW + 16} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+                  <line x1={pw / 2} y1={cutY - 12} x2={pw / 2} y2={cutY + cutH + 12} stroke="#2563eb" strokeWidth={strokeThin * 0.8} strokeDasharray="5,2,2,2" />
+
+                  {/* Centros de radio */}
+                  <line x1={cutX + cutR - 5} y1={pl / 2} x2={cutX + cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutR} y1={pl / 2 - 5} x2={cutX + cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR - 5} y1={pl / 2} x2={cutX + cutW - cutR + 5} y2={pl / 2} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+                  <line x1={cutX + cutW - cutR} y1={pl / 2 - 5} x2={cutX + cutW - cutR} y2={pl / 2 + 5} stroke="#2563eb" strokeWidth={strokeThin * 0.8} />
+
+                  {/* Cota de Ancho del Calado (cutW) */}
+                  <line x1={cutX} y1={cotaTopCutY} x2={cutX + cutW} y2={cotaTopCutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX} y1={cutY} x2={cutX} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW} y2={cotaTopCutY - 4} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX - 3} y1={cotaTopCutY + 3} x2={cutX + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW - 3} y1={cotaTopCutY + 3} x2={cutX + cutW + 3} y2={cotaTopCutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={pw / 2} y={cotaTopCutY - 4} fontSize={Math.round(fSizeSm * 0.9)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="900" fontFamily="monospace">{cutW}</text>
+
+                  {/* Cota de Altura del Calado (cutH) al costado derecho */}
+                  <line x1={cutX + cutW + 14} y1={cutY} x2={cutX + cutW + 14} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY} x2={cutX + cutW + 18} y2={cutY} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW} y1={cutY + cutH} x2={cutX + cutW + 18} y2={cutY + cutH} stroke={COLOR_DETALLE} strokeWidth={strokeThin} />
+                  <line x1={cutX + cutW + 11} y1={cutY + 3} x2={cutX + cutW + 17} y2={cutY - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <line x1={cutX + cutW + 11} y1={cutY + cutH + 3} x2={cutX + cutW + 17} y2={cutY + cutH - 3} stroke={COLOR_DETALLE} strokeWidth={strokeMed} />
+                  <text x={cutX + cutW + 24} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.85)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">{cutH}</text>
+
+                  {/* Indicación de Radio */}
+                  <text x={cutX + 10} y={pl / 2 + fSizeSm * 0.35} fontSize={Math.round(fSizeSm * 0.8)} fill={COLOR_DETALLE} stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="start" fontWeight="900" fontFamily="monospace">R{cutR}</text>
+
+                  {/* Texto Técnico de Rotulado */}
+                  <text x={pw / 2} y={pl / 2 + 3} fontSize={Math.round(fSizeSm * 0.82)} fill="#0f172a" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">CALADO CNC CONTRAFRENTE {cutW}x{cutH}mm</text>
+                  <text x={pw / 2} y={pl / 2 + fSizeSm * 0.85 + 4} fontSize={Math.round(fSizeSm * 0.65)} fill="#2563eb" stroke="#ffffff" strokeWidth={haloWidth} paintOrder="stroke fill" textAnchor="middle" fontWeight="bold" fontFamily="monospace">(+20mm P/ ATORNILLADO TRASERO)</text>
                 </g>
               );
             })()}
@@ -1378,7 +1554,7 @@ export function KitchenBlueprint() {
     const COLOR_MAGENTA = "#d946ef";
 
     const isBaseGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
-    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === 'sink_u_drawer');
+    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' || cab.variant === 'sink_u_drawer' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers');
     const golaColorHex = kState.golaSystem === 'black' ? '#18181b' : '#94a3b8';
 
     // Cálculo dinámico de altura útil y posición milimétrica exacta del perfil Gola C
@@ -1394,9 +1570,12 @@ export function KitchenBlueprint() {
       golaCY_lat = Math.round(35 + drH_4dr * 2 + 20);
     } else if (cab.variant === '1_door_1_drawer') {
       golaCY_lat = Math.round(35 + drH_1d1dr + 20);
-    } else if (cab.variant === '2_drawers_1_pot') {
+    } else if (cab.variant === '2_drawers_1_pot' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
       const topDrH = Math.round(golaAvailH * 0.25);
       golaCY_lat = Math.round(35 + topDrH * 2 + 20);
+    } else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') {
+      const lowDrH = Math.round(golaAvailH * 0.43);
+      golaCY_lat = Math.round(35 + lowDrH + 20);
     }
 
     return (
@@ -1572,6 +1751,30 @@ export function KitchenBlueprint() {
                     <text x={cabW / 2} y={bodyH * 0.78} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón Ollero 2</text>
                   </g>
                 )
+              ) : (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') ? (
+                isBaseGola ? (
+                  (() => {
+                    const topDrH = Math.round(golaAvailH * 0.25);
+                    return (
+                      <g>
+                        <rect x={0} y={35} width={cabW} height={topDrH} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                        <text x={cabW / 2} y={35 + topDrH * 0.6} fontSize={Math.max(12, fSizeElev * 0.38)} fill="#0f172a" fontWeight="bold" textAnchor="middle" fontFamily="monospace">FRENTE FIJO ENCIMERA</text>
+                        <line x1={0} y1={35 + topDrH} x2={cabW} y2={35 + topDrH} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                        <text x={cabW / 2} y={35 + topDrH * 1.6} fontSize={Math.max(15, fSizeElev * 0.45)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cajón 2</text>
+                        <text x={cabW / 2} y={35 + topDrH * 2 + 40 + (bodyH - (35 + topDrH * 2 + 40)) * 0.58} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cajón Ollero</text>
+                      </g>
+                    );
+                  })()
+                ) : (
+                  <g>
+                    <rect x={0} y={0} width={cabW} height={bodyH * 0.25} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <line x1={0} y1={bodyH * 0.25} x2={cabW} y2={bodyH * 0.25} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <line x1={0} y1={bodyH * 0.5} x2={cabW} y2={bodyH * 0.5} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                    <text x={cabW / 2} y={bodyH * 0.15} fontSize={Math.max(12, fSizeElev * 0.38)} fill="#0f172a" fontWeight="bold" textAnchor="middle" fontFamily="monospace">FRENTE FIJO ENCIMERA</text>
+                    <text x={cabW / 2} y={bodyH * 0.40} fontSize={Math.max(14, fSizeElev * 0.42)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón 2</text>
+                    <text x={cabW / 2} y={bodyH * 0.78} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón Ollero</text>
+                  </g>
+                )
               ) : cab.variant === '2_drawers_1_pot' ? (
                 isBaseGola ? (
                   (() => {
@@ -1594,6 +1797,33 @@ export function KitchenBlueprint() {
                     <text x={cabW / 2} y={bodyH * 0.78} fontSize={Math.max(16, fSizeElev * 0.48)} fill="#64748b" textAnchor="middle" fontFamily="monospace">Cajón Ollero</text>
                   </g>
                 )
+              ) : cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' ? (
+                (() => {
+                  const y1 = Math.round(bodyH * 0.24);
+                  const y2 = Math.round(bodyH * 0.57);
+                  const cutW = Math.min(360, Math.max(200, Math.round(cabW * 0.55)));
+                  const cutH = 70;
+                  const cutX = (cabW - cutW) / 2;
+                  const rx = cutH / 2;
+                  return (
+                    <g>
+                      <line x1={0} y1={y1} x2={cabW} y2={y1} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                      <line x1={0} y1={y2} x2={cabW} y2={y2} stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
+                      
+                      {/* Ranura Cajón Superior */}
+                      <rect x={cutX} y={y1 / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.7} />
+                      <text x={cabW / 2} y={y1 / 2 + 5} fontSize={Math.max(12, fSizeElev * 0.36)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">VERDULERO SUP</text>
+                      
+                      {/* Ranura Cajón Medio */}
+                      <rect x={cutX} y={y1 + (y2 - y1) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.7} />
+                      <text x={cabW / 2} y={y1 + (y2 - y1) / 2 + 5} fontSize={Math.max(12, fSizeElev * 0.36)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">VERDULERO MED</text>
+                      
+                      {/* Ranura Cajón Inferior */}
+                      <rect x={cutX} y={y2 + (bodyH - y2) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.7} />
+                      <text x={cabW / 2} y={y2 + (bodyH - y2) / 2 + 5} fontSize={Math.max(12, fSizeElev * 0.36)} fill="#475569" fontWeight="bold" textAnchor="middle" fontFamily="monospace">VERDULERO INF</text>
+                    </g>
+                  );
+                })()
               ) : cab.variant === '1_door_1_drawer' ? (
                 isBaseGola ? (
                   <g>
@@ -1649,7 +1879,7 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 })()
-              ) : cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' ? (
+              ) : cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors' ? (
                 (() => {
                   const yDoorT = isBaseGola ? 35 : 0;
                   const yDoorMid = (yDoorT + bodyH) / 2;
@@ -1666,20 +1896,39 @@ export function KitchenBlueprint() {
                   // Torre Horno + Microondas: 4 zonas verticales (de abajo hacia arriba)
                   // bodyH es la altura del cuerpo en mm (ej. 2050mm)
                   // En SVG: Y=0 es el techo del cuerpo, Y=bodyH es el fondo/base del cuerpo
-                  const baseH = 700; // 70cm puerta inferior
+                  const baseH = (cab.variant === 'tall_oven_micro') ? 600 : 700; // 60cm en tall_oven_micro
                   const ovenH = 600; // 60cm nicho horno
                   const microH = 380; // 38cm nicho microondas
-                  const yBaseTop = Math.max(0, bodyH - baseH); // Cota superior de la puerta inferior
+                  const yBaseTop = Math.max(0, bodyH - baseH); // Cota superior de la puerta inferior / gavetas
                   const yOvenTop = Math.max(0, yBaseTop - ovenH); // Cota superior del nicho de horno
                   const yMicroTop = Math.max(0, yOvenTop - microH); // Cota superior del nicho microondas
                   const topDoorH = yMicroTop; // Altura restante puerta superior
 
                   return (
                     <g>
-                      {/* 1. Puerta Inferior (0 a 70cm) */}
-                      <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
-                      <path d={`M 0 ${(yBaseTop + bodyH) / 2} L ${cabW} ${yBaseTop} L ${cabW} ${bodyH} Z`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
-                      <text x={cabW / 2} y={(yBaseTop + bodyH) / 2 + 5} fontSize={Math.max(13, fSizeElev * 0.38)} fill="#c026d3" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Puerta Base</text>
+                      {/* 1. Zona Inferior (Puerta o 2 Gavetas Caceroleras) */}
+                      {cab.towerLowerType === 'drawers' ? (
+                        (() => {
+                          const singleDrawerH = baseH / 2;
+                          const yDrawerSplit = bodyH - singleDrawerH;
+                          return (
+                            <g>
+                              <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
+                              <line x1={0} y1={yDrawerSplit} x2={cabW} y2={yDrawerSplit} stroke="#0f172a" strokeWidth={strokeElev} />
+                              <line x1={cabW * 0.25} y1={yDrawerSplit + singleDrawerH / 2} x2={cabW * 0.75} y2={yDrawerSplit + singleDrawerH / 2} stroke="#3b82f6" strokeWidth={strokeElev * 1.5} />
+                              <line x1={cabW * 0.25} y1={yBaseTop + singleDrawerH / 2} x2={cabW * 0.75} y2={yBaseTop + singleDrawerH / 2} stroke="#3b82f6" strokeWidth={strokeElev * 1.5} />
+                              <text x={cabW / 2} y={yDrawerSplit + singleDrawerH / 2 - 6} fontSize={Math.max(11, fSizeElev * 0.34)} fill="#2563eb" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cacerolero 1 (30cm)</text>
+                              <text x={cabW / 2} y={yBaseTop + singleDrawerH / 2 - 6} fontSize={Math.max(11, fSizeElev * 0.34)} fill="#2563eb" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Cacerolero 2 (30cm)</text>
+                            </g>
+                          );
+                        })()
+                      ) : (
+                        <g>
+                          <line x1={0} y1={yBaseTop} x2={cabW} y2={yBaseTop} stroke="#0f172a" strokeWidth={strokeElev} />
+                          <path d={`M 0 ${(yBaseTop + bodyH) / 2} L ${cabW} ${yBaseTop} L ${cabW} ${bodyH} Z`} fill="none" stroke="#c026d3" strokeWidth={strokeElev * 0.8} strokeDasharray="4,4" />
+                          <text x={cabW / 2} y={(yBaseTop + bodyH) / 2 + 5} fontSize={Math.max(13, fSizeElev * 0.38)} fill="#c026d3" fontWeight="bold" textAnchor="middle" fontFamily="monospace">Puerta Base</text>
+                        </g>
+                      )}
 
                       {/* 2. Nicho Horno Empotrado (60cm) */}
                       <rect x={12} y={yOvenTop + 8} width={cabW - 24} height={ovenH - 16} fill="#f1f5f9" stroke="#0f172a" strokeWidth={strokeElev * 0.8} />
@@ -1807,6 +2056,31 @@ export function KitchenBlueprint() {
                           key={`pot-h-${di}`}
                           x={cabW / 2 - hLen / 2}
                           y={di * dH + dH * 0.35 - hThick / 2}
+                          width={hLen}
+                          height={hThick}
+                          rx={2}
+                          fill={hColor}
+                          stroke="#0f172a"
+                          strokeWidth={strokeElev * 0.6}
+                        />
+                      ))}
+                    </g>
+                  );
+                } else if (cab.variant === '2_drawers_1_pot') {
+                  const dH_top = bodyH * 0.25;
+                  const dH_bot = bodyH * 0.5;
+                  const handleYs = [
+                    dH_top * 0.35 - hThick / 2,
+                    dH_top + dH_top * 0.35 - hThick / 2,
+                    dH_top * 2 + dH_bot * 0.35 - hThick / 2
+                  ];
+                  return (
+                    <g key="front-handles">
+                      {handleYs.map((hy, di) => (
+                        <rect
+                          key={`pot-h-${di}`}
+                          x={cabW / 2 - hLen / 2}
+                          y={hy}
                           width={hLen}
                           height={hThick}
                           rx={2}
@@ -2716,6 +2990,43 @@ export function KitchenBlueprint() {
                       ))}
                     </g>
                   );
+                } else if (cab.variant === '2_drawers_1_pot') {
+                  const dH_top = bodyH * 0.25;
+                  const dH_bot = bodyH * 0.50;
+                  return (
+                    <g>
+                      <g stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"}>
+                        <line x1={cLeftX} y1={cTopY + dH_top} x2={cLeftX + cW} y2={cTopY + dH_top} />
+                        <line x1={cLeftX} y1={cTopY + dH_top * 2} x2={cLeftX + cW} y2={cTopY + dH_top * 2} />
+                      </g>
+                      {showHandles && (
+                        <>
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top + dH_top * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                          <rect x={cLeftX + cW / 2 - hLen / 2} y={cTopY + dH_top * 2 + dH_bot * 0.35 - hThick / 2} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                        </>
+                      )}
+                    </g>
+                  );
+                } else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') {
+                  const y1 = cTopY + bodyH * 0.24;
+                  const y2 = cTopY + bodyH * 0.57;
+                  const cutW = Math.min(cW * 0.55, 26);
+                  const cutH = Math.max(3.5, 4.5 * elevScale);
+                  const cutX = cLeftX + (cW - cutW) / 2;
+                  const rx = cutH / 2;
+                  return (
+                    <g>
+                      <g stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"}>
+                        <line x1={cLeftX} y1={y1} x2={cLeftX + cW} y2={y1} />
+                        <line x1={cLeftX} y1={y2} x2={cLeftX + cW} y2={y2} />
+                      </g>
+                      {/* Ranuras verdulero */}
+                      <rect x={cutX} y={cTopY + (y1 - cTopY) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                      <rect x={cutX} y={y1 + (y2 - y1) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                      <rect x={cutX} y={y2 + (cTopY + bodyH - y2) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                    </g>
+                  );
                 } else if (cab.variant === '1_door_1_drawer') {
                   const drwH = (isGolaActive ? Math.round((bodyH - 75) / 4) : Math.round((bodyH - 15) / 4)) * elevScale;
                   const doorTop = cTopY + drwH;
@@ -2919,7 +3230,8 @@ export function KitchenBlueprint() {
                     </g>
                   );
                 } else if (isTall && (cab.variant?.includes('oven') || cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent')) {
-                  const lowerDoorH = Math.min(bodyH * 0.35, 700 * elevScale);
+                  const baseRefMm = (cab.variant === 'tall_oven_micro') ? 600 : 700;
+                  const lowerDoorH = Math.min(bodyH * 0.35, baseRefMm * elevScale);
                   const ovenH = Math.min(bodyH * 0.30, 600 * elevScale);
                   const microH = Math.min(bodyH * 0.18, 380 * elevScale);
                   
@@ -2937,22 +3249,43 @@ export function KitchenBlueprint() {
                   return (
                     <g>
                       <line x1={cLeftX} y1={yLowerSplit} x2={cLeftX + cW} y2={yLowerSplit} stroke="#0f172a" strokeWidth={isStacked ? "0.6" : "0.8"} />
-                      {handleOnLeft ? (
-                        <path d={`M ${cLeftX + cW} ${yLowerSplit} L ${cLeftX} ${lowerDoorMidY} L ${cLeftX + cW} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                      {cab.towerLowerType === 'drawers' ? (
+                        (() => {
+                          const drawerSplitY = (yLowerSplit + bodyBottomY) / 2;
+                          const hMidW = Math.min(cW * 0.5, 40 * elevScale);
+                          const hMidX = cLeftX + (cW - hMidW) / 2;
+                          return (
+                            <g>
+                              <line x1={cLeftX} y1={drawerSplitY} x2={cLeftX + cW} y2={drawerSplitY} stroke="#0f172a" strokeWidth={isStacked ? "0.6" : "0.8"} />
+                              {showHandles && (
+                                <>
+                                  <rect x={hMidX} y={drawerSplitY + 4} width={hMidW} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                  <rect x={hMidX} y={yLowerSplit + 4} width={hMidW} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                </>
+                              )}
+                            </g>
+                          );
+                        })()
                       ) : (
-                        <path d={`M ${cLeftX} ${yLowerSplit} L ${cLeftX + cW} ${lowerDoorMidY} L ${cLeftX} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
-                      )}
-                      {showHandles && (
-                        <rect
-                          x={handleX}
-                          y={yLowerSplit + handleEdgeOffset}
-                          width={hThick}
-                          height={hLen}
-                          rx={0.5}
-                          fill={hColor}
-                          stroke="#0f172a"
-                          strokeWidth="0.3"
-                        />
+                        <>
+                          {handleOnLeft ? (
+                            <path d={`M ${cLeftX + cW} ${yLowerSplit} L ${cLeftX} ${lowerDoorMidY} L ${cLeftX + cW} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                          ) : (
+                            <path d={`M ${cLeftX} ${yLowerSplit} L ${cLeftX + cW} ${lowerDoorMidY} L ${cLeftX} ${bodyBottomY}`} fill="none" stroke="#c026d3" strokeWidth={isStacked ? "0.5" : "0.6"} strokeDasharray="3,2" />
+                          )}
+                          {showHandles && (
+                            <rect
+                              x={handleX}
+                              y={yLowerSplit + handleEdgeOffset}
+                              width={hThick}
+                              height={hLen}
+                              rx={0.5}
+                              fill={hColor}
+                              stroke="#0f172a"
+                              strokeWidth="0.3"
+                            />
+                          )}
+                        </>
                       )}
 
                       <rect
@@ -3249,6 +3582,22 @@ export function KitchenBlueprint() {
                                 <rect x={cLeftX + cW / 2 - hLen / 2} y={bodyTopY + d2 + (bodyH - d2) * 0.35} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
                               </>
                             )}
+                          </g>
+                        );
+                      } else if (v.includes('veggie') || v === '3_drawers_veggie' || v === 'base_3_drawers_veggie') {
+                        const d1 = bodyH * 0.24;
+                        const d2 = bodyH * 0.57;
+                        const cutW = Math.min(cW * 0.55, 26);
+                        const cutH = Math.max(3.5, 4.5 * elevScale);
+                        const cutX = cLeftX + (cW - cutW) / 2;
+                        const rx = cutH / 2;
+                        return (
+                          <g>
+                            <line x1={cLeftX} y1={bodyTopY + d1} x2={cLeftX + cW} y2={bodyTopY + d1} stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                            <line x1={cLeftX} y1={bodyTopY + d2} x2={cLeftX + cW} y2={bodyTopY + d2} stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                            <rect x={cutX} y={bodyTopY + d1 / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                            <rect x={cutX} y={bodyTopY + d1 + (d2 - d1) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                            <rect x={cutX} y={bodyTopY + d2 + (bodyH - d2) / 2 - cutH / 2} width={cutW} height={cutH} rx={rx} ry={rx} fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
                           </g>
                         );
                       } else if (v.includes('2_pot') || v.includes('pot_drawer') || v.includes('2_drawer') || v.includes('2_caj') || v === 'place_island' || v === 'island_2_pot_drawers' || v === '2_pot_drawers' || dCount === 2) {
@@ -3846,7 +4195,10 @@ export function KitchenBlueprint() {
                         else if (cab.type === 'closet' || cab.variant?.startsWith('closet_')) label = `CLÓSET ${Math.round(cab.width * 10)}`;
                         else if (isTall) label = `TORRE ${Math.round(cab.width * 10)}`;
                         else if (isIsland) label = `ISLA ${Math.round(cab.width * 10)}`;
-                        else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers') label = `CAJ ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') label = `VERD ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') label = `LAV ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') label = `ENC ${Math.round(cab.width * 10)}`;
+                        else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot') label = `CAJ ${Math.round(cab.width * 10)}`;
 
                         return (
                           <g key={cIdx}>
@@ -4065,6 +4417,24 @@ export function KitchenBlueprint() {
                                   })}
                                 </g>
                               )}
+                              {cab.variant === '2_drawers_1_pot' && (
+                                <g stroke="#0f172a" strokeWidth="0.6">
+                                  {(() => {
+                                    const yD1 = yBodyBottom + (cab.height - 10) * 0.50;
+                                    const yD2 = yBodyBottom + (cab.height - 10) * 0.75;
+                                    const pd0 = toIsoSvg(x0, yD1, z0);
+                                    const pd1 = toIsoSvg(x0, yD1, z1);
+                                    const pd2 = toIsoSvg(x0, yD2, z0);
+                                    const pd3 = toIsoSvg(x0, yD2, z1);
+                                    return (
+                                      <>
+                                        <line x1={pd0.x} y1={pd0.y} x2={pd1.x} y2={pd1.y} stroke="#0f172a" />
+                                        <line x1={pd2.x} y1={pd2.y} x2={pd3.x} y2={pd3.y} stroke="#0f172a" />
+                                      </>
+                                    );
+                                  })()}
+                                </g>
+                              )}
                               {(cab.variant === '2_pot_drawers' || cab.variant === 'sink_u_drawer') && (
                                 <g stroke="#0f172a" strokeWidth="0.6">
                                   {(() => {
@@ -4072,6 +4442,24 @@ export function KitchenBlueprint() {
                                     const pd0 = toIsoSvg(x0, yD, z0);
                                     const pd1 = toIsoSvg(x0, yD, z1);
                                     return <line x1={pd0.x} y1={pd0.y} x2={pd1.x} y2={pd1.y} />;
+                                  })()}
+                                </g>
+                              )}
+                              {(cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') && (
+                                <g stroke="#0f172a" strokeWidth="0.6">
+                                  {(() => {
+                                    const yD1 = yBodyBottom + (cab.height - 10) * 0.43;
+                                    const yD2 = yBodyBottom + (cab.height - 10) * 0.76;
+                                    const pd0 = toIsoSvg(x0, yD1, z0);
+                                    const pd1 = toIsoSvg(x0, yD1, z1);
+                                    const pd2 = toIsoSvg(x0, yD2, z0);
+                                    const pd3 = toIsoSvg(x0, yD2, z1);
+                                    return (
+                                      <>
+                                        <line x1={pd0.x} y1={pd0.y} x2={pd1.x} y2={pd1.y} stroke="#0f172a" />
+                                        <line x1={pd2.x} y1={pd2.y} x2={pd3.x} y2={pd3.y} stroke="#0f172a" />
+                                      </>
+                                    );
                                   })()}
                                 </g>
                               )}
@@ -4088,7 +4476,8 @@ export function KitchenBlueprint() {
                               {isOvenTower && (
                                 <g stroke="#0f172a" strokeWidth="0.8">
                                   {(() => {
-                                    const yOven1 = yBodyBottom + 70;
+                                    const baseH = (cab.variant === 'tall_oven_micro') ? 60 : 70;
+                                    const yOven1 = yBodyBottom + baseH;
                                     const yOven2 = yOven1 + 60;
                                     const yMicro2 = yOven2 + 38;
                                     const po1_0 = toIsoSvg(x0, yOven1, z0);
@@ -4097,8 +4486,13 @@ export function KitchenBlueprint() {
                                     const po2_1 = toIsoSvg(x0, yOven2, z1);
                                     const pm2_0 = toIsoSvg(x0, yMicro2, z0);
                                     const pm2_1 = toIsoSvg(x0, yMicro2, z1);
+                                    const isDrawers = cab.towerLowerType === 'drawers';
+                                    const yDrawSplit = yBodyBottom + baseH / 2;
+                                    const pds_0 = toIsoSvg(x0, yDrawSplit, z0);
+                                    const pds_1 = toIsoSvg(x0, yDrawSplit, z1);
                                     return (
                                       <>
+                                        {isDrawers && <line x1={pds_0.x} y1={pds_0.y} x2={pds_1.x} y2={pds_1.y} stroke="#0f172a" strokeWidth="0.6" />}
                                         <line x1={po1_0.x} y1={po1_0.y} x2={po1_1.x} y2={po1_1.y} />
                                         <line x1={po2_0.x} y1={po2_0.y} x2={po2_1.x} y2={po2_1.y} />
                                         <line x1={pm2_0.x} y1={pm2_0.y} x2={pm2_1.x} y2={pm2_1.y} />
@@ -4107,7 +4501,7 @@ export function KitchenBlueprint() {
                                   })()}
                                 </g>
                               )}
-                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow') && (
+                              {(cab.variant === '2_doors' || cab.variant === 'wall_2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'wall_hood_new_flow' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') && (
                                 <g stroke="#0f172a" strokeWidth="0.7">
                                   {(() => {
                                     const midZ = (z0 + z1) / 2;
@@ -5037,31 +5431,69 @@ export function KitchenBlueprint() {
                         strokeWidth={3}
                       />
 
-                      {/* Calado de lavaplatos o encimera en líneas punteadas */}
-                      {p.hasCutout && p.widthMm > 600 && p.lengthMm > 350 && (
-                        <g>
-                          <rect
-                            x={p.x + (p.widthMm - (p.hasCutout === 'sink' ? 695 : 550)) / 2}
-                            y={p.y + (p.lengthMm - (p.hasCutout === 'sink' ? 400 : 470)) / 2}
-                            width={p.hasCutout === 'sink' ? 695 : 550}
-                            height={p.hasCutout === 'sink' ? 400 : 470}
-                            fill="#ffffff"
-                            stroke="#dc2626"
-                            strokeWidth={3}
-                            strokeDasharray="12,8"
-                          />
-                          <text
-                            x={p.x + p.widthMm / 2}
-                            y={p.y + p.lengthMm / 2 + 8}
-                            textAnchor="middle"
-                            fontSize={24}
-                            fontWeight="bold"
-                            fill="#dc2626"
-                          >
-                            {p.hasCutout === 'sink' ? 'CALADO ENCASTRE LAVAPLATOS' : 'CALADO ENCIMERA'}
-                          </text>
-                        </g>
-                      )}
+                      {/* Calado de lavaplatos o encimera en líneas punteadas rojas con dimensiones exactas */}
+                      {p.hasCutout && (() => {
+                        const isRot = p.rotated;
+                        const cW = p.cutoutWidthMm || (p.hasCutout === 'sink' ? 720 : 560);
+                        const cD = p.cutoutDepthMm || (p.hasCutout === 'sink' ? 400 : 490);
+
+                        const holeDrawW = isRot ? cD : cW;
+                        const holeDrawH = isRot ? cW : cD;
+
+                        const longLen = isRot ? p.lengthMm : p.widthMm;
+                        const shortLen = isRot ? p.widthMm : p.lengthMm;
+                        const centerLong = p.cutoutOffsetMm && p.cutoutOffsetMm > 0 && p.cutoutOffsetMm < longLen
+                          ? p.cutoutOffsetMm
+                          : longLen / 2;
+                        const centerShort = shortLen / 2;
+
+                        const holeX = isRot
+                          ? p.x + Math.max(10, Math.min(shortLen - holeDrawW - 10, centerShort - holeDrawW / 2))
+                          : p.x + Math.max(10, Math.min(longLen - holeDrawW - 10, centerLong - holeDrawW / 2));
+                        const holeY = isRot
+                          ? p.y + Math.max(10, Math.min(longLen - holeDrawH - 10, centerLong - holeDrawH / 2))
+                          : p.y + Math.max(10, Math.min(shortLen - holeDrawH - 10, centerShort - holeDrawH / 2));
+
+                        const labelTitle = p.hasCutout === 'sink' ? 'CALADO ENCASTRE LAVAPLATOS' : 'CALADO ENCIMERA';
+                        const labelDim = `${cW} x ${cD} mm`;
+
+                        return (
+                          <g>
+                            <rect
+                              x={holeX}
+                              y={holeY}
+                              width={holeDrawW}
+                              height={holeDrawH}
+                              fill="#fee2e2"
+                              fillOpacity={0.4}
+                              stroke="#dc2626"
+                              strokeWidth={3}
+                              strokeDasharray="12,8"
+                            />
+                            <text
+                              x={holeX + holeDrawW / 2}
+                              y={holeY + holeDrawH / 2 - 8}
+                              textAnchor="middle"
+                              fontSize={Math.max(16, Math.min(22, holeDrawW / 24))}
+                              fontWeight="bold"
+                              fill="#dc2626"
+                            >
+                              {labelTitle}
+                            </text>
+                            <text
+                              x={holeX + holeDrawW / 2}
+                              y={holeY + holeDrawH / 2 + 16}
+                              textAnchor="middle"
+                              fontSize={Math.max(14, Math.min(18, holeDrawW / 28))}
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                              fill="#991b1b"
+                            >
+                              {labelDim}
+                            </text>
+                          </g>
+                        );
+                      })()}
 
                       {/* Identificación y medidas de la pieza */}
                       {p.widthMm > 150 && p.lengthMm > 60 && (

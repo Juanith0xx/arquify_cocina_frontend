@@ -1,10 +1,12 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { CabinetType } from '../store/kitchenStore';
+import { CabinetType, useKitchenStore } from '../store/kitchenStore';
 import { generateKitchenPartsList } from './kitchenManufacturing';
 import { calculateCncMachiningForPart, CncMachinedPart } from './kitchenCncMachining';
 import { renderArquifyPdfLogo } from './pdfLogo';
 import { getFriendlyColorName } from './colorNames';
+import { resolveAssemblyPartKey } from './assemblyPartMapper';
+import { saveAssemblySnapshot, buildAssemblyViewerUrl } from './assemblySnapshotService';
 
 export async function exportKitchenLabelsPDF(
   cabinets: CabinetType[],
@@ -20,18 +22,20 @@ export async function exportKitchenLabelsPDF(
   const assemblyType = (state.assemblyType === 'minifix' ? 'minifix' : 'spax') as 'minifix' | 'spax';
   const golaSystem = (state.golaSystem || 'none') as 'none' | 'aluminum' | 'black';
 
-  // Desglosar partes individuales (respetando cantidad)
-  const individualMachinedParts: CncMachinedPart[] = [];
+  // Desglosar partes individuales (respetando cantidad) junto a su identificador 3D de armado
+  const individualMachinedParts: Array<CncMachinedPart & { moduleId: string; assemblyPartKey: string }> = [];
 
   allParts.forEach((part) => {
     const cab = realCabinets.find(c => c.id === part.moduleId);
     const cncPart = calculateCncMachiningForPart(part, cab, hardwareBrand, assemblyType, golaSystem, state.handleConfig);
 
     for (let q = 1; q <= part.qty; q++) {
-      const partCopy: CncMachinedPart = {
+      const partCopy = {
         ...cncPart,
         partCode: part.qty > 1 ? `${cncPart.partCode}#${q}` : cncPart.partCode,
-        material: getFriendlyColorName(part.material, state.customTextures)
+        material: getFriendlyColorName(part.material, state.customTextures),
+        moduleId: part.moduleId || '',
+        assemblyPartKey: resolveAssemblyPartKey(part, q),
       };
       individualMachinedParts.push(partCopy);
     }
@@ -42,7 +46,13 @@ export async function exportKitchenLabelsPDF(
     return;
   }
 
-  // Pre-generar códigos QR en paralelo
+  // Guardar snapshot de solo lectura para el visor 3D de armado (escaneable desde celular)
+  const kitchenState = useKitchenStore.getState();
+  const snapshotInfo = await saveAssemblySnapshot(kitchenState, state);
+
+  // Pre-generar ambos códigos QR en paralelo:
+  // 1) QR CNC (mismo payload JSON intacto para máquina CNC)
+  // 2) QR 3D ARMADO (URL de solo lectura con el proyecto en Rayos X y esta pieza destacada)
   const qrPromises = individualMachinedParts.map(async (part) => {
     const payload = JSON.stringify({
       c: part.partCode,
@@ -53,14 +63,30 @@ export async function exportKitchenLabelsPDF(
       e: `L1:${part.edgeThicknessL1},L2:${part.edgeThicknessL2},W1:${part.edgeThicknessW1},W2:${part.edgeThicknessW2}`,
       hw: hardwareBrand
     });
+    const assemblyUrl = buildAssemblyViewerUrl(
+      snapshotInfo.baseUrl,
+      snapshotInfo.id,
+      part.moduleId,
+      part.assemblyPartKey,
+      part.partCode
+    );
     try {
-      return await QRCode.toDataURL(payload, {
-        width: 140,
-        margin: 0,
-        color: { dark: '#0f172a', light: '#ffffff' }
-      });
+      const [cncQr, assemblyQr] = await Promise.all([
+        QRCode.toDataURL(payload, {
+          width: 140,
+          margin: 1,
+          color: { dark: '#0f172a', light: '#ffffff' }
+        }),
+        QRCode.toDataURL(assemblyUrl, {
+          width: 140,
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#0f172a', light: '#ffffff' }
+        })
+      ]);
+      return { cncQr, assemblyQr };
     } catch {
-      return null;
+      return { cncQr: null, assemblyQr: null };
     }
   });
 
@@ -123,46 +149,47 @@ export async function exportKitchenLabelsPDF(
       doc.text(part.partCode, x + colWidth - 15.5, y + 7, { align: 'center' });
 
       // Nombre de la Pieza
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(15, 23, 42);
-      const truncatedName = part.partName.length > 34 ? part.partName.substring(0, 32) + '...' : part.partName;
-      doc.text(truncatedName, x + 3.5, y + 17);
+      const truncatedName = part.partName.length > 26 ? part.partName.substring(0, 24) + '...' : part.partName;
+      doc.text(truncatedName, x + 3.5, y + 16.5);
 
       // Módulo Padre
-      doc.setFontSize(6.5);
+      doc.setFontSize(6);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Módulo: ${part.moduleName}`, x + 3.5, y + 21);
+      const truncatedModule = part.moduleName.length > 30 ? part.moduleName.substring(0, 28) + '...' : part.moduleName;
+      doc.text(`Módulo: ${truncatedModule}`, x + 3.5, y + 20.2);
 
       // Dimensiones de Corte (Largo x Ancho x Espesor) en recuadro destacado
       doc.setFillColor(254, 243, 199); // amber-100
       doc.setDrawColor(245, 158, 11); // amber-500
-      doc.roundedRect(x + 3.5, y + 23.5, 57, 10, 1.5, 1.5, 'FD');
+      doc.roundedRect(x + 3.5, y + 22.2, 45.5, 10.5, 1.5, 1.5, 'FD');
 
-      doc.setFontSize(8);
+      doc.setFontSize(7.6);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(180, 83, 9);
-      doc.text(`${part.length} × ${part.width} × ${part.thickness} mm`, x + 6, y + 30.5);
+      doc.text(`${part.length} × ${part.width} × ${part.thickness} mm`, x + 5.5, y + 26.8);
 
       // Sentido de Veta
-      doc.setFontSize(6.5);
+      doc.setFontSize(5.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(120, 53, 15);
-      doc.text(part.grainDirection === 'vertical' ? '↕ Veta Vertical' : '↔ Veta Horizontal', x + 38, y + 30.5);
+      doc.text(part.grainDirection === 'vertical' ? '↕ Veta Vertical' : '↔ Veta Horizontal', x + 5.5, y + 31);
 
       // Material y Color
-      doc.setFontSize(7);
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(51, 65, 85);
-      doc.text(`Material: ${part.material.substring(0, 26)}`, x + 3.5, y + 37.5);
+      doc.text(`Material: ${part.material.substring(0, 23)}`, x + 3.5, y + 36.5);
 
       // Herrajes & Mecanizado
-      doc.setFontSize(6.2);
+      doc.setFontSize(5.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(71, 85, 105);
       const hwLabel = hardwareBrand === 'Hafele' ? 'Häfele Matrix S32' : 'Provelcar S32';
-      doc.text(`Herrajes: ${hwLabel} • ${assemblyType === 'minifix' ? 'Minifix' : 'Spax'}`, x + 3.5, y + 41.5);
+      doc.text(`Herrajes: ${hwLabel} • ${assemblyType === 'minifix' ? 'Minifix' : 'Spax'}`, x + 3.5, y + 40.2);
 
       // DIAGRAMA 2D DE TAPACANTOS (Mini esquema interactivo del panel)
       const diagX = x + 4;
@@ -225,22 +252,52 @@ export async function exportKitchenLabelsPDF(
       doc.setFontSize(5.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(71, 85, 105);
-      doc.text(`L1: ${part.edgeL1 ? `${part.edgeThicknessL1}mm` : '-'} | L2: ${part.edgeL2 ? `${part.edgeThicknessL2}mm` : '-'}`, diagX + 37, diagY + 5);
-      doc.text(`W1: ${part.edgeW1 ? `${part.edgeThicknessW1}mm` : '-'} | W2: ${part.edgeW2 ? `${part.edgeThicknessW2}mm` : '-'}`, diagX + 37, diagY + 9.5);
-      doc.text(`Mecanizados: ${part.drills.length} perf. | ${part.grooves.length} ran.`, diagX + 37, diagY + 14);
+      doc.text(`L1: ${part.edgeL1 ? `${part.edgeThicknessL1}mm` : '-'} | L2: ${part.edgeL2 ? `${part.edgeThicknessL2}mm` : '-'}`, diagX + 35, diagY + 4.5);
+      doc.text(`W1: ${part.edgeW1 ? `${part.edgeThicknessW1}mm` : '-'} | W2: ${part.edgeW2 ? `${part.edgeThicknessW2}mm` : '-'}`, diagX + 35, diagY + 8.8);
+      doc.text(`Mecanizados: ${part.drills.length} perf. | ${part.grooves.length} ran.`, diagX + 35, diagY + 13.2);
 
-      // CÓDIGO QR TÉCNICO
-      const qrDataUrl = qrDataUrls[globalIndex];
-      if (qrDataUrl) {
-        const qrSize = 22;
-        const qrX = x + colWidth - qrSize - 3.5;
-        const qrY = y + 16;
-        doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+      // DOBLE CÓDIGO QR: (1) CNC / CORTE y (2) VISOR 3D ARMADO (Rayos X)
+      const qrPair = qrDataUrls[globalIndex];
+      const qrSize = 17.5;
+      const qrBoxW = 19;
+      const qrBoxH = 24.5;
+      const qrBoxY = y + 14;
 
-        doc.setFontSize(5.2);
+      if (qrPair?.cncQr) {
+        const qr1BoxX = x + 50.5;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(203, 213, 225); // slate-300
+        doc.setLineWidth(0.3);
+        doc.roundedRect(qr1BoxX, qrBoxY, qrBoxW, qrBoxH, 1.5, 1.5, 'FD');
+
+        doc.addImage(qrPair.cncQr, 'PNG', qr1BoxX + (qrBoxW - qrSize) / 2, qrBoxY + 1, qrSize, qrSize);
+
+        // Etiqueta inferior CNC
+        doc.setFillColor(15, 23, 42); // slate-900
+        doc.roundedRect(qr1BoxX + 1, qrBoxY + qrSize + 1.8, qrBoxW - 2, 4, 0.8, 0.8, 'F');
+        doc.setFontSize(4.7);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(148, 163, 184);
-        doc.text('ESCÁNER TALLER', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text('CNC / CORTE', qr1BoxX + qrBoxW / 2, qrBoxY + qrSize + 4.6, { align: 'center' });
+      }
+
+      if (qrPair?.assemblyQr) {
+        const qr2BoxX = x + 70.8;
+        doc.setFillColor(255, 247, 237); // orange-50
+        doc.setDrawColor(249, 115, 22); // orange-500 (marca Arquify)
+        doc.setLineWidth(0.45);
+        doc.roundedRect(qr2BoxX, qrBoxY, qrBoxW, qrBoxH, 1.5, 1.5, 'FD');
+        doc.setLineWidth(0.2);
+
+        doc.addImage(qrPair.assemblyQr, 'PNG', qr2BoxX + (qrBoxW - qrSize) / 2, qrBoxY + 1, qrSize, qrSize);
+
+        // Etiqueta inferior 3D ARMADO
+        doc.setFillColor(234, 88, 12); // orange-600
+        doc.roundedRect(qr2BoxX + 1, qrBoxY + qrSize + 1.8, qrBoxW - 2, 4, 0.8, 0.8, 'F');
+        doc.setFontSize(4.7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text('3D ARMADO', qr2BoxX + qrBoxW / 2, qrBoxY + qrSize + 4.6, { align: 'center' });
       }
 
       // Pie de Etiqueta

@@ -7,11 +7,15 @@ import { QSTONE_SINKS, FDV_COOKTOPS, SinkSpec } from '../../types/countertop';
 import { detectContinuousCabinetRuns, ContinuousRunInfo } from '../../utils/countertopNesting';
 
 // =========================================================================
-// 3D MODEL: GRIFERÍA MONOMANDO DE ALTA GAMA (L-NECK MIXER FAUCET)
+// =========================================================================
+// 3D MODEL: GRIFERÍA MONOMANDO FDV TOP PRO 4.0 (SAP: 15507)
+// Altura total: 51.7 cm (517 mm) | Fondo / Alcance al difusor: 25.0 cm (250 mm)
+// Terminación: Acero inoxidable satinado con resorte helicoidal y rociador extensible
 // =========================================================================
 function DeckMixerFaucet3D({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.95, roughness = 0.18) => ({
+
+  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
     color: isTransparent ? '#cbd5e1' : color,
     metalness: isTransparent ? 0.05 : metalness,
     roughness: isTransparent ? 0.1 : roughness,
@@ -20,64 +24,247 @@ function DeckMixerFaucet3D({ position }: { position: [number, number, number] })
     depthWrite: !isTransparent,
   });
 
+  // Generación paramétrica exacta de la manguera flexible y el resorte helicoidal
+  const { hoseGeo, springGeo } = useMemo(() => {
+    // Parámetros dimensionales basados en la ficha técnica FDV TOP PRO 4.0 (Kitchen Center)
+    const startY = 22.0;       // Altura de inicio sobre la columna rígida
+    const centerArcY = 39.2;   // Centro del arco semicircular
+    const radiusArc = 12.5;    // Radio del arco (12.5 cm -> Cúspide exacta en Y = 39.2 + 12.5 = 51.7 cm)
+    const reachZ = 25.0;       // Alcance frontal al eje del cabezal (25.0 cm = 250 mm)
+    const endHoseY = 24.0;     // Altura final donde conecta al cabezal difusor
+    const endSpringY = 30.5;   // Altura donde remata el resorte helicoidal en su casquillo
+
+    // 1. Curva de la manguera flexible interior
+    const hosePoints: THREE.Vector3[] = [];
+    hosePoints.push(new THREE.Vector3(0, startY, 0));
+    hosePoints.push(new THREE.Vector3(0, 30.0, 0));
+    hosePoints.push(new THREE.Vector3(0, centerArcY, 0));
+
+    const arcSegments = 24;
+    for (let i = 1; i < arcSegments; i++) {
+      const theta = (Math.PI * i) / arcSegments;
+      const z = radiusArc - radiusArc * Math.cos(theta);
+      const y = centerArcY + radiusArc * Math.sin(theta);
+      hosePoints.push(new THREE.Vector3(0, y, z));
+    }
+
+    hosePoints.push(new THREE.Vector3(0, centerArcY, reachZ));
+    hosePoints.push(new THREE.Vector3(0, 32.0, reachZ));
+    hosePoints.push(new THREE.Vector3(0, endHoseY, reachZ));
+
+    const hoseCurve = new THREE.CatmullRomCurve3(hosePoints, false, 'centripetal');
+    const hGeo = new THREE.TubeGeometry(hoseCurve, 64, 0.65, 16, false);
+
+    // 2. Resorte helicoidal exterior continuo
+    const l1 = centerArcY - startY;      // 17.2 cm tramo vertical
+    const l2 = Math.PI * radiusArc;      // 39.27 cm tramo de arco
+    const l3 = centerArcY - endSpringY;  // 8.7 cm tramo descendente
+    const lTot = l1 + l2 + l3;
+
+    const numCoils = 24;                 // Número de vueltas de espiral
+    const springRadius = 1.35;           // Radio exterior de las espiras (abraza la manguera de radio 0.65)
+    const sampleSteps = 380;             // Muestreo denso para suavidad de la curva
+    const springPoints: THREE.Vector3[] = [];
+
+    for (let i = 0; i <= sampleSteps; i++) {
+      const u = i / sampleSteps;
+      const s = u * lTot;
+      let yc = 0;
+      let zc = 0;
+      let ny = 0;
+      let nz = 0;
+
+      if (s <= l1) {
+        // Vertical ascendente
+        yc = startY + s;
+        zc = 0;
+        ny = 0;
+        nz = 1;
+      } else if (s <= l1 + l2) {
+        // Arco semicircular
+        const theta = (s - l1) / radiusArc;
+        zc = radiusArc - radiusArc * Math.cos(theta);
+        yc = centerArcY + radiusArc * Math.sin(theta);
+        ny = -Math.sin(theta);
+        nz = Math.cos(theta);
+      } else {
+        // Vertical descendente
+        const dDown = s - (l1 + l2);
+        yc = centerArcY - dDown;
+        zc = reachZ;
+        ny = 0;
+        nz = -1;
+      }
+
+      const phi = 2 * Math.PI * numCoils * u;
+      const x = springRadius * Math.cos(phi);
+      const y = yc + springRadius * Math.sin(phi) * ny;
+      const z = zc + springRadius * Math.sin(phi) * nz;
+
+      springPoints.push(new THREE.Vector3(x, y, z));
+    }
+
+    const sCurve = new THREE.CatmullRomCurve3(springPoints, false, 'centripetal');
+    const sGeo = new THREE.TubeGeometry(sCurve, 280, 0.16, 6, false);
+
+    return { hoseGeo: hGeo, springGeo: sGeo };
+  }, []);
+
   return (
     <group position={position}>
-      {/* Base de fijación sobre cubierta */}
-      <mesh position={[0, 0.4, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[2.5, 2.7, 0.8, 32]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.16)} />
+      {/* 1. Base y anillo de asiento sobre cubierta */}
+      <mesh position={[0, 0.35, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.6, 2.7, 0.7, 32]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
       <mesh position={[0, 0.9, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[2.0, 2.4, 0.4, 32]} />
-        <meshStandardMaterial {...getMatProps('#94a3b8', 0.95, 0.2)} />
+        <cylinderGeometry args={[2.3, 2.5, 0.4, 32]} />
+        <meshStandardMaterial {...getMatProps('#94a3b8', 0.92, 0.22)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
 
-      {/* Columna vertical principal */}
-      <mesh position={[0, 9.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.7, 1.7, 17, 32]} />
+      {/* 2. Cuerpo cilíndrico principal inferior */}
+      <mesh position={[0, 5.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.2, 2.2, 8.8, 32]} />
         <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
-
-      {/* Caño horizontal en L hacia el centro de la poza */}
-      <mesh position={[0, 18, 9]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.2, 1.2, 18, 24]} />
-        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+      <mesh position={[0, 10.1, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[2.3, 2.3, 0.4, 32]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.92, 0.22)} />
         {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
       </mesh>
 
-      {/* Codo de unión 90° */}
-      <mesh position={[0, 18, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <sphereGeometry args={[1.6, 24, 24]} />
-        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-
-      {/* Puntera / Aireador direccionador de agua */}
-      <mesh position={[0, 15.5, 17.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.1, 1.3, 4, 24]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.15)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-      <mesh position={[0, 13.4, 17.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <cylinderGeometry args={[1.0, 1.0, 0.3, 24]} />
-        <meshStandardMaterial {...getMatProps('#64748b', 0.4, 0.7)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
-
-      {/* Manilla monomando lateral */}
-      <group position={[2.2, 6.5, 0]} rotation={[0, 0, -0.25]}>
-        <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-          <cylinderGeometry args={[1.2, 1.2, 1.2, 24]} />
-          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
+      {/* Maneta monomando lateral derecha (+X) */}
+      <group position={[2.2, 5.8, 0.4]} rotation={[0, -0.2, -0.3]}>
+        {/* Carcasa lateral del cartucho */}
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 1.25, 1.4, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
           {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
         </mesh>
-        <mesh position={[0.6, 3.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-          <cylinderGeometry args={[0.5, 0.5, 7, 20]} />
-          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.97, 0.15)} />
+        {/* Casquillo giratorio de la manilla */}
+        <mesh position={[1.1, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.15, 1.25, 0.9, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
           {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Palanca cilíndrica esbelta estilizada */}
+        <mesh position={[1.1, 3.6, 0.2]} rotation={[0.1, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[0.38, 0.38, 6.8, 16]} />
+          <meshStandardMaterial {...getMatProps('#f1f5f9', 0.98, 0.14)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Remate superior redondeado de la palanca */}
+        <mesh position={[1.1, 7.0, 0.2]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <sphereGeometry args={[0.42, 16, 16]} />
+          <meshStandardMaterial {...getMatProps('#f1f5f9', 0.98, 0.14)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
+
+      {/* 3. Columna vertical rígida de acero */}
+      <mesh position={[0, 16.2, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.35, 1.35, 11.8, 32]} />
+        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* 4. Brazo horizontal de retención y soporte del cabezal */}
+      <group position={[0, 21.6, 0]}>
+        {/* Collarín giratorio de unión a la columna */}
+        <mesh position={[0, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.55, 1.55, 1.4, 28]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Barra horizontal orientada en +Z hacia el centro del lavaplatos */}
+        <mesh position={[0, 0, 11.5]} rotation={[Math.PI / 2, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[0.55, 0.55, 23.0, 20]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Soporte frontal / horquilla donde descansa el cabezal en Z = 25.0 */}
+        <mesh position={[0, 0, 23.6]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[1.4, 1.2, 1.6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        <mesh position={[0, 0, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.7, 1.7, 1.4, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
+
+      {/* 5. Muelle de soporte denso en la base (strain relief collar) */}
+      {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
+        <mesh key={`dense-ring-${idx}`} position={[0, 22.5 + idx * 0.45, 0]}>
+          <torusGeometry args={[1.35, 0.18, 8, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      ))}
+
+      {/* Manguera flexible interior trenzada (gris grafito) */}
+      <mesh geometry={hoseGeo} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <meshStandardMaterial {...getMatProps('#334155', 0.15, 0.65)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* Resorte helicoidal exterior continuo (acero inoxidable) */}
+      <mesh geometry={springGeo} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+      </mesh>
+
+      {/* Virola / casquillo de remate del resorte en Z = 25.0 */}
+      <mesh position={[0, 30.5, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.35, 1.45, 1.2, 24]} />
+        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.96, 0.18)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+      <mesh position={[0, 29.8, 25.0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+        <cylinderGeometry args={[1.15, 1.35, 0.4, 24]} />
+        <meshStandardMaterial {...getMatProps('#94a3b8', 0.92, 0.22)} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+
+      {/* 6. Cabezal difusor profesional (Spray Head) centrado en Z = 25.0 */}
+      <group position={[0, 0, 25.0]}>
+        {/* Casquillo superior de conexión a manguera */}
+        <mesh position={[0, 24.0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.1, 1.2, 1.2, 24]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Cuello cilíndrico que calza en el anillo del soporte horizontal */}
+        <mesh position={[0, 22.4, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 1.25, 2.0, 24]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Cuerpo cónico ergonómico acampanado */}
+        <mesh position={[0, 19.3, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[1.25, 2.05, 4.2, 28]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.18)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Selector basculante negro mate de doble chorro (orientado hacia el frente) */}
+        <mesh position={[0, 19.3, 1.55]} rotation={[-0.1, 0, 0]} castShadow={!isTransparent}>
+          <boxGeometry args={[0.85, 2.2, 0.45]} />
+          <meshStandardMaterial {...getMatProps('#1e293b', 0.1, 0.7)} />
+        </mesh>
+        {/* Aro inferior cromado de la boquilla */}
+        <mesh position={[0, 17.0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <cylinderGeometry args={[2.05, 1.9, 0.4, 28]} />
+          <meshStandardMaterial {...getMatProps('#e2e8f0', 0.96, 0.16)} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Placa difusora microperforada de salida de agua */}
+        <mesh position={[0, 16.75, 0]}>
+          <cylinderGeometry args={[1.75, 1.75, 0.12, 28]} />
+          <meshStandardMaterial {...getMatProps('#1e293b', 0.2, 0.5)} />
         </mesh>
       </group>
     </group>
@@ -89,10 +276,10 @@ function DeckMixerFaucet3D({ position }: { position: [number, number, number] })
 // =========================================================================
 function DrainBasketStrainer3D({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.92, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.3,
+    roughness: isTransparent ? 0.1 : 0.32,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -176,8 +363,8 @@ function OverflowSlots3D({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial
             key={isTransparent ? 'transp' : 'solid'}
             color={isTransparent ? '#cbd5e1' : '#e2e8f0'}
-            metalness={isTransparent ? 0.05 : 0.92}
-            roughness={isTransparent ? 0.1 : 0.2}
+            metalness={isTransparent ? 0.05 : 0.3}
+            roughness={isTransparent ? 0.1 : 0.3}
             transparent={isTransparent}
             opacity={isTransparent ? 0.3 : 1}
             depthWrite={!isTransparent}
@@ -206,10 +393,10 @@ function AlfaOnec3018Realistic({
   const h = 22; // 22 cm profundidad de bacin
   const wallThick = 0.35; // 3.5mm acero
 
-  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.28,
+    roughness: isTransparent ? 0.1 : 0.35,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -217,12 +404,33 @@ function AlfaOnec3018Realistic({
 
   return (
     <group position={position}>
-      {/* Pestaña perimetral superior que se fija BAJO la piedra (undermount flange) */}
-      <mesh position={[0, -stoneThicknessCm - 0.15, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <boxGeometry args={[w + 6, 0.3, d + 6]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
+      {/* Pestaña perimetral superior que se fija BAJO la piedra (undermount flange con vano abierto) */}
+      <group position={[0, -stoneThicknessCm - 0.15, 0]}>
+        {/* Tira izquierda de pestaña */}
+        <mesh position={[-w / 2 - 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira derecha de pestaña */}
+        <mesh position={[w / 2 + 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira frontal de pestaña */}
+        <mesh position={[0, 0, d / 2 + 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira trasera de pestaña */}
+        <mesh position={[0, 0, -d / 2 - 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
 
       {/* CUBA PRINCIPAL PROFUNDA */}
       <group position={[0, -stoneThicknessCm - h / 2, 0]}>
@@ -309,10 +517,10 @@ function AlfaTwocF5858aRealistic({
   const bowlW = (w - 2.5) / 2; // ~35.2 cm por cuba
   const wallThick = 0.35;
 
-  const getMatProps = (color: string, metalness = 0.94, roughness = 0.22) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.28,
+    roughness: isTransparent ? 0.1 : 0.35,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -320,12 +528,33 @@ function AlfaTwocF5858aRealistic({
 
   return (
     <group position={position}>
-      {/* Pestaña perimetral superior */}
-      <mesh position={[0, -stoneThicknessCm - 0.15, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-        <boxGeometry args={[w + 6, 0.3, d + 6]} />
-        <meshStandardMaterial {...getMatProps('#cbd5e1', 0.95, 0.2)} />
-        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-      </mesh>
+      {/* Pestaña perimetral superior con vano abierto */}
+      <group position={[0, -stoneThicknessCm - 0.15, 0]}>
+        {/* Tira izquierda de pestaña */}
+        <mesh position={[-w / 2 - 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira derecha de pestaña */}
+        <mesh position={[w / 2 + 1.5, 0, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[3, 0.3, d + 6]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira frontal de pestaña */}
+        <mesh position={[0, 0, d / 2 + 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+        {/* Tira trasera de pestaña */}
+        <mesh position={[0, 0, -d / 2 - 1.5]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
+          <boxGeometry args={[w, 0.3, 3]} />
+          <meshStandardMaterial {...getMatProps('#cbd5e1')} />
+          {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+        </mesh>
+      </group>
 
       {/* Puente divisor central entre las dos cubas */}
       <mesh position={[0, -stoneThicknessCm - 1.5, 0]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
@@ -396,10 +625,10 @@ function AlfaTwocF5858aRealistic({
 // =========================================================================
 function FdvDesign60Model({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.88, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.35,
+    roughness: isTransparent ? 0.1 : 0.3,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -465,10 +694,10 @@ function FdvDesign60Model({ position }: { position: [number, number, number] }) 
 
 function FdvDesign90Model({ position }: { position: [number, number, number] }) {
   const isTransparent = useStore((s) => s.isTransparent);
-  const getMatProps = (color: string, metalness = 0.88, roughness = 0.2) => ({
+  const getMatProps = (color: string, _ignoredMetalness?: number, _ignoredRoughness?: number) => ({
     color: isTransparent ? '#cbd5e1' : color,
-    metalness: isTransparent ? 0.05 : metalness,
-    roughness: isTransparent ? 0.1 : roughness,
+    metalness: isTransparent ? 0.05 : 0.35,
+    roughness: isTransparent ? 0.1 : 0.3,
     transparent: isTransparent,
     opacity: isTransparent ? 0.3 : 1,
     depthWrite: !isTransparent,
@@ -536,6 +765,172 @@ function FdvDesign90Model({ position }: { position: [number, number, number] }) 
 }
 
 // =========================================================================
+// MALLA MONOLÍTICA DE CUBIERTA SIMULADA SEMITRANSPARENTE (SIN HUINCHAS NI COSTURAS)
+// =========================================================================
+function SimulatedPreviewCountertopMesh({
+  cabW,
+  cabD,
+  ctThick,
+  cutoutW,
+  cutoutD,
+  simMatProps,
+}: {
+  cabW: number;
+  cabD: number;
+  ctThick: number;
+  cutoutW: number;
+  cutoutD: number;
+  simMatProps: any;
+}) {
+  const geom = useMemo(() => {
+    const shape = new THREE.Shape();
+    const halfW = cabW / 2;
+    const ctDepth = cabD + 2;
+    const halfD = ctDepth / 2;
+
+    shape.moveTo(-halfW, -halfD);
+    shape.lineTo(halfW, -halfD);
+    shape.lineTo(halfW, halfD);
+    shape.lineTo(-halfW, halfD);
+    shape.closePath();
+
+    if (cutoutW > 0 && cutoutD > 0) {
+      const hole = new THREE.Path();
+      const hLeft = -cutoutW / 2;
+      const hRight = cutoutW / 2;
+      const hBack = -cutoutD / 2;
+      const hFront = cutoutD / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: ctThick,
+      bevelEnabled: false,
+    });
+    g.rotateX(Math.PI / 2);
+    g.translate(0, ctThick, 0);
+    g.computeVertexNormals();
+    return g;
+  }, [cabW, cabD, ctThick, cutoutW, cutoutD]);
+
+  return (
+    <mesh position={[0, 0, 1.0]} geometry={geom} castShadow={false} receiveShadow={false}>
+      <meshStandardMaterial {...simMatProps} />
+      <Edges scale={1} threshold={15} color="#94a3b8" />
+    </mesh>
+  );
+}
+
+// =========================================================================
+// MALLA MONOLÍTICA DE TRAMO DE CUBIERTA REAL CON CALADOS CNC INDEPENDIENTES
+// =========================================================================
+function ContinuousSlabSegmentMesh({
+  totalSegSlabLenCm,
+  depthCm,
+  stoneThicknessCm,
+  cabTopY,
+  localZShift,
+  isLastSeg,
+  isTransparent,
+  matProps,
+  sinkCutout,
+  cooktopCutout,
+}: {
+  totalSegSlabLenCm: number;
+  depthCm: number;
+  stoneThicknessCm: number;
+  cabTopY: number;
+  localZShift: number;
+  isLastSeg: boolean;
+  isTransparent: boolean;
+  matProps: any;
+  sinkCutout?: { localX: number; width: number; depth: number } | null;
+  cooktopCutout?: { localX: number; width: number; depth: number } | null;
+}) {
+  const geom = useMemo(() => {
+    if (!sinkCutout && !cooktopCutout) return null;
+
+    const shape = new THREE.Shape();
+    const halfW = (totalSegSlabLenCm - (isLastSeg ? 0 : 0.05)) / 2;
+    const halfD = depthCm / 2;
+
+    shape.moveTo(-halfW, -halfD);
+    shape.lineTo(halfW, -halfD);
+    shape.lineTo(halfW, halfD);
+    shape.lineTo(-halfW, halfD);
+    shape.closePath();
+
+    if (sinkCutout) {
+      const hole = new THREE.Path();
+      const hLeft = sinkCutout.localX - sinkCutout.width / 2;
+      const hRight = sinkCutout.localX + sinkCutout.width / 2;
+      const hBack = -sinkCutout.depth / 2;
+      const hFront = sinkCutout.depth / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    if (cooktopCutout) {
+      const hole = new THREE.Path();
+      const hLeft = cooktopCutout.localX - cooktopCutout.width / 2;
+      const hRight = cooktopCutout.localX + cooktopCutout.width / 2;
+      const hBack = -cooktopCutout.depth / 2;
+      const hFront = cooktopCutout.depth / 2;
+      hole.moveTo(hLeft, hBack);
+      hole.lineTo(hRight, hBack);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hLeft, hFront);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: stoneThicknessCm,
+      bevelEnabled: false,
+    });
+    g.rotateX(Math.PI / 2);
+    g.translate(0, stoneThicknessCm, 0);
+    g.computeVertexNormals();
+    return g;
+  }, [totalSegSlabLenCm, isLastSeg, depthCm, stoneThicknessCm, sinkCutout, cooktopCutout]);
+
+  if (!geom) {
+    return (
+      <mesh
+        position={[0, cabTopY + stoneThicknessCm / 2, localZShift]}
+        castShadow={!isTransparent}
+        receiveShadow={!isTransparent}
+      >
+        <boxGeometry args={[totalSegSlabLenCm - (isLastSeg ? 0 : 0.05), stoneThicknessCm, depthCm]} />
+        <meshStandardMaterial {...matProps} />
+        {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+      </mesh>
+    );
+  }
+
+  return (
+    <mesh
+      position={[0, cabTopY, localZShift]}
+      geometry={geom}
+      castShadow={!isTransparent}
+      receiveShadow={!isTransparent}
+    >
+      <meshStandardMaterial {...matProps} />
+      {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
+    </mesh>
+  );
+}
+
+// =========================================================================
 // COMPONENTE PRINCIPAL: KITCHEN COUNTERTOP 3D (CONTINUOUS SLABS & UNDERMOUNT SINK)
 // =========================================================================
 export function KitchenCountertop3D() {
@@ -582,7 +977,122 @@ export function KitchenCountertop3D() {
     return detectContinuousCabinetRuns(cabinets, countertopConfig, walls, architecturalElements, roomConfig);
   }, [cabinets, countertopConfig, walls, architecturalElements, roomConfig]);
 
-  if (!countertopConfig.enabled || continuousRuns.length === 0) {
+  // Si la cubierta NO está habilitada en el proyecto, renderizar ÚNICAMENTE la cubierta simulada semitransparente
+  // de apoyo sobre los muebles con accesorios (lavaplatos o encimera) para que no floten en el aire y sea evidente
+  // para el cliente que se trata de un preview simulado y no de una cubierta de fabricación incluida.
+  if (!countertopConfig.enabled) {
+    const accessoryCabinets = cabinets.filter((c) =>
+      c.variant === 'base_sink_2_doors' ||
+      c.variant === 'sink_2_doors' ||
+      c.variant === 'sink_u_drawer' ||
+      c.id === countertopConfig.sinkCabinetId ||
+      c.variant === 'base_cooktop_3_drawers' ||
+      c.variant === 'cooktop_3_drawers' ||
+      c.id === countertopConfig.cooktopCabinetId
+    );
+
+    if (accessoryCabinets.length === 0) return null;
+
+    return (
+      <group name="kitchen-simulated-preview-countertops">
+        {accessoryCabinets.map((cab) => {
+          const isSink =
+            cab.variant === 'base_sink_2_doors' ||
+            cab.variant === 'sink_2_doors' ||
+            cab.variant === 'sink_u_drawer' ||
+            cab.id === countertopConfig.sinkCabinetId;
+
+          const isCooktop =
+            cab.variant === 'base_cooktop_3_drawers' ||
+            cab.variant === 'cooktop_3_drawers' ||
+            cab.id === countertopConfig.cooktopCabinetId;
+
+          const cabW = cab.width;
+          const cabH = cab.height;
+          const cabD = cab.depth || 60;
+          const ctThick = 2.0;
+          const cabTopY = (cab.position[1] || 0) + cabH / 2;
+          const localZShift = 1.0;
+
+          let cutoutW = 0;
+          let cutoutD = 0;
+          let sinkSpec: SinkSpec | null = null;
+          let cooktopSpec: any = null;
+
+          if (isSink) {
+            const model = (countertopConfig.sinkModel && countertopConfig.sinkModel !== 'none')
+              ? countertopConfig.sinkModel
+              : 'alfa_onec_3018';
+            sinkSpec = QSTONE_SINKS[model] || QSTONE_SINKS.alfa_onec_3018;
+            cutoutW = sinkSpec.cutoutWidthMm / 10;
+            cutoutD = sinkSpec.cutoutDepthMm / 10;
+          } else if (isCooktop) {
+            const model = (countertopConfig.cooktopModel && countertopConfig.cooktopModel !== 'none')
+              ? countertopConfig.cooktopModel
+              : 'fdv_design_60';
+            cooktopSpec = FDV_COOKTOPS[model] || FDV_COOKTOPS.fdv_design_60;
+            cutoutW = cooktopSpec.cutoutWidthMm / 10;
+            cutoutD = cooktopSpec.cutoutDepthMm / 10;
+          }
+
+          const simMatProps = {
+            color: '#cbd5e1',
+            roughness: 0.2,
+            metalness: 0.05,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          };
+
+          return (
+            <group
+              key={`preview-ct-${cab.id}`}
+              position={[cab.position[0], cabTopY, cab.position[2]]}
+              rotation={[0, cab.rotation || 0, 0]}
+            >
+              <SimulatedPreviewCountertopMesh
+                cabW={cabW}
+                cabD={cabD}
+                ctThick={ctThick}
+                cutoutW={cutoutW}
+                cutoutD={cutoutD}
+                simMatProps={simMatProps}
+              />
+
+              {/* Artefacto instalado apoyado sobre la cubierta simulada */}
+              {isSink && sinkSpec && (
+                <>
+                  {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
+                    <AlfaTwocF5858aRealistic
+                      position={[0, ctThick, localZShift]}
+                      stoneThicknessCm={ctThick}
+                    />
+                  ) : (
+                    <AlfaOnec3018Realistic
+                      position={[0, ctThick, localZShift]}
+                      stoneThicknessCm={ctThick}
+                    />
+                  )}
+                </>
+              )}
+
+              {isCooktop && (
+                <group position={[0, ctThick, localZShift]}>
+                  {countertopConfig.cooktopModel === 'fdv_design_90' ? (
+                    <FdvDesign90Model position={[0, 0, 0]} />
+                  ) : (
+                    <FdvDesign60Model position={[0, 0, 0]} />
+                  )}
+                </group>
+              )}
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  if (continuousRuns.length === 0) {
     return null;
   }
 
@@ -631,22 +1141,26 @@ export function KitchenCountertop3D() {
 
         // Verificar si la corrida contiene el lavaplatos o la encimera
         const sinkCabinet = run.cabinets.find(
-          (c) => c.id === countertopConfig.sinkCabinetId
+          (c) => c.id === countertopConfig.sinkCabinetId ||
+                 c.variant === 'base_sink_2_doors' ||
+                 c.variant === 'sink_2_doors' ||
+                 c.variant === 'sink_u_drawer'
         );
         const cooktopCabinet = run.cabinets.find(
-          (c) => c.id === countertopConfig.cooktopCabinetId
+          (c) => c.id === countertopConfig.cooktopCabinetId ||
+                 c.variant === 'base_cooktop_3_drawers' ||
+                 c.variant === 'cooktop_3_drawers'
         );
 
         // Calcular posición relativa del lavaplatos dentro de la corrida
         const leftCoverOffsetCm = (run.leftCoverThickMm || 0) / 10;
         let sinkRelX: number | null = null;
         let sinkSpec: SinkSpec | null = null;
-        if (
-          sinkCabinet &&
-          countertopConfig.sinkModel &&
-          countertopConfig.sinkModel !== 'none'
-        ) {
-          sinkSpec = QSTONE_SINKS[countertopConfig.sinkModel];
+        if (sinkCabinet) {
+          const model = (countertopConfig.sinkModel && countertopConfig.sinkModel !== 'none')
+            ? countertopConfig.sinkModel
+            : 'alfa_onec_3018';
+          sinkSpec = QSTONE_SINKS[model] || QSTONE_SINKS.alfa_onec_3018;
           // Calcular distancia desde el extremo izquierdo de la corrida hasta el centro del gabinete del lavaplatos
           let currentDist = leftCoverOffsetCm;
           for (const cab of run.cabinets) {
@@ -661,11 +1175,12 @@ export function KitchenCountertop3D() {
 
         // Posición relativa de la encimera dentro de la corrida
         let cooktopRelX: number | null = null;
-        if (
-          cooktopCabinet &&
-          countertopConfig.cooktopModel &&
-          countertopConfig.cooktopModel !== 'none'
-        ) {
+        let cooktopSpec: any = null;
+        if (cooktopCabinet) {
+          const model = (countertopConfig.cooktopModel && countertopConfig.cooktopModel !== 'none')
+            ? countertopConfig.cooktopModel
+            : 'fdv_design_60';
+          cooktopSpec = FDV_COOKTOPS[model] || FDV_COOKTOPS.fdv_design_60;
           let currentDist = leftCoverOffsetCm;
           for (const cab of run.cabinets) {
             if (cab.id === cooktopCabinet.id) {
@@ -712,127 +1227,73 @@ export function KitchenCountertop3D() {
 
               const isLastSeg = segIdx === run.segmentLengthsMm.length - 1;
 
-              // Comprobar si el lavaplatos cae en este tramo
+              // Comprobar si el lavaplatos o la encimera caen en este tramo
               const hasSinkInSeg =
                 sinkRelX !== null &&
                 sinkSpec !== null &&
                 sinkRelX >= segLeft - 1 &&
                 sinkRelX <= segRight + 1;
 
-              const cutoutW = sinkSpec ? sinkSpec.cutoutWidthMm / 10 : 0;
-              const cutoutD = sinkSpec ? sinkSpec.cutoutDepthMm / 10 : 0;
+              const hasCooktopInSeg =
+                cooktopRelX !== null &&
+                cooktopSpec !== null &&
+                cooktopRelX >= segLeft - 1 &&
+                cooktopRelX <= segRight + 1;
+
+              const sinkCutout = (hasSinkInSeg && sinkSpec) ? {
+                localX: sinkRelX! - segCenterRelX,
+                width: sinkSpec.cutoutWidthMm / 10,
+                depth: sinkSpec.cutoutDepthMm / 10,
+              } : null;
+
+              const cooktopCutout = (hasCooktopInSeg && cooktopSpec) ? {
+                localX: cooktopRelX! - segCenterRelX,
+                width: cooktopSpec.cutoutWidthMm / 10,
+                depth: cooktopSpec.cutoutDepthMm / 10,
+              } : null;
 
               return (
                 <group key={`seg-${segIdx}`} position={[segCenterRelX, 0, 0]}>
-                  {/* SI TIENE LAVAPLATOS: Generar la cubierta con HUECO REAL (Cutout) de 4 piezas sin colisiones ni z-fighting */}
-                  {hasSinkInSeg && sinkSpec ? (
-                    (() => {
-                      const localSinkX = sinkRelX! - segCenterRelX;
-                      const holeLeft = localSinkX - cutoutW / 2;
-                      const holeRight = localSinkX + cutoutW / 2;
-                      const holeBack = localZShift - cutoutD / 2;
-                      const holeFront = localZShift + cutoutD / 2;
+                  {/* Plancha de cubierta continua monolítica (con o sin calados CNC) */}
+                  <ContinuousSlabSegmentMesh
+                    totalSegSlabLenCm={totalSegSlabLenCm}
+                    depthCm={depthCm}
+                    stoneThicknessCm={stoneThicknessCm}
+                    cabTopY={cabTopY}
+                    localZShift={localZShift}
+                    isLastSeg={isLastSeg}
+                    isTransparent={isTransparent}
+                    matProps={getCountertopMatProps()}
+                    sinkCutout={sinkCutout}
+                    cooktopCutout={cooktopCutout}
+                  />
 
-                      const leftPartW = Math.max(0, holeLeft - (-totalSegSlabLenCm / 2));
-                      const rightPartW = Math.max(0, totalSegSlabLenCm / 2 - holeRight);
-                      const rearPartD = Math.max(0, holeBack - (-depthCm / 2));
-                      const frontPartD = Math.max(0, depthCm / 2 - holeFront);
+                  {/* MONTAJE BAJO CUBIERTA DEL LAVAPLATOS REALISTA */}
+                  {sinkCutout && (
+                    <>
+                      {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
+                        <AlfaTwocF5858aRealistic
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          stoneThicknessCm={stoneThicknessCm}
+                        />
+                      ) : (
+                        <AlfaOnec3018Realistic
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          stoneThicknessCm={stoneThicknessCm}
+                        />
+                      )}
+                    </>
+                  )}
 
-                      return (
-                        <group>
-                          {/* Pieza izquierda de la cubierta */}
-                          {leftPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                -totalSegSlabLenCm / 2 + leftPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[leftPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza derecha de la cubierta */}
-                          {rightPartW > 0.1 && (
-                            <mesh
-                              position={[
-                                totalSegSlabLenCm / 2 - rightPartW / 2,
-                                slabCenterY,
-                                localZShift,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[rightPartW, stoneThicknessCm, depthCm]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza trasera (puente donde se monta la grifería) */}
-                          {rearPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localSinkX,
-                                slabCenterY,
-                                -depthCm / 2 + rearPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cutoutW, stoneThicknessCm, rearPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* Pieza delantera (borde frontal de la cubierta frente al lavaplatos) */}
-                          {frontPartD > 0.1 && (
-                            <mesh
-                              position={[
-                                localSinkX,
-                                slabCenterY,
-                                depthCm / 2 - frontPartD / 2,
-                              ]}
-                              castShadow={!isTransparent}
-                              receiveShadow={!isTransparent}
-                            >
-                              <boxGeometry args={[cutoutW, stoneThicknessCm, frontPartD]} />
-                              <meshStandardMaterial {...getCountertopMatProps()} />
-                              {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                            </mesh>
-                          )}
-
-                          {/* MONTAJE BAJO CUBIERTA DEL LAVAPLATOS REALISTA */}
-                          {countertopConfig.sinkModel === 'alfa_onec_3018' && (
-                            <AlfaOnec3018Realistic
-                              position={[localSinkX, cabTopY + stoneThicknessCm, localZShift]}
-                              stoneThicknessCm={stoneThicknessCm}
-                            />
-                          )}
-                          {countertopConfig.sinkModel === 'alfa_twoc_f5858a' && (
-                            <AlfaTwocF5858aRealistic
-                              position={[localSinkX, cabTopY + stoneThicknessCm, localZShift]}
-                              stoneThicknessCm={stoneThicknessCm}
-                            />
-                          )}
-                        </group>
-                      );
-                    })()
-                  ) : (
-                    /* SI NO TIENE LAVAPLATOS: Plancha corrida continua estándar cubriendo toda la superficie hasta el muro en esquinas */
-                    <mesh position={[0, slabCenterY, localZShift]} castShadow={!isTransparent} receiveShadow={!isTransparent}>
-                      <boxGeometry
-                        args={[totalSegSlabLenCm - (isLastSeg ? 0 : 0.05), stoneThicknessCm, depthCm]}
-                      />
-                      <meshStandardMaterial {...getCountertopMatProps()} />
-                      {isTransparent && <Edges scale={1} threshold={15} color="#555555" />}
-                    </mesh>
+                  {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
+                  {cooktopCutout && (
+                    <group position={[cooktopCutout.localX, cabTopY + stoneThicknessCm, localZShift]}>
+                      {countertopConfig.cooktopModel === 'fdv_design_90' ? (
+                        <FdvDesign90Model position={[0, 0, 0]} />
+                      ) : (
+                        <FdvDesign60Model position={[0, 0, 0]} />
+                      )}
+                    </group>
                   )}
 
                   {/* Junta sutil a 90° si el tramo fue seccionado por criterio de transporte */}
@@ -852,18 +1313,6 @@ export function KitchenCountertop3D() {
                 </group>
               );
             })}
-
-            {/* ENCIMERA A GAS FDV (si cae en esta corrida) */}
-            {cooktopRelX !== null && (
-              <group position={[cooktopRelX, cabTopY + stoneThicknessCm, localZShift]}>
-                {countertopConfig.cooktopModel === 'fdv_design_60' && (
-                  <FdvDesign60Model position={[0, 0, 0]} />
-                )}
-                {countertopConfig.cooktopModel === 'fdv_design_90' && (
-                  <FdvDesign90Model position={[0, 0, 0]} />
-                )}
-              </group>
-            )}
 
             {/* Faldón Delantero / Regrueso Continuo (de 0 a 5 cm) */}
             {regruesoCm > 0 && (() => {

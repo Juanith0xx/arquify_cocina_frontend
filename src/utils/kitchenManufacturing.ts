@@ -161,6 +161,7 @@ export function isCabinetWithDoors(cab: CabinetType): boolean {
     v === 'wall_1_door' ||
     v === 'wall_2_doors' ||
     v === 'wall_hood_new_flow' ||
+    v === 'wall_door_shelf' ||
     v === 'closet_2_doors' ||
     v === 'closet_inner_drawers' ||
     (cab.type === 'closet' && Boolean(cab.hasDoors)) ||
@@ -189,7 +190,7 @@ export function getSplitCabinetShelvesCounts(cab: CabinetType): { lower: number;
   let defaultLower = 1;
   let defaultUpper = 3;
   if (cab.variant === 'tall_oven_vent' || cab.variant === 'tall_oven_micro') {
-    defaultLower = 1;
+    defaultLower = (cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers') ? 0 : 1;
     defaultUpper = 1;
   } else if (cab.variant === 'tall_microwave_niche') {
     defaultLower = 1;
@@ -210,6 +211,7 @@ export function getSplitCabinetShelvesCounts(cab: CabinetType): { lower: number;
  */
 export function getDefaultShelvesCount(cab: CabinetType): number {
   const v = cab.variant || (cab.width > 60 ? '2_doors' : '1_door');
+  if (v === 'base_sink_2_doors' || v === 'sink_2_doors' || v === 'base_cooktop_3_drawers' || v === 'cooktop_3_drawers') return 0;
   if (v === 'closet_shelves') return 5;
   if (v === 'closet_walkin') return 3;
   if (v === 'closet_mixed') return 2;
@@ -298,6 +300,11 @@ export function getCabinetHingesPositions(cab: CabinetType): number[] {
     return [9, Math.max(15, doorH - 9)];
   }
 
+  if (v === 'wall_door_shelf') {
+    const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+    return [nicheH + 9, cabH - 9];
+  }
+
   // Estándar 1 puerta o 2 puertas (base, isla, aéreo)
   return [9, cabH - 9];
 }
@@ -379,6 +386,26 @@ export function getResolvedCabinetShelfElevations(cab: CabinetType, thicknessCm 
     return elevations.sort((a, b) => a - b);
   }
 
+  if (v === 'wall_door_shelf') {
+    const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+    const bottomOffset = nicheH + thicknessCm;
+    const topOffset = thicknessCm;
+    const usableH = cabH - topOffset - bottomOffset;
+    if (usableH <= 10) return [];
+    const step = usableH / (count + 1);
+    const elevations: number[] = [];
+    for (let i = 0; i < count; i++) {
+      let yPos = bottomOffset + (i + 1) * step;
+      for (const h of hinges) {
+        if (Math.abs(yPos - h) <= HINGE_COLLISION_RADIUS) {
+          yPos += (yPos >= h ? 4.5 : -4.5);
+        }
+      }
+      elevations.push(Math.round(yPos * 10) / 10);
+    }
+    return elevations.sort((a, b) => a - b);
+  }
+
   const bottomOffset = thicknessCm;
   const topOffset = thicknessCm;
   const usableH = cabH - topOffset - bottomOffset;
@@ -433,7 +460,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
     // 1. Laterales (Sides)
     const isBaseGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
     const isTallSplitGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && cab.type === 'tall' && (cab.variant === 'tall_split_2_doors' || cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent');
-    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers');
+    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot');
     const isWineRack = cab.variant?.includes('wine_rack') || cab.variant === 'base_wine_rack' || cab.variant === 'wall_wine_rack' || cab.variant === 'tall_wine_rack' || cab.variant === 'island_wine_rack';
     const isOpen = cab.variant === 'open' || cab.variant === 'tall_open' || cab.variant === 'wall_open' || (cab.type === 'closet' && !cab.hasDoors && cab.variant !== 'closet_2_doors' && cab.variant !== 'closet_inner_drawers');
     const hasFronts = !isWineRack && !isOpen;
@@ -579,7 +606,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
 
     // 3.1 Barras de Refuerzo Traseras (únicamente si el material de la trasera es Durolac)
     if (isDurolacBack && cab.type !== 'closet') {
-      if (cab.type === 'base' || cab.type === 'island' || cab.type === 'wall') {
+      if (cab.variant === 'wall_hood_new_flow') {
         parts.push({
           name: `Barra Refuerzo Trasera Superior ${cabName}`,
           moduleId: cab.id,
@@ -590,7 +617,32 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
           thickness: thickness * 10,
           material: cab.structureColor || state.structureColor,
           edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-          notes: 'Amarre posterior de refuerzo para trasera Durolac (superior)'
+          notes: 'Amarre posterior de refuerzo para trasera Durolac (superior, bajo techo)'
+        });
+        parts.push({
+          name: `Barra Refuerzo Trasera Inferior ${cabName}`,
+          moduleId: cab.id,
+          moduleIndex: index,
+          qty: 1,
+          length: innerW * 10,
+          width: 10 * 10,
+          thickness: thickness * 10,
+          material: cab.structureColor || state.structureColor,
+          edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+          notes: 'Amarre posterior de refuerzo para trasera Durolac (sobre repisa campana a 176mm)'
+        });
+      } else if (cab.type === 'base' || cab.type === 'island' || cab.type === 'wall') {
+        parts.push({
+          name: `Barra Refuerzo Trasera Superior ${cabName}`,
+          moduleId: cab.id,
+          moduleIndex: index,
+          qty: 1,
+          length: innerW * 10,
+          width: 10 * 10,
+          thickness: thickness * 10,
+          material: cab.structureColor || state.structureColor,
+          edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+          notes: cab.type === 'wall' ? 'Amarre posterior de refuerzo para trasera Durolac (superior, bajo techo)' : 'Amarre posterior de refuerzo para trasera Durolac (superior)'
         });
         parts.push({
           name: `Barra Refuerzo Trasera Inferior ${cabName}`,
@@ -681,18 +733,35 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
           notes: isDurolacBack ? 'Placa Durolac 3mm despensa superior' : `Trasera Melamina ${backThickMm}mm despensa superior`
         });
       }
-    } else {
+    } else if (cab.variant === 'wall_hood_new_flow') {
+      const hoodShelfH = 17.6;
+      const durolacOpeningH = Math.max(5, cabH - hoodShelfH - thickness * 2);
+      const groovePenetrationMm = isDurolacBack ? 16 : 0;
       parts.push({
         name: `Fondo Trasera ${cabName}`,
         moduleId: cab.id,
         moduleIndex: index,
         qty: 1,
-        length: innerW * 10,
-        width: innerH * 10,
+        length: Math.round(innerW * 10 + groovePenetrationMm),
+        width: Math.round(durolacOpeningH * 10 + groovePenetrationMm),
         thickness: backThickMm,
         material: backMaterialName,
         edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
-        notes: isDurolacBack ? 'Placa Durolac 3mm ranurada/clavada' : `Trasera Melamina ${backThickMm}mm`
+        notes: isDurolacBack ? 'Placa Durolac 3mm para ranurado de 4x8mm en laterales, techo y repisa campana (+16mm)' : `Trasera Melamina ${backThickMm}mm sobre repisa campana`
+      });
+    } else {
+      const groovePenetrationMm = isDurolacBack ? 16 : 0;
+      parts.push({
+        name: `Fondo Trasera ${cabName}`,
+        moduleId: cab.id,
+        moduleIndex: index,
+        qty: 1,
+        length: Math.round(innerW * 10 + groovePenetrationMm),
+        width: Math.round(innerH * 10 + groovePenetrationMm),
+        thickness: backThickMm,
+        material: backMaterialName,
+        edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
+        notes: isDurolacBack ? 'Placa Durolac 3mm ranurada (+16mm penetración 4x8mm)' : `Trasera Melamina ${backThickMm}mm`
       });
     }
 
@@ -784,7 +853,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             thickness: thickness * 10,
             material: cab.shelfColor || state.structureColor,
             edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-            notes: 'Base reforzada soporte horno a 70cm'
+            notes: 'Base reforzada soporte horno a 60cm de casco'
         });
         parts.push({
             name: `Divisor Horno / Microondas ${cabName}`,
@@ -1807,7 +1876,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
             notes: (doorLeaves === 2 ? 'Módulo > 60cm subdividido en 2 hojas (máx 600mm)' : 'Puerta batiente') + (isGola ? ' (Descuento 35mm p/ Riel Gola L x175)' : '')
         });
-    } else if (cab.variant === '2_doors' || cab.variant === 'tall_2_doors') {
+    } else if (cab.variant === '2_doors' || cab.variant === 'tall_2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') {
         const isGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
         const ctConfig = kState.countertopConfig;
         const regruesoCm = (ctConfig?.enabled && (cab.type === 'base' || cab.type === 'island'))
@@ -1866,35 +1935,110 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             notes: 'Puerta superior despensa (ancho <= 600mm)'
         });
     } else if (cab.variant === 'tall_oven_micro') {
-        const baseH = 70;
+        const baseH = 60;
         const ovenH = 60;
         const microH = 38;
         const topH = Math.max(10, cabH - (baseH + ovenH + microH));
         const lowerDoorH = baseH - gap*2;
         const topDoorH = topH - gap*2;
 
-        parts.push({
-            name: `Puerta Inferior Base ${cabName}`,
-            moduleId: cab.id,
-            moduleIndex: index,
-            qty: 1,
-            length: lowerDoorH * 10,
-            width: (w - gap*2) * 10,
-            thickness: thickness * 10,
-            material: frontMat,
-            edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true
-        });
+        if (cab.towerLowerType === 'drawers') {
+            const singleDrawerH = (baseH - gap * 3) / 2;
+            const drawH_mm = Number((singleDrawerH * 10).toFixed(1));
+            const drawW_mm = Number(((w - gap * 2) * 10).toFixed(1));
+
+            // 2 Frentes Caceroleros
+            parts.push({
+                name: `Frente Cacerolero Inferior 1 ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: drawH_mm,
+                width: drawW_mm,
+                thickness: thickness * 10,
+                material: cab.drawerFrontColor || frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Frente gaveta cacerolera inferior (base de torre)'
+            });
+            parts.push({
+                name: `Frente Cacerolero Inferior 2 ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: drawH_mm,
+                width: drawW_mm,
+                thickness: thickness * 10,
+                material: cab.drawerFrontColor || frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Frente gaveta cacerolera media (bajo horno)'
+            });
+
+            // Cajas de los 2 cajones caceroleros
+            const innerDepthMm = (effectiveDepth - 2) * 10;
+            const nominalLength = getNominalSlideLength(innerDepthMm);
+            const drawerBoxLength = nominalLength - hwSpec.drawerLengthDeduction;
+            const drawerBoxOuterWidth = innerW * 10 - hwSpec.slideClearanceTotal;
+            const drawerFrontBackLength = drawerBoxOuterWidth - (2 * thickness * 10);
+            const cInnerMat = cab.drawerInnerColor || state.structureColor;
+            const caceroleroSideH = 180; // Altura lateral cacerolero estándar 180mm
+
+            for (let i = 0; i < 2; i++) {
+                parts.push({
+                    name: `Lateral Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 2,
+                    length: drawerBoxLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `P/ ${hwSpec.slideName} (NL=${nominalLength}mm)`
+                });
+                parts.push({
+                    name: `Contrafrente Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerFrontBackLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `Testero frontal interior p/ fijación de frente exterior`
+                });
+                parts.push({
+                    name: `Trasera Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerFrontBackLength, width: caceroleroSideH, thickness: thickness * 10, material: cInnerMat,
+                    edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: `Testero posterior p/ ${hwSpec.slideName}`
+                });
+                const botSpecs = getDrawerBottomSpecs(w, cInnerMat, cab.drawerInnerMaterial || state.drawerInnerMaterial, thickness);
+                parts.push({
+                    name: `Fondo Cacerolero Torre ${cabName} (${i + 1})`,
+                    moduleId: cab.id, moduleIndex: index, qty: 1,
+                    length: drawerBoxLength, width: botSpecs.isDurolac ? drawerBoxOuterWidth : drawerFrontBackLength, thickness: botSpecs.thicknessMm, material: botSpecs.materialName,
+                    edgeL1: false, edgeL2: false, edgeW1: false, edgeW2: false,
+                    notes: botSpecs.notes
+                });
+            }
+        } else {
+            parts.push({
+                name: `Puerta Inferior Base ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: 1,
+                length: Number((lowerDoorH * 10).toFixed(1)),
+                width: Number(((w - gap*2) * 10).toFixed(1)),
+                thickness: thickness * 10,
+                material: frontMat,
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Puerta inferior base de torre horno'
+            });
+        }
         if (topDoorH > 10) {
             parts.push({
                 name: `Puerta Superior Despensa ${cabName}`,
                 moduleId: cab.id,
                 moduleIndex: index,
                 qty: 1,
-                length: topDoorH * 10,
-                width: (w - gap*2) * 10,
+                length: Number((topDoorH * 10).toFixed(1)),
+                width: Number(((w - gap*2) * 10).toFixed(1)),
                 thickness: thickness * 10,
                 material: frontMat,
-                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true
+                edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+                notes: 'Puerta superior torre despensa'
             });
         }
     } else if (cab.variant === 'tall_microwave_niche') {
@@ -2033,6 +2177,49 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false
             });
         }
+    } else if (cab.variant === 'wall_door_shelf') {
+        const nicheH = Math.min(30, Math.max(22, Math.round(cabH * 0.35)));
+        const topH = Math.max(20, cabH - nicheH - gap);
+        const topDoorH = topH - gap * 2;
+        parts.push({
+            name: `Divisor Fijo Sobre Nicho ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 1,
+            length: (innerW - 0.2) * 10,
+            width: Number((effectiveDepth * 10).toFixed(1)),
+            thickness: thickness * 10,
+            material: cab.shelfColor || state.structureColor,
+            edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+            notes: 'Repisa divisoria fija sobre nicho inferior'
+        });
+        parts.push({
+            name: `Puerta Superior Batiente ${cabName}`,
+            moduleId: cab.id,
+            moduleIndex: index,
+            qty: 1,
+            length: topDoorH * 10,
+            width: (w - gap * 2) * 10,
+            thickness: thickness * 10,
+            material: frontMat,
+            edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
+            notes: 'Puerta batiente superior de mueble aéreo'
+        });
+        const shelfCount = cab.shelvesCount !== undefined ? cab.shelvesCount : (topH > 40 ? 1 : 0);
+        if (shelfCount > 0) {
+            parts.push({
+                name: `Repisa Interior Superior ${cabName}`,
+                moduleId: cab.id,
+                moduleIndex: index,
+                qty: shelfCount,
+                length: (innerW - 0.2) * 10,
+                width: stdShelfDepthMm,
+                thickness: thickness * 10,
+                material: cab.shelfColor || state.structureColor,
+                edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
+                notes: 'Repisas regulables interiores en compartimento superior'
+            });
+        }
     } else if (cab.variant === 'wall_hood_new_flow') {
         const hoodH = 17.6;
         const visorH = 4.0; // Visera frontal inferior visible
@@ -2096,8 +2283,10 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
             notes: '2 repisas vistas interiores'
         });
-    } else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '1_door_1_drawer') {
+    } else if (cab.variant === '4_drawers' || cab.variant === '2_pot_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === '1_door_1_drawer' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
         const isGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
+        const isVeggie = cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie';
+        const isCooktop3D = cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers';
         let drawCount = 0;
         let drawerHeights: number[] = [];
         let isPotDrawer = cab.variant === '2_pot_drawers';
@@ -2120,7 +2309,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 drawerHeights = [(cabH - gap*3)/2, (cabH - gap*3)/2];
             }
         }
-        if (cab.variant === '2_drawers_1_pot') {
+        if (cab.variant === '2_drawers_1_pot' || isCooktop3D) {
             drawCount = 3;
             if (isGola) {
                 const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4);
@@ -2130,6 +2319,22 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 const lowH = Math.round(availH * 0.5 * 10) / 10;
                 const upH = (availH - lowH) / 2;
                 drawerHeights = [lowH, upH, upH];
+            }
+        }
+        if (isVeggie) {
+            drawCount = 3;
+            if (isGola) {
+                const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4);
+                const lowH = Math.round(availH * 0.43 * 10) / 10;
+                const midH = Math.round(availH * 0.33 * 10) / 10;
+                const topH = Math.round((availH - lowH - midH) * 10) / 10;
+                drawerHeights = [lowH, midH, topH];
+            } else {
+                const availH = cabH - gap * 4;
+                const lowH = Math.round(availH * 0.43 * 10) / 10;
+                const midH = Math.round(availH * 0.33 * 10) / 10;
+                const topH = Math.round((availH - lowH - midH) * 10) / 10;
+                drawerHeights = [lowH, midH, topH];
             }
         }
         if (cab.variant === '1_door_1_drawer') {
@@ -2151,13 +2356,36 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
             const topIdx = drawerHeights.length - 1;
             drawerHeights[topIdx] = Math.max(8, Number((drawerHeights[topIdx] - regruesoDeduction).toFixed(1)));
         }
+
+        // Medidas de ranura verdulero y cálculo de tapacanto interior
+        const frontWidthMm = (w - gap * 2) * 10;
+        const cutoutWMm = Math.min(360, Math.max(220, Math.round(frontWidthMm * 0.55)));
+        const cutoutHMm = 70; // 70 mm
+        // Perímetro ranura stadium: 2 * (W - H) + PI * H
+        const cutoutInnerPerimeterM = isVeggie ? (2 * (cutoutWMm - cutoutHMm) + Math.PI * cutoutHMm) / 1000 : 0;
         
         drawerHeights.forEach((dh, i) => {
-            const isOlleroFront = cab.variant === '2_drawers_1_pot' ? i === 0 : isPotDrawer;
+            const isOlleroFront = (cab.variant === '2_drawers_1_pot' || isCooktop3D) ? i === 0 : isPotDrawer;
+            let partName = `Frente Cajón ${i+1} ${cabName}`;
+            if (isCooktop3D) {
+                partName = i === 2 
+                    ? `Frente Fijo Superior Encimera ${cabName}`
+                    : (i === 0 ? `Frente Cajón Ollero Inferior ${cabName}` : `Frente Cajón Medio ${cabName}`);
+            } else if (cab.variant === '2_drawers_1_pot') {
+                partName = i === 0 ? `Frente Cajón Ollero Inferior ${cabName}` : `Frente Cajón Superior ${i} ${cabName}`;
+            } else if (isVeggie) {
+                const veggieLabels = ['Inferior (Papas/Hortalizas)', 'Medio (Cebollas/Frutas)', 'Superior (Cítricos/Menores)'];
+                partName = `Frente Cajón Verdulero ${veggieLabels[i] || i + 1} ${cabName}`;
+            }
+
+            const notesText = isCooktop3D && i === 2
+                ? 'Frente Fijo / Ciego para encimera embutida (sin correderas, fijación con escuadras)'
+                : (isVeggie 
+                    ? `Perforación verdulero ${cutoutWMm}x${cutoutHMm}mm c/ tapacanto interior (+${cutoutInnerPerimeterM.toFixed(2)}m)` 
+                    : (isGola ? 'Tapacanto perimetral (Alineado a Riel Gola Provelcar)' : (isOlleroFront ? 'Frente cajón ollero de gran capacidad' : 'Tapacanto perimetral')));
+
             parts.push({
-                name: cab.variant === '2_drawers_1_pot' 
-                    ? (i === 0 ? `Frente Cajón Ollero Inferior ${cabName}` : `Frente Cajón Superior ${i} ${cabName}`)
-                    : `Frente Cajón ${i+1} ${cabName}`,
+                name: partName,
                 moduleId: cab.id,
                 moduleIndex: index,
                 qty: 1,
@@ -2166,7 +2394,8 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 thickness: thickness * 10,
                 material: cab.drawerFrontColor || frontMat,
                 edgeL1: true, edgeL2: true, edgeW1: true, edgeW2: true,
-                notes: isGola ? 'Tapacanto perimetral (Alineado a Riel Gola Provelcar)' : (isOlleroFront ? 'Frente cajón ollero de gran capacidad' : 'Tapacanto perimetral')
+                extraEdgeMeters: isVeggie ? cutoutInnerPerimeterM : undefined,
+                notes: notesText
             });
         });
 
@@ -2211,10 +2440,11 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
         const drawerFrontBackLength = drawerBoxOuterWidth - (2 * thickness * 10);
         const cInnerMat = cab.drawerInnerColor || state.structureColor;
 
-        for (let i=0; i<drawCount; i++) {
-            const currentSideH = cab.variant === '2_drawers_1_pot' 
-                ? (i === 0 ? 180 : 120) 
-                : (isPotDrawer ? 180 : 120);
+        const actualBoxesCount = isCooktop3D ? 2 : drawCount;
+        for (let i=0; i<actualBoxesCount; i++) {
+            const currentSideH = isVeggie
+                ? (i === 0 ? 180 : (i === 1 ? 140 : 100))
+                : ((cab.variant === '2_drawers_1_pot' || isCooktop3D) ? (i === 0 ? 180 : 120) : (isPotDrawer ? 180 : 120));
             // Laterales cajon
             parts.push({
                 name: `Lateral Cajón ${cabName} (${i+1})`,
@@ -2223,13 +2453,20 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
                 notes: `P/ ${hwSpec.slideName} (NL=${nominalLength}mm)`
             });
-            // Contrafrente (Frontal Interior) de caja
+            // Contrafrente (Frontal Interior) de caja: altura completa con calado CNC (+20mm contorno) en verdulero para atornillado firme desde atrás
+            const frontTesteroH = currentSideH;
+            const innerCutoutWMm = cutoutWMm + 40;
+            const innerCutoutHMm = Math.min(frontTesteroH - 10, cutoutHMm + 40);
+            const innerCutoutPerimeterM = isVeggie ? (2 * (innerCutoutWMm - innerCutoutHMm) + Math.PI * innerCutoutHMm) / 1000 : 0;
             parts.push({
                 name: `Contrafrente Cajón ${cabName} (${i+1})`,
                 moduleId: cab.id, moduleIndex: index, qty: 1,
-                length: drawerFrontBackLength, width: currentSideH, thickness: thickness * 10, material: cInnerMat,
+                length: drawerFrontBackLength, width: frontTesteroH, thickness: thickness * 10, material: cInnerMat,
                 edgeL1: true, edgeL2: false, edgeW1: false, edgeW2: false,
-                notes: `Testero frontal interior p/ fijación de frente exterior`
+                extraEdgeMeters: isVeggie ? innerCutoutPerimeterM : undefined,
+                notes: isVeggie 
+                    ? `Mecanizado CNC calado ovalado interior ${innerCutoutWMm}x${innerCutoutHMm}mm (+20mm p/ atornillado desde atrás)` 
+                    : `Testero frontal interior p/ fijación de frente exterior`
             });
             // Trasera de caja
             parts.push({
@@ -2365,7 +2602,8 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
       // Tapacantos
       const cantosL = (p.edgeL1 ? 1 : 0) + (p.edgeL2 ? 1 : 0);
       const cantosW = (p.edgeW1 ? 1 : 0) + (p.edgeW2 ? 1 : 0);
-      const meters = (((cantosL * p.length) + (cantosW * p.width)) * p.qty) / 1000;
+      const extraMeters = (p.extraEdgeMeters || 0) * p.qty;
+      const meters = ((((cantosL * p.length) + (cantosW * p.width)) * p.qty) / 1000) + extraMeters;
       if (meters > 0) {
         if (isFront) {
           if (!cantosFrontByColor[colorVal]) {
@@ -2556,7 +2794,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         if (cab.variant === '1_door' || cab.variant === '1_door_1_drawer' || cab.variant?.startsWith('corner_blind') || cab.variant === 'corner_blind' || cab.variant?.startsWith('wall_corner_blind')) {
             const leaves = 1;
             totalHinges += leaves * stdHingesPerLeaf;
-        } else if (cab.variant === '2_doors') {
+        } else if (cab.variant === '2_doors' || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') {
             const leaves = Math.max(2, Math.ceil(cab.width / 60));
             totalHinges += leaves * stdHingesPerLeaf;
         } else if (cab.variant === 'wall_lift_up') {
@@ -2573,6 +2811,12 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             const leaves = 2;
             totalHinges += leaves * getHingesCountByHeight(topDoorHMm);
             neuFlowHoodsCount += 1;
+        } else if (cab.variant === 'wall_door_shelf') {
+            const nicheH = Math.min(30, Math.max(22, Math.round(cabBodyH * 0.35)));
+            const topH = Math.max(20, cabBodyH - nicheH - gap);
+            const topDoorHMm = Math.round((topH - gap * 2) * 10);
+            const leaves = 1;
+            totalHinges += leaves * getHingesCountByHeight(topDoorHMm);
         } else if (cab.variant === 'tall_1_door') {
             const leaves = 1;
             totalHinges += leaves * stdHingesPerLeaf;
@@ -2586,13 +2830,15 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             totalHinges += leaves * (getHingesCountByHeight(lowerHMm) + getHingesCountByHeight(upperHMm));
         } else if (cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent') {
             const leaves = 1;
-            const baseH = 70;
+            const baseH = (cab.variant === 'tall_oven_micro') ? 60 : 70;
             const ovenH = 60;
             const microH = 38;
             const topH = Math.max(10, cabBodyH - (baseH + ovenH + microH));
             const lowerHMm = Math.round((baseH - gap * 2) * 10);
             const topHMm = Math.round((topH - gap * 2) * 10);
-            totalHinges += leaves * getHingesCountByHeight(lowerHMm);
+            if (!(cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers')) {
+                totalHinges += leaves * getHingesCountByHeight(lowerHMm);
+            }
             if (topH > 10) {
                 totalHinges += leaves * getHingesCountByHeight(topHMm);
             }
@@ -2637,10 +2883,13 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
         let cabDrawers = 0;
         if (cab.variant === '4_drawers') cabDrawers = 4;
         if (cab.variant === '2_pot_drawers') cabDrawers = 2;
+        if (cab.variant === '2_drawers_1_pot' || cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') cabDrawers = 3;
+        if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') cabDrawers = 2;
         if (cab.variant === '1_door_1_drawer') cabDrawers = 1;
         if (cab.variant === 'sink_u_drawer') cabDrawers = 2;
         if (cab.variant === 'tall_inner_drawers') cabDrawers = 4;
         if (cab.variant === 'spice_rack') cabDrawers = 1;
+        if (cab.variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers') cabDrawers = 2;
         if (cab.type === 'closet' || cab.variant?.startsWith('closet_')) {
             cabDrawers = cab.drawersCount !== undefined 
                 ? cab.drawersCount 
@@ -3024,7 +3273,7 @@ export function generateKitchenHardwareList(cabinets: CabinetType[]) {
             return 0;
         }
         const v = cab.variant || (cab.width > 60 ? '2_doors' : '1_door');
-        if (v === '1_door' || v === 'spice_rack' || v === 'sink_1_door' || v === 'wall_1_door' || v === 'tall_1_door' || v === 'wall_lift_up' || v === 'wall_microwave_niche' || v === 'corner_l' || v === 'wall_corner_l' || v?.startsWith('corner_blind') || v === 'corner_blind' || v?.startsWith('wall_corner_blind')) {
+        if (v === '1_door' || v === 'spice_rack' || v === 'sink_1_door' || v === 'wall_1_door' || v === 'tall_1_door' || v === 'wall_lift_up' || v === 'wall_microwave_niche' || v === 'wall_door_shelf' || v === 'corner_l' || v === 'wall_corner_l' || v?.startsWith('corner_blind') || v === 'corner_blind' || v?.startsWith('wall_corner_blind')) {
             return 1;
         }
         if (v === '2_doors' || v === '1_door_1_drawer' || v === '2_drawers' || v === 'sink_2_doors' || v === 'sink_2_drawers_u' || v === 'wall_2_doors' || v === 'wall_hood_new_flow' || v === 'wall_lift_up_double' || v === 'tall_2_doors' || v === 'tall_split_2_doors' || v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_microwave_niche') {

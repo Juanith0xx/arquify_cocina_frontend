@@ -1,8 +1,11 @@
 import React from 'react';
 import { useKitchenStore } from '../../store/kitchenStore';
 import { calculateSocleSystem } from '../../utils/kitchenSocle';
+import { useAssemblyHighlight } from './AssemblyHighlightContext';
 
 export function KitchenSocle() {
+  const assemblyHighlight = useAssemblyHighlight();
+  const isAssemblyXray = assemblyHighlight.active && assemblyHighlight.xrayMode;
   const cabinets = useKitchenStore((state) => state.cabinets);
   const showSocle = useKitchenStore((state) => state.showSocle);
   const socleFinish = useKitchenStore((state) => state.socleFinish || 'aluminum');
@@ -47,12 +50,15 @@ export function KitchenSocle() {
           position={piece.center}
           rotation={[0, piece.rotation, 0]}
         >
-          <mesh castShadow receiveShadow>
+          <mesh castShadow={!isAssemblyXray} receiveShadow={!isAssemblyXray}>
             <boxGeometry args={[piece.length, legsHeight, socleThickness]} />
             <meshStandardMaterial
-              color={socleColor}
-              metalness={socleMetalness}
-              roughness={socleRoughness}
+              color={isAssemblyXray ? '#94a3b8' : socleColor}
+              metalness={isAssemblyXray ? 0.05 : socleMetalness}
+              roughness={isAssemblyXray ? 0.2 : socleRoughness}
+              transparent={isAssemblyXray}
+              opacity={isAssemblyXray ? 0.14 : 1}
+              depthWrite={!isAssemblyXray}
             />
           </mesh>
         </group>
@@ -90,12 +96,15 @@ export function KitchenSocle() {
           position={lat.position}
           rotation={[0, lat.rotation, 0]}
         >
-          <mesh castShadow receiveShadow>
+          <mesh castShadow={!isAssemblyXray} receiveShadow={!isAssemblyXray}>
             <boxGeometry args={[socleThickness, legsHeight, lat.depth]} />
             <meshStandardMaterial
-              color={socleColor}
-              metalness={socleMetalness}
-              roughness={socleRoughness}
+              color={isAssemblyXray ? '#94a3b8' : socleColor}
+              metalness={isAssemblyXray ? 0.05 : socleMetalness}
+              roughness={isAssemblyXray ? 0.2 : socleRoughness}
+              transparent={isAssemblyXray}
+              opacity={isAssemblyXray ? 0.14 : 1}
+              depthWrite={!isAssemblyXray}
             />
           </mesh>
         </group>

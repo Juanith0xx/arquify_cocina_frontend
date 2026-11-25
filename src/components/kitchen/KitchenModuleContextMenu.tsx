@@ -235,6 +235,17 @@ export function KitchenModuleContextMenu({
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  useEffect(() => {
+    if (!activeCabinetId) return;
+    const cab = cabinets.find(c => c.id === activeCabinetId);
+    if (!cab) return;
+    const v = cab.variant;
+    const isDrawerOnly = v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === '4_drawers' || v === '2_pot_drawers' || v === '2_drawers_1_pot' || v === 'sink_u_drawer' || v === 'spice_rack';
+    if (isDrawerOnly && targetZone === 'doors') {
+      setTargetZone('drawerFronts');
+    }
+  }, [activeCabinetId, cabinets]);
+
   const isLight = propIsLight !== undefined ? propIsLight : (() => {
     try {
       return localStorage.getItem('arquify_kitchen_theme') === 'light';
@@ -620,9 +631,16 @@ export function KitchenModuleContextMenu({
       case 'structure':
         updateCabinet(activeCabinetId, { structureColor: url, structureMaterial: mat as any });
         break;
-      case 'doors':
-        updateCabinet(activeCabinetId, { doorColor: url, doorMaterial: mat as any });
+      case 'doors': {
+        const v = activeCabinet.variant;
+        const isDrawerOnly = v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === '4_drawers' || v === '2_pot_drawers' || v === '2_drawers_1_pot' || v === 'sink_u_drawer' || v === 'spice_rack';
+        if (isDrawerOnly) {
+          updateCabinet(activeCabinetId, { drawerFrontColor: url, drawerFrontMaterial: mat as any });
+        } else {
+          updateCabinet(activeCabinetId, { doorColor: url, doorMaterial: mat as any });
+        }
         break;
+      }
       case 'drawerFronts':
         updateCabinet(activeCabinetId, { drawerFrontColor: url, drawerFrontMaterial: mat as any });
         break;
@@ -745,7 +763,7 @@ export function KitchenModuleContextMenu({
   const is4Drawers = variant === '4_drawers';
   const is2PotDrawers = variant === '2_pot_drawers';
   const is1Door1Drawer = variant === '1_door_1_drawer';
-  const is2Doors = variant === '2_doors' || variant === 'tall_2_doors' || variant === 'wall_2_doors';
+  const is2Doors = variant === '2_doors' || variant === 'tall_2_doors' || variant === 'wall_2_doors' || variant === 'base_sink_2_doors' || variant === 'sink_2_doors';
   const is1Door = variant === '1_door' || variant === 'wall_1_door' || variant === 'tall_1_door';
   const isSplit2Doors = variant === 'tall_split_2_doors';
   const isLiftUp = variant === 'wall_lift_up';
@@ -753,6 +771,14 @@ export function KitchenModuleContextMenu({
   const isOvenMicro = variant === 'tall_oven_micro';
   const isSpiceRack = variant === 'spice_rack';
   const isCornerBlind = variant === 'corner_blind' || variant === 'corner_blind_left' || variant === 'corner_blind_right' || variant?.startsWith('corner_blind') || variant?.startsWith('wall_corner_blind');
+  const isSideBySideDoors =
+    is2Doors ||
+    variant === 'wall_hood_new_flow' ||
+    variant === 'corner_l' ||
+    variant === 'base_corner_l' ||
+    ((activeCabinet.type === 'closet' || activeCabinet.variant?.startsWith('closet_')) &&
+      Boolean(activeCabinet.hasDoors || activeCabinet.variant === 'closet_2_doors' || activeCabinet.variant === 'closet_inner_drawers') &&
+      activeCabinet.width > 50);
 
   const getElementsList = () => {
     const elements: { id: string; label: string; type: 'door' | 'drawer' }[] = [];
@@ -776,6 +802,8 @@ export function KitchenModuleContextMenu({
       elements.push({ id: 'door-lower', label: 'Pta. Elevable Inf.', type: 'door' });
     } else if (variant === 'wall_microwave_niche') {
       elements.push({ id: 'door-top', label: 'Pta. Superior Elevable', type: 'door' });
+    } else if (variant === 'wall_door_shelf') {
+      elements.push({ id: 'door-top', label: 'Puerta Superior', type: 'door' });
     } else if (isLiftUp) {
       elements.push({ id: 'door-lift', label: 'Puerta Elevable', type: 'door' });
     } else if (variant === 'corner_l' || variant === 'base_corner_l') {
@@ -791,7 +819,12 @@ export function KitchenModuleContextMenu({
       elements.push({ id: 'drawer-2', label: 'Cajón Interior 3', type: 'drawer' });
       elements.push({ id: 'drawer-3', label: 'Cajón Interior 4 (Inf.)', type: 'drawer' });
     } else if (isOvenMicro || variant === 'tall_oven_vent' || variant === 'tall_microwave_niche') {
-      elements.push({ id: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+      if (isOvenMicro && activeCabinet.towerLowerType === 'drawers') {
+        elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior 1', type: 'drawer' });
+        elements.push({ id: 'drawer-1', label: 'Cacerolero Inferior 2', type: 'drawer' });
+      } else {
+        elements.push({ id: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+      }
       elements.push({ id: 'door-top', label: 'Puerta Superior', type: 'door' });
     } else if (is1Door1Drawer) {
       elements.push({ id: 'drawer-0', label: 'Cajón Superior', type: 'drawer' });
@@ -804,6 +837,17 @@ export function KitchenModuleContextMenu({
     } else if (is2PotDrawers) {
       elements.push({ id: 'drawer-0', label: 'Cacerolero Superior', type: 'drawer' });
       elements.push({ id: 'drawer-1', label: 'Cacerolero Inferior', type: 'drawer' });
+    } else if (variant === '3_drawers_veggie' || variant === 'base_3_drawers_veggie') {
+      elements.push({ id: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cajón 3 (Inferior)', type: 'drawer' });
+    } else if (variant === '2_drawers_1_pot') {
+      elements.push({ id: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
+    } else if (variant === 'base_cooktop_3_drawers' || variant === 'cooktop_3_drawers') {
+      elements.push({ id: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+      elements.push({ id: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
     } else if (isSpiceRack) {
       elements.push({ id: 'drawer-0', label: 'Especiero Extraíble', type: 'drawer' });
     } else if (activeCabinet.type === 'closet' || activeCabinet.variant?.startsWith('closet_')) {
@@ -850,7 +894,13 @@ export function KitchenModuleContextMenu({
     const shelfColor = activeCabinet.shelfColor || globalState.shelfColor || structColor;
     const backColor = activeCabinet.backColor || globalState.backColor || structColor;
 
-    if (target === 'doors') return doorColor?.toLowerCase() === url.toLowerCase();
+    const isDrawerOnly = variant === '3_drawers_veggie' || variant === 'base_3_drawers_veggie' || variant === '4_drawers' || variant === '2_pot_drawers' || variant === '2_drawers_1_pot' || variant === 'sink_u_drawer' || variant === 'spice_rack';
+    if (target === 'doors') {
+      if (isDrawerOnly) {
+        return drawerFrontColor?.toLowerCase() === url.toLowerCase();
+      }
+      return doorColor?.toLowerCase() === url.toLowerCase();
+    }
     if (target === 'structure') return structColor?.toLowerCase() === url.toLowerCase();
     if (target === 'drawerFronts') return drawerFrontColor?.toLowerCase() === url.toLowerCase();
     if (target === 'drawerInner') return drawerInnerColor?.toLowerCase() === url.toLowerCase();
@@ -1038,6 +1088,7 @@ export function KitchenModuleContextMenu({
     if (activeCabinet.variant === 'wall_lift_up') return 'Aéreo Puerta Elevable Aventos';
     if (activeCabinet.variant === 'wall_lift_up_double') return 'Aéreo Doble Puerta Elevable';
     if (activeCabinet.variant === 'wall_microwave_niche') return 'Aéreo Nicho Micro + Puerta';
+    if (activeCabinet.variant === 'wall_door_shelf') return 'Aéreo Puerta + Repisa Inferior';
     if (activeCabinet.variant === 'wall_open') return 'Aéreo Repisas a la Vista';
     if (activeCabinet.variant === 'wall_hood_new_flow') return 'New Flow 60';
     if (activeCabinet.variant === 'closet_hanger') return 'Clóset Barra + Maletero';
@@ -1308,7 +1359,8 @@ export function KitchenModuleContextMenu({
                 activeCabinet.variant === 'tall_terminal_shelves' ? 40 :
                 activeCabinet.variant?.includes('wine_rack') ? 15 :
                 activeCabinet.variant?.startsWith('wall_corner_blind') ? 60 :
-                (activeCabinet.variant?.startsWith('corner_blind') ? 80 : 30)
+                (activeCabinet.variant?.startsWith('corner_blind') ? 80 :
+                 (activeCabinet.variant === 'base_sink_2_doors' || activeCabinet.variant === 'base_cooktop_3_drawers' ? 80 : 30))
               }
               maxCm={
                 activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
@@ -1362,6 +1414,55 @@ export function KitchenModuleContextMenu({
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { depth: val })}
             />
           </div>
+
+          {/* CONFIGURACIÓN INFERIOR TORRE HORNO + MICRO */}
+          {activeCabinet.variant === 'tall_oven_micro' && (
+            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
+              isLight ? 'bg-orange-50/70 border-orange-200' : 'bg-orange-500/10 border-orange-500/20'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                  isLight ? 'text-orange-950' : 'text-orange-200'
+                }`}>
+                  Configuración Inferior (Bajo Horno)
+                </span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                  isLight ? 'bg-orange-100 text-orange-800' : 'bg-orange-500/20 text-orange-300'
+                }`}>
+                  NPT 70-75cm
+                </span>
+              </div>
+              <p className={`text-[11px] leading-tight ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>
+                Selecciona la distribución bajo la base del horno:
+              </p>
+              <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-lg border ${
+                isLight ? 'bg-white border-orange-200' : 'bg-[#1c1c1f] border-white/5'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => updateCabinet(activeCabinet.id, { towerLowerType: 'door' })}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    (!activeCabinet.towerLowerType || activeCabinet.towerLowerType === 'door')
+                      ? 'bg-orange-600 text-white shadow-sm'
+                      : (isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-zinc-400 hover:bg-white/5')
+                  }`}
+                >
+                  🚪 1 Puerta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCabinet(activeCabinet.id, { towerLowerType: 'drawers' })}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeCabinet.towerLowerType === 'drawers'
+                      ? 'bg-orange-600 text-white shadow-sm'
+                      : (isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-zinc-400 hover:bg-white/5')
+                  }`}
+                >
+                  🗄️ 2 Gavetas
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* INFO ESPECÍFICA CAMPANA INTEGRADA NEW FLOW 60 */}
           {activeCabinet.variant === 'wall_hood_new_flow' && (
@@ -1531,7 +1632,7 @@ export function KitchenModuleContextMenu({
               );
             })()}
 
-            {swingDoors.length > 1 && (
+            {swingDoors.length > 1 && !isSideBySideDoors && (
               <div className={`mb-3 rounded-xl border p-3 ${
                 isLight
                   ? 'border-slate-200 bg-slate-50'

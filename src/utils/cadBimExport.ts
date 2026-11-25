@@ -261,23 +261,28 @@ export function extractKitchen3dElements(
         th,
         10
       );
+      const isSinkForCad = v === 'base_sink_2_doors' || v === 'sink_2_doors' || v === 'sink_u_drawer';
       addLocalBox(
         'Amarre_Frontal',
         'carcass',
         'Melamina_Estructura',
         colorStructure,
         0,
-        legsH + cabH - th / 2,
-        depth / 2 - 5,
+        isSinkForCad ? (legsH + cabH - 5) : (legsH + cabH - th / 2),
+        isSinkForCad ? (depth / 2 - th / 2) : (depth / 2 - 5),
         width - 2 * th,
-        th,
-        10
+        isSinkForCad ? 10 : th,
+        isSinkForCad ? th : 10
       );
     }
 
     // Fondo / Trasera de Durolac
-    const backH = (v === 'wall_hood_new_flow') ? Math.max(10, cabH - 17.6 - th) : (cabH - th);
-    const backY = (v === 'wall_hood_new_flow') ? (legsH + 17.6 + th + backH / 2) : (legsH + cabH / 2);
+    const backH = (v === 'wall_hood_new_flow')
+      ? (Math.max(5, cabH - 17.6 - 2 * th) + 1.6)
+      : (cabH - 2 * th + 1.6);
+    const backY = (v === 'wall_hood_new_flow')
+      ? (legsH + (cabH + 17.6) / 2)
+      : (legsH + cabH / 2);
     addLocalBox(
       'Fondo_Trasera_Durolac',
       'carcass',
@@ -286,7 +291,7 @@ export function extractKitchen3dElements(
       0,
       backY,
       -depth / 2 + 0.3 / 2 + 1.2,
-      width - 2 * th,
+      (width - 2 * th) + 1.6,
       backH,
       0.3
     );
@@ -682,17 +687,29 @@ export function extractKitchen3dElements(
       }
 
     } else if (v === 'tall_oven_micro' || v === 'tall_oven_vent' || v === 'tall_oven' || v.includes('oven')) {
-      const baseSectionH = 70;
+      const baseSectionH = (v === 'tall_oven_micro') ? 60 : 70;
       const ovenNicheH = 60;
       const microNicheH = 38;
       const drW = width - gap * 2;
 
-      // 1. Base: Puerta inferior batiente
-      const lowerDoorH = baseSectionH - gap * 2;
-      const yLowerDoor = legsH + gap + lowerDoorH / 2;
-      addLocalBox('Torre_Puerta_Inferior', 'door', 'Melamina_Frente', colorDoors, 0, yLowerDoor, frontZ, drW, lowerDoorH, th);
-      addDetailedHandle3D('TPtaInf', width / 2 - 4.5, legsH + lowerDoorH - 8, frontZ + th / 2, true);
-      addDoorHinges('TPtaInf', yLowerDoor, lowerDoorH, false);
+      // 1. Base: Puerta inferior batiente o 2 gavetas caceroleras
+      if (cab.towerLowerType === 'drawers') {
+        const singleDrawerH = (baseSectionH - gap * 3) / 2;
+        const yDrawerLower = legsH + gap + singleDrawerH / 2;
+        const yDrawerUpper = legsH + gap + singleDrawerH + gap + singleDrawerH / 2;
+        addLocalBox('Torre_Cacerolero_Inf_1', 'drawer', 'Melamina_Frente', colorDrawers, 0, yDrawerLower, frontZ, drW, singleDrawerH, th);
+        addDetailedHandle3D('TCacInf1', 0, yDrawerLower + singleDrawerH / 2 - 4, frontZ + th / 2, false);
+        addDrawerInteriorBox('Caja_Cacerolero_1', yDrawerLower, singleDrawerH);
+        addLocalBox('Torre_Cacerolero_Inf_2', 'drawer', 'Melamina_Frente', colorDrawers, 0, yDrawerUpper, frontZ, drW, singleDrawerH, th);
+        addDetailedHandle3D('TCacInf2', 0, yDrawerUpper + singleDrawerH / 2 - 4, frontZ + th / 2, false);
+        addDrawerInteriorBox('Caja_Cacerolero_2', yDrawerUpper, singleDrawerH);
+      } else {
+        const lowerDoorH = baseSectionH - gap * 2;
+        const yLowerDoor = legsH + gap + lowerDoorH / 2;
+        addLocalBox('Torre_Puerta_Inferior', 'door', 'Melamina_Frente', colorDoors, 0, yLowerDoor, frontZ, drW, lowerDoorH, th);
+        addDetailedHandle3D('TPtaInf', width / 2 - 4.5, legsH + lowerDoorH - 8, frontZ + th / 2, true);
+        addDoorHinges('TPtaInf', yLowerDoor, lowerDoorH, false);
+      }
 
       // 2. Repisa soporte de Horno
       const yOvenShelf = legsH + baseSectionH;

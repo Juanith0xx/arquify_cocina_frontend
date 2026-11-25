@@ -28,7 +28,11 @@ import {
   Activity,
   ShoppingBag,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Download,
+  Eye,
+  ChevronDown,
+  Camera,
 } from 'lucide-react';
 import { useAdminStore, ProjectItem, ProjectType } from '../../store/adminStore';
 import { useSupabaseAuthStore } from '../../store/supabaseAuthStore';
@@ -44,6 +48,7 @@ import { useOfficeStore } from '../../store/officeStore';
 import { calculateKitchenDualQuote } from '../../utils/kitchenB2BPricing';
 import { generateKitchenPartsList, generateKitchenHardwareList } from '../../utils/kitchenManufacturing';
 import { getFriendlyColorName } from '../../utils/colorNames';
+import { LivePricingBackofficeCard } from './LivePricingBackofficeCard';
 
 interface ProjectsManagerTabProps {
   onLoadProjectToModule: (route: 'kitchen' | 'closet' | 'special' | 'hpl-bathroom' | 'office' | 'chair') => void;
@@ -89,6 +94,11 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
   const [salePrice, setSalePrice] = useState<number>(0);
   const [saleOrderNum, setSaleOrderNum] = useState<string>('');
   const [saleDate, setSaleDate] = useState<string>('');
+
+  // Galería de Renders AI del proyecto y Lightbox
+  const [galleryProject, setGalleryProject] = useState<ProjectItem | null>(null);
+  const [lightboxRender, setLightboxRender] = useState<{ url: string; title: string; date?: string } | null>(null);
+  const [openExportMenuId, setOpenExportMenuId] = useState<string | null>(null);
 
   // Sincronizar al montar si hay supabase
   useEffect(() => {
@@ -326,6 +336,9 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
   };
 
   const handleOpenInConfigurator = (proj: ProjectItem) => {
+    // Record current active project
+    useAdminStore.getState().setActiveProjectId(proj.id);
+
     // Inject data into the target module store
     if (proj.type === 'kitchen') {
       if (proj.data?.cabinets) {
@@ -466,6 +479,35 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
     }
   };
 
+  const handleDownloadAiRender = (renderUrl: string, projectName: string, index: number) => {
+    try {
+      const a = document.createElement('a');
+      a.href = renderUrl;
+      a.download = `render_ai_${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${index + 1}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showNotification('Render descargado correctamente.');
+    } catch (e) {
+      console.error('Error al descargar render:', e);
+      alert('Error al descargar la imagen del render.');
+    }
+  };
+
+  const handleDeleteAiRender = (projectId: string, renderId: string) => {
+    if (window.confirm('¿Deseas eliminar este render guardado del proyecto?')) {
+      useAdminStore.getState().deleteProjectAiRender(projectId, renderId);
+      setGalleryProject((prev) => {
+        if (!prev || prev.id !== projectId) return prev;
+        return {
+          ...prev,
+          aiRenders: (prev.aiRenders || []).filter((r) => r.id !== renderId),
+        };
+      });
+      showNotification('Render eliminado del proyecto.', 'info');
+    }
+  };
+
   const handleCreateNewProject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
@@ -599,6 +641,9 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
           {feedbackMsg.text}
         </div>
       )}
+
+      {/* Control de Visualización en Vivo de Precios / Modo Cliente */}
+      <LivePricingBackofficeCard />
 
       {/* Vista de Usuario Gratuito vs Superadministrador */}
       {isFreeUserMode ? (
@@ -1209,29 +1254,70 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
               filteredProjects.map((proj) => (
                 <div
                   key={proj.id}
-                  className={`group border rounded-xl p-4 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-sm ${
+                  className={`group border rounded-2xl p-4 transition-all flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 shadow-sm ${
                     isLight
-                      ? 'bg-white border-zinc-200 hover:border-orange-400 text-zinc-900'
-                      : 'bg-zinc-900/90 border-zinc-800 hover:border-zinc-700 text-white'
+                      ? 'bg-white border-zinc-200/90 hover:border-orange-400 hover:shadow-md text-zinc-900'
+                      : 'bg-zinc-900/90 border-zinc-800 hover:border-zinc-700 hover:shadow-lg text-white'
                   }`}
                 >
-                  {/* Left Info with Thumbnail Preview */}
+                  {/* Left: Thumbnail Preview + AI Renders Badge */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
-                    {proj.thumbnail ? (
-                      <div className="w-20 h-20 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-950 shrink-0 relative group/thumb shadow">
-                        <img
-                          src={proj.thumbnail}
-                          alt={proj.name}
-                          className="w-full h-full object-cover object-center group-hover/thumb:scale-105 transition-transform"
-                        />
+                    <div className="flex flex-col items-center gap-1.5 shrink-0">
+                      <div className="w-20 h-20 rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950 shrink-0 relative group/thumb shadow-sm">
+                        {proj.thumbnail ? (
+                          <>
+                            <img
+                              src={proj.thumbnail}
+                              alt={proj.name}
+                              className="w-full h-full object-cover object-center group-hover/thumb:scale-105 transition-transform"
+                            />
+                            <button
+                              onClick={() => setLightboxRender({ url: proj.thumbnail!, title: `Vista 3D: ${proj.name}` })}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                              title="Ampliar vista 3D"
+                            >
+                              <Eye size={14} className="mr-1" /> Ver 3D
+                            </button>
+                          </>
+                        ) : proj.aiRenders && proj.aiRenders.length > 0 ? (
+                          <>
+                            <img
+                              src={proj.aiRenders[0].url}
+                              alt={proj.name}
+                              className="w-full h-full object-cover object-center group-hover/thumb:scale-105 transition-transform"
+                            />
+                            <button
+                              onClick={() => setGalleryProject(proj)}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                              title="Ver Renders AI"
+                            >
+                              <Sparkles size={14} className="mr-1 text-orange-400" /> Ver AI
+                            </button>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                            <FolderKanban size={24} />
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 text-zinc-600">
-                        <FolderKanban size={24} />
-                      </div>
-                    )}
 
-                    <div className="space-y-1.5 flex-1 min-w-0">
+                      {/* Badge / Botón Renders IA */}
+                      {proj.aiRenders && proj.aiRenders.length > 0 ? (
+                        <button
+                          onClick={() => setGalleryProject(proj)}
+                          className="w-full px-1.5 py-0.5 bg-gradient-to-r from-orange-500/15 to-amber-500/15 hover:from-orange-500/25 hover:to-amber-500/25 border border-orange-500/40 text-orange-400 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          title="Ver renders con IA guardados para este proyecto"
+                        >
+                          <Sparkles size={10} className="text-orange-400" />
+                          <span>{proj.aiRenders.length} Render{proj.aiRenders.length > 1 ? 's' : ''} IA</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-zinc-500 font-medium">Sin render IA</span>
+                      )}
+                    </div>
+
+                    {/* Middle: Details & Metadata */}
+                    <div className="space-y-2 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {getModuleBadge(proj.type)}
                         {getStatusBadge(proj.status)}
@@ -1267,7 +1353,7 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                             </button>
                           </div>
                         ) : (
-                          <h4 className={`text-sm font-bold tracking-tight truncate flex items-center gap-2 ${isLight ? 'text-zinc-900' : 'text-white'}`}>
+                          <h4 className={`text-sm font-extrabold tracking-tight truncate flex items-center gap-2 ${isLight ? 'text-zinc-900' : 'text-white'}`}>
                             {proj.name}
                             <button
                               onClick={() => handleStartEdit(proj)}
@@ -1280,22 +1366,29 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                         )}
                       </div>
 
-                      <div className={`flex flex-wrap items-center gap-3 text-[11px] ${isLight ? 'text-zinc-600' : 'text-slate-400'}`}>
-                        <span className={`flex items-center gap-1 ${isLight ? 'text-zinc-700' : 'text-slate-300'}`}>
-                          <User size={12} className="text-zinc-500" />
+                      {/* Clean Metadata Badges */}
+                      <div className={`flex flex-wrap items-center gap-2 text-[11px] ${isLight ? 'text-zinc-600' : 'text-slate-400'}`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${
+                          isLight ? 'bg-zinc-100 border-zinc-200 text-zinc-800' : 'bg-zinc-950 border-zinc-800 text-zinc-300'
+                        }`}>
+                          <User size={11} className="text-zinc-500" />
                           Cliente: <strong className={isLight ? 'text-zinc-900' : 'text-slate-200'}>{proj.client || 'General'}</strong>
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Calendar size={12} className="text-zinc-500" />
+
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${
+                          isLight ? 'bg-zinc-100 border-zinc-200 text-zinc-800' : 'bg-zinc-950 border-zinc-800 text-zinc-300'
+                        }`}>
+                          <Calendar size={11} className="text-zinc-500" />
                           {proj.date}
                         </span>
-                        <span className="text-orange-500 font-mono font-semibold">
+
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-500 font-mono font-bold">
                           Est. ${getProjectCalculatedCost(proj).toLocaleString('es-CL')} CLP
                         </span>
 
                         {/* Superadmin: Trazabilidad de quién diseñó este proyecto */}
                         {!isFreeUserMode && proj.userName && (
-                          <span className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
+                          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
                             isLight ? 'bg-zinc-100 border-zinc-300 text-zinc-800' : 'bg-zinc-950 border-zinc-800 text-zinc-300'
                           }`}>
                             <User size={11} className="text-orange-500" />
@@ -1308,18 +1401,20 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
 
                         {/* Detalle si fue vendido */}
                         {proj.status === 'sold' && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
                             Venta: ${(proj.finalSalePriceClp || proj.totalCostEstimateClp || 0).toLocaleString('es-CL')} CLP
                             {proj.orderNumber && ` • OT: ${proj.orderNumber}`}
                           </span>
                         )}
                       </div>
 
-                      <p className="text-xs text-zinc-500 truncate max-w-2xl">{proj.description}</p>
+                      {proj.description && (
+                        <p className="text-xs text-zinc-500 truncate max-w-2xl">{proj.description}</p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Actions for Free User vs Superadmin */}
+                  {/* Right Actions: Ordered Architecture */}
                   {isFreeUserMode ? (
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <button
@@ -1330,12 +1425,22 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                         <Play size={13} /> Cargar en 3D
                       </button>
 
+                      {proj.aiRenders && proj.aiRenders.length > 0 && (
+                        <button
+                          onClick={() => setGalleryProject(proj)}
+                          className="px-3 py-2 bg-gradient-to-r from-orange-500/15 to-amber-500/15 hover:from-orange-500/25 hover:to-amber-500/25 border border-orange-500/30 text-orange-400 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Ver Renders AI"
+                        >
+                          <Sparkles size={13} /> Renders AI ({proj.aiRenders.length})
+                        </button>
+                      )}
+
                       <button
                         onClick={() => handleDownloadCommercialPdf(proj)}
                         className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
                         title="Descargar Ficha y Cotización Comercial en PDF con Vistas 3D"
                       >
-                        <FileText size={14} /> Descargar Cotización PDF
+                        <FileText size={14} /> Cotización PDF
                       </button>
 
                       {proj.status !== 'sold' && (
@@ -1363,121 +1468,151 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                       </button>
                     </div>
                   ) : (
-                    /* Superadmin Action Buttons & Status Selector */
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      {/* Pipeline Status Selector */}
-                      <select
-                        value={proj.status || 'designed'}
-                        onChange={(e) => handleChangeStatus(proj, e.target.value as any)}
-                        className={`py-1.5 px-2 border text-xs rounded-lg font-medium focus:border-orange-500 focus:outline-none cursor-pointer ${
-                          isLight ? 'bg-zinc-100 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-700 text-slate-300'
-                        }`}
-                        title="Cambiar estado del proyecto en el pipeline"
-                      >
-                        <option value="designed">✏ Diseñado</option>
-                        <option value="quoted">📋 Cotizado</option>
-                        <option value="sold">✓ Vendido</option>
-                        <option value="in_production">⚙ En Taller</option>
-                      </select>
-
-                      {/* Quick Register Sale Button if not sold */}
-                      {proj.status !== 'sold' && proj.status !== 'in_production' && (
-                        <button
-                          onClick={() => handleOpenSaleModal(proj)}
-                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-sm shadow-emerald-600/30"
-                          title="Registrar cierre de venta con precio y N° OT"
+                    /* Superadmin: Structured 2-Tier Actions (Clean & Professional) */
+                    <div className="flex flex-col items-stretch xl:items-end gap-2 shrink-0 w-full xl:w-auto">
+                      {/* Tier 1: Primary Operation & Pipeline Status */}
+                      <div className="flex items-center gap-2 justify-end">
+                        {/* Pipeline Status Selector */}
+                        <select
+                          value={proj.status || 'designed'}
+                          onChange={(e) => handleChangeStatus(proj, e.target.value as any)}
+                          className={`py-1.5 px-2.5 border text-xs rounded-lg font-semibold focus:border-orange-500 focus:outline-none cursor-pointer transition-colors ${
+                            isLight ? 'bg-zinc-100 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-700 text-slate-300'
+                          }`}
+                          title="Cambiar estado del proyecto en el pipeline"
                         >
-                          <Check size={13} />
-                          <span>Registrar Venta</span>
+                          <option value="designed">✏ Diseñado</option>
+                          <option value="quoted">📋 Cotizado</option>
+                          <option value="sold">✓ Vendido</option>
+                          <option value="in_production">⚙ En Taller</option>
+                        </select>
+
+                        {/* Quick Register Sale Button if not sold */}
+                        {proj.status !== 'sold' && proj.status !== 'in_production' && (
+                          <button
+                            onClick={() => handleOpenSaleModal(proj)}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-sm shadow-emerald-600/30"
+                            title="Registrar cierre de venta con precio y N° OT"
+                          >
+                            <Check size={13} />
+                            <span>Registrar Venta</span>
+                          </button>
+                        )}
+
+                        {/* Open in Configurator (Highlighted CTA) */}
+                        <button
+                          onClick={() => handleOpenInConfigurator(proj)}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/40 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-emerald-900/30 active:scale-95"
+                          title="Abrir y editar en el configurador 3D"
+                        >
+                          <Play size={13} className="fill-current" /> Cargar en 3D
                         </button>
-                      )}
+                      </div>
 
-                      {/* Open in Configurator */}
-                      <button
-                        onClick={() => handleOpenInConfigurator(proj)}
-                        className={`px-3 py-1.5 border rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer ${
-                          isLight
-                            ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-700'
-                            : 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-300'
-                        }`}
-                        title="Abrir y editar en el configurador 3D"
-                      >
-                        <Play size={13} /> Cargar en 3D
-                      </button>
+                      {/* Tier 2: Documents Dropdown, AI Renders & Tools */}
+                      <div className="flex items-center gap-1.5 justify-end relative">
+                        {/* Botón Ver Renders IA (si tiene) */}
+                        {proj.aiRenders && proj.aiRenders.length > 0 && (
+                          <button
+                            onClick={() => setGalleryProject(proj)}
+                            className="px-2.5 py-1.5 bg-gradient-to-r from-orange-500/15 to-amber-500/15 hover:from-orange-500/25 hover:to-amber-500/25 border border-orange-500/30 text-orange-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Ver galería de Renders AI"
+                          >
+                            <Sparkles size={13} className="text-orange-400" />
+                            <span>Renders AI ({proj.aiRenders.length})</span>
+                          </button>
+                        )}
 
-                      {/* Commercial PDF Download */}
-                      <button
-                        onClick={() => handleDownloadCommercialPdf(proj)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                          isLight
-                            ? 'bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-700'
-                            : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/30 text-orange-300'
-                        }`}
-                        title="Descargar Ficha y Cotización Comercial en PDF"
-                      >
-                        <FileText size={14} className={isLight ? 'text-orange-600' : 'text-orange-400'} /> PDF Comercial
-                      </button>
+                        {/* Dropdown Unificado de Documentos / Exportables */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenExportMenuId(openExportMenuId === proj.id ? null : proj.id)}
+                            className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                              isLight
+                                ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-300 text-zinc-800'
+                                : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-slate-200'
+                            }`}
+                            title="Descargar documentos comerciales y técnicos (PDF / Excel)"
+                          >
+                            <FileText size={13} className="text-orange-400" />
+                            <span>Documentos</span>
+                            <ChevronDown size={12} className={`transition-transform duration-200 ${openExportMenuId === proj.id ? 'rotate-180' : ''}`} />
+                          </button>
 
-                      {/* Detailed B2B Quote PDF (Placas, Herrajes, m² CNC, Módulos, Tapacantos y Margen) */}
-                      <button
-                        onClick={() => handleDownloadB2BDetailedPdf(proj)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                          isLight
-                            ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-300 text-indigo-700'
-                            : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300'
-                        }`}
-                        title="Descargar PDF con Detalle de Cálculo B2B (Placas, Quincallería, m² CNC, Módulos, Tapacantos y Margen de Ganancia)"
-                      >
-                        <FileSpreadsheet size={14} className={isLight ? 'text-indigo-600' : 'text-indigo-400'} /> Detalle B2B (Margen)
-                      </button>
+                          {/* Menú Desplegable Flotante */}
+                          {openExportMenuId === proj.id && (
+                            <div className={`absolute right-0 top-full mt-1.5 w-56 rounded-xl border shadow-2xl z-30 py-1 text-xs animate-in fade-in zoom-in-95 duration-150 ${
+                              isLight ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-zinc-950 border-zinc-800 text-zinc-200'
+                            }`}>
+                              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-zinc-800/40">
+                                Descargar Documentos
+                              </div>
+                              <button
+                                onClick={() => { setOpenExportMenuId(null); handleDownloadCommercialPdf(proj); }}
+                                className="w-full px-3 py-2 text-left hover:bg-orange-500/10 hover:text-orange-400 flex items-center gap-2.5 cursor-pointer transition-colors"
+                              >
+                                <FileText size={14} className="text-orange-400 shrink-0" />
+                                <div>
+                                  <div className="font-bold">PDF Comercial</div>
+                                  <div className="text-[10px] text-zinc-400">Cotización con vistas 3D</div>
+                                </div>
+                              </button>
+                              <button
+                                onClick={() => { setOpenExportMenuId(null); handleDownloadB2BDetailedPdf(proj); }}
+                                className="w-full px-3 py-2 text-left hover:bg-indigo-500/10 hover:text-indigo-400 flex items-center gap-2.5 cursor-pointer transition-colors"
+                              >
+                                <FileSpreadsheet size={14} className="text-indigo-400 shrink-0" />
+                                <div>
+                                  <div className="font-bold">Detalle B2B (Margen)</div>
+                                  <div className="text-[10px] text-zinc-400">Placas, herrajes y costos</div>
+                                </div>
+                              </button>
+                              <button
+                                onClick={() => { setOpenExportMenuId(null); handleDownloadPdf(proj); }}
+                                className="w-full px-3 py-2 text-left hover:bg-zinc-500/10 hover:text-zinc-200 flex items-center gap-2.5 cursor-pointer transition-colors"
+                              >
+                                <FileText size={14} className="text-zinc-400 shrink-0" />
+                                <div>
+                                  <div className="font-bold">Ficha Técnica</div>
+                                  <div className="text-[10px] text-zinc-400">Planos de fábrica</div>
+                                </div>
+                              </button>
+                              <button
+                                onClick={() => { setOpenExportMenuId(null); handleDownloadExcel(proj); }}
+                                className="w-full px-3 py-2 text-left hover:bg-emerald-500/10 hover:text-emerald-400 flex items-center gap-2.5 cursor-pointer transition-colors"
+                              >
+                                <FileSpreadsheet size={14} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <div className="font-bold">Planilla Excel</div>
+                                  <div className="text-[10px] text-zinc-400">Materiales y despiece</div>
+                                </div>
+                              </button>
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Technical Factory PDF Download */}
-                      <button
-                        onClick={() => handleDownloadPdf(proj)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                          isLight
-                            ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-300 text-zinc-800'
-                            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-slate-200'
-                        }`}
-                        title="Descargar Ficha Técnica de Fábrica en PDF"
-                      >
-                        <FileText size={14} className={isLight ? 'text-zinc-600' : 'text-zinc-400'} /> Ficha Técnica
-                      </button>
+                        {/* Duplicar */}
+                        <button
+                          onClick={() => handleDuplicate(proj.id)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isLight ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border border-zinc-200' : 'bg-zinc-800/80 hover:bg-zinc-700 text-slate-400 hover:text-white'
+                          }`}
+                          title="Duplicar proyecto"
+                        >
+                          <Copy size={13} />
+                        </button>
 
-                      {/* Direct Excel Download */}
-                      <button
-                        onClick={() => handleDownloadExcel(proj)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                          isLight
-                            ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-300 text-zinc-800'
-                            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-slate-200'
-                        }`}
-                        title="Descargar Planilla de Materiales en Excel"
-                      >
-                        <FileSpreadsheet size={14} className={isLight ? 'text-emerald-600' : 'text-emerald-400'} /> Excel
-                      </button>
-
-                      {/* Duplicate */}
-                      <button
-                        onClick={() => handleDuplicate(proj.id)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isLight ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900 border border-zinc-200' : 'bg-zinc-800/80 hover:bg-zinc-700 text-slate-400 hover:text-white'
-                        }`}
-                        title="Duplicar proyecto"
-                      >
-                        <Copy size={14} />
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        onClick={() => handleDelete(proj.id, proj.name)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isLight ? 'bg-zinc-100 hover:bg-red-50 text-zinc-500 hover:text-red-600 border border-zinc-200' : 'bg-zinc-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400'
-                        }`}
-                        title="Eliminar proyecto"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        {/* Eliminar */}
+                        <button
+                          onClick={() => handleDelete(proj.id, proj.name)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isLight ? 'bg-zinc-100 hover:bg-red-50 text-zinc-500 hover:text-red-600 border border-zinc-200' : 'bg-zinc-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400'
+                          }`}
+                          title="Eliminar proyecto"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1570,6 +1705,190 @@ export function ProjectsManagerTab({ onLoadProjectToModule, isFreeUserMode = fal
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Galería de Renders AI del Proyecto */}
+      {galleryProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className={`w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${
+            isLight ? 'bg-white border-zinc-300 text-zinc-900' : 'bg-zinc-900 border-zinc-700 text-white'
+          }`}>
+            {/* Header del Modal */}
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${
+              isLight ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-zinc-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-tr from-orange-500 to-amber-500 text-white rounded-xl shadow-md shadow-orange-500/20">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold flex items-center gap-2">
+                    Renders AI Guardados
+                    <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                      {galleryProject.aiRenders?.length || 0}
+                    </span>
+                  </h3>
+                  <p className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    Proyecto: <strong>{galleryProject.name}</strong> • Cliente: {galleryProject.client || 'Particular'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setGalleryProject(null)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isLight ? 'text-zinc-500 hover:bg-zinc-200' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Contenido de la Galería */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {!galleryProject.aiRenders || galleryProject.aiRenders.length === 0 ? (
+                <div className="p-12 text-center space-y-3">
+                  <Camera size={40} className="mx-auto text-zinc-500" />
+                  <p className="text-sm font-semibold text-zinc-400">Aún no hay renders generados con IA para este proyecto.</p>
+                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                    Abre el proyecto en 3D y pulsa en "Render Fotográfico NanoBanana AI" para generar imágenes fotorrealistas con iluminación natural.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {galleryProject.aiRenders.map((renderItem, rIdx) => (
+                    <div
+                      key={renderItem.id || rIdx}
+                      className={`group/item border rounded-xl overflow-hidden flex flex-col transition-all shadow-sm ${
+                        isLight ? 'bg-zinc-50 border-zinc-200 hover:shadow-md' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      {/* Imagen con Overlay de Zoom */}
+                      <div className="relative aspect-[4/3] bg-black overflow-hidden group/img">
+                        <img
+                          src={renderItem.url}
+                          alt={`Render ${rIdx + 1}`}
+                          className="w-full h-full object-cover object-center group-hover/img:scale-105 transition-transform duration-300"
+                        />
+                        <button
+                          onClick={() => setLightboxRender({
+                            url: renderItem.url,
+                            title: `Render Fotográfico #${rIdx + 1} - ${galleryProject.name}`,
+                            date: renderItem.createdAt ? new Date(renderItem.createdAt).toLocaleDateString('es-CL') : undefined
+                          })}
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity cursor-pointer gap-1.5"
+                        >
+                          <Eye size={16} /> Ver Pantalla Completa
+                        </button>
+                      </div>
+
+                      {/* Metadatos del Render */}
+                      <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-extrabold text-orange-400">Render #{rIdx + 1}</span>
+                            <span className="text-zinc-500 text-[10px]">
+                              {renderItem.createdAt ? new Date(renderItem.createdAt).toLocaleDateString('es-CL') : ''}
+                            </span>
+                          </div>
+                          {renderItem.environment && (
+                            <div className="text-[10px] text-zinc-400 truncate">
+                              🏞️ {renderItem.environment}
+                            </div>
+                          )}
+                          {renderItem.lighting && (
+                            <div className="text-[10px] text-zinc-400 truncate">
+                              ☀️ {renderItem.lighting}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botones de Acción */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/40">
+                          <button
+                            onClick={() => handleDownloadAiRender(renderItem.url, galleryProject.name, rIdx)}
+                            className="flex-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-black font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
+                            title="Descargar este render en alta resolución"
+                          >
+                            <Download size={13} />
+                            <span>Descargar</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAiRender(galleryProject.id, renderItem.id)}
+                            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar este render del proyecto"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`px-6 py-3 border-t flex items-center justify-between text-xs ${
+              isLight ? 'bg-zinc-50 border-zinc-200 text-zinc-500' : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+            }`}>
+              <span>Todos los renders generados quedan vinculados de manera segura a este proyecto.</span>
+              <button
+                onClick={() => setGalleryProject(null)}
+                className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lightbox a Pantalla Completa */}
+      {lightboxRender && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-lg p-3 animate-in fade-in duration-150">
+          <div className="relative w-full max-w-6xl max-h-[96vh] flex flex-col items-center">
+            {/* Barra superior de herramientas */}
+            <div className="w-full flex items-center justify-between text-white pb-3 px-2">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-orange-400" />
+                <span className="font-bold text-sm truncate">{lightboxRender.title}</span>
+                {lightboxRender.date && (
+                  <span className="text-xs text-zinc-400">({lightboxRender.date})</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = lightboxRender.url;
+                    a.download = `render_hd_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                >
+                  <Download size={14} /> Descargar HD
+                </button>
+                <button
+                  onClick={() => setLightboxRender(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Imagen Principal */}
+            <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black flex items-center justify-center max-h-[86vh]">
+              <img
+                src={lightboxRender.url}
+                alt="Vista previa"
+                className="max-h-[86vh] max-w-full object-contain mx-auto"
+              />
+            </div>
           </div>
         </div>
       )}

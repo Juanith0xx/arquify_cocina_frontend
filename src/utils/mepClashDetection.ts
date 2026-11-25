@@ -76,6 +76,7 @@ export function detectMepClashes(
         const hasSolidDrawers = 
           cab.variant === '4_drawers' || 
           cab.variant === '2_pot_drawers' || 
+          cab.variant === '2_drawers_1_pot' || 
           cab.variant === '1_door_1_drawer';
 
         if (isPlumbing && hasSolidDrawers) {

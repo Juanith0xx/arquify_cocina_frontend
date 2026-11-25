@@ -1,7 +1,27 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ProjectItem } from '../store/adminStore';
+import { useStore } from '../store';
 import { renderArquifyPdfLogo } from './pdfLogo';
+import { getFriendlyColorName } from './colorNames';
+import { isHplFinish } from './kitchenManufacturing';
+
+function normalizeThicknessMm(raw?: number): number {
+  if (!raw || Number.isNaN(Number(raw))) return 18;
+  const n = Number(raw);
+  return n < 10 ? Math.round(n * 10) : Math.round(n);
+}
+
+function getAvailableCustomTextures(projectData?: any): any[] {
+  const fromProject = Array.isArray(projectData?.customTextures) ? projectData.customTextures : [];
+  let fromStore: any[] = [];
+  try {
+    fromStore = useStore.getState().customTextures || [];
+  } catch {
+    fromStore = [];
+  }
+  return [...fromProject, ...fromStore];
+}
 
 export function exportProjectToPdf(project: ProjectItem) {
   const doc = new jsPDF({
@@ -48,9 +68,13 @@ export function exportProjectToPdf(project: ProjectItem) {
   doc.setTextColor(slateColor[0], slateColor[1], slateColor[2]);
   doc.text(`Cliente / Referencia: ${project.client || 'General'}`, 14, 51);
   doc.text(`Tipo de Módulo: ${getModuleTypeName(project.type)}`, 14, 57);
-  doc.text(`Descripción: ${project.description || 'Sin descripción adicional'}`, 14, 63);
+  const descLines = doc.splitTextToSize(
+    `Descripción: ${project.description || 'Sin descripción adicional'}`,
+    182
+  );
+  doc.text(descLines, 14, 63);
 
-  let currentY = 72;
+  const currentY = Math.max(72, 63 + descLines.length * 5 + 4);
 
   // Module-specific data generation
   if (project.type === 'kitchen') {
@@ -90,13 +114,15 @@ function getModuleTypeName(type: string): string {
 function renderKitchenPdf(doc: jsPDF, project: ProjectItem, startY: number) {
   const d = project.data || {};
   const cabinets = d.cabinets || [];
+  const thicknessMm = normalizeThicknessMm(d.thickness);
+  const customTextures = getAvailableCustomTextures(d);
 
   autoTable(doc, {
     startY: startY,
     head: [['Resumen General Cocina', 'Detalle']],
     body: [
       ['Total de Módulos / Gabinetes', `${cabinets.length} unidades`],
-      ['Espesor de Tableros Cascos', `${d.thickness || 18} mm`],
+      ['Espesor de Tableros Cascos', `${thicknessMm} mm`],
       ['Módulos Bajos', `${cabinets.filter((c: any) => c.type === 'base').length} unid.`],
       ['Módulos Aéreos / Pared', `${cabinets.filter((c: any) => c.type === 'wall').length} unid.`],
       ['Módulos Torre / Despensero', `${cabinets.filter((c: any) => c.type === 'tall').length} unid.`],
@@ -109,13 +135,26 @@ function renderKitchenPdf(doc: jsPDF, project: ProjectItem, startY: number) {
 
   const finalY = (doc as any).lastAutoTable.finalY || 130;
 
-  const cabRows = cabinets.map((c: any, i: number) => [
-    `#${i + 1} - ${c.type.toUpperCase()}`,
-    `${c.width} x ${c.height} x ${c.depth} cm`,
-    c.doorColor || '#FFFFFF',
-    c.structureColor || '#FFFFFF',
-    'Melamina 18mm / Tapacanto 2mm',
-  ]);
+  const cabRows = cabinets.map((c: any, i: number) => {
+    const rawDoorColor = c.doorColor || d.doorColor || '#FFFFFF';
+    const rawStructureColor = c.structureColor || d.structureColor || '#FFFFFF';
+    const doorColorName = getFriendlyColorName(rawDoorColor, customTextures);
+    const structureColorName = getFriendlyColorName(rawStructureColor, customTextures);
+    const isHpl =
+      isHplFinish(rawDoorColor, c.doorMaterial || d.doorMaterial, c) ||
+      isHplFinish(doorColorName, c.doorMaterial || d.doorMaterial, c);
+    const materialLabel = isHpl
+      ? `HPL 0.9mm + MDF ${thicknessMm}mm`
+      : `Melamina ${thicknessMm}mm / Tapacanto 2mm`;
+
+    return [
+      `#${i + 1} - ${(c.type || 'MOD').toUpperCase()}`,
+      `${c.width} x ${c.height} x ${c.depth} cm`,
+      doorColorName,
+      structureColorName,
+      materialLabel,
+    ];
+  });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -128,13 +167,23 @@ function renderKitchenPdf(doc: jsPDF, project: ProjectItem, startY: number) {
     body: cabRows.length > 0 ? cabRows : [['Sin gabinetes configurados', '-', '-', '-', '-']],
     theme: 'striped',
     headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8, cellPadding: 2.5 },
+    styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      1: { cellWidth: 34 },
+      2: { cellWidth: 42 },
+      3: { cellWidth: 34 },
+      4: { cellWidth: 44 },
+    },
+    margin: { left: 14, right: 14 },
   });
 }
 
 function renderClosetPdf(doc: jsPDF, project: ProjectItem, startY: number) {
   const d = project.data || {};
   const modules = d.modules || [];
+  const thicknessMm = normalizeThicknessMm(d.thickness);
+  const customTextures = getAvailableCustomTextures(d);
 
   autoTable(doc, {
     startY: startY,
@@ -142,10 +191,10 @@ function renderClosetPdf(doc: jsPDF, project: ProjectItem, startY: number) {
     body: [
       ['Altura Total', `${d.height || 240} cm`],
       ['Profundidad', `${d.depth || 60} cm`],
-      ['Espesor de Placas', `${d.thickness || 18} mm`],
+      ['Espesor de Placas', `${thicknessMm} mm`],
       ['Cantidad de Cuerpos / Módulos', `${modules.length} cuerpos`],
-      ['Color Estructura', `${d.structureColor || '#FFFFFF'}`],
-      ['Color Frentes / Puertas', `${d.doorColor || '#F8F9FA'}`],
+      ['Color Estructura', getFriendlyColorName(d.structureColor || '#FFFFFF', customTextures)],
+      ['Color Frentes / Puertas', getFriendlyColorName(d.doorColor || '#F8F9FA', customTextures)],
       ['Presupuesto Estimado CLP', `$${(project.totalCostEstimateClp || 1800000).toLocaleString('es-CL')}`],
     ],
     theme: 'grid',

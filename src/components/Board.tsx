@@ -6,6 +6,7 @@ import { DoubleSide } from 'three';
 import { Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStudioRender } from './common/StudioRenderContext';
+import { useAssemblyBoardStyle } from './kitchen/AssemblyHighlightContext';
 
 interface BoardProps {
   textureUrl?: string;
@@ -20,9 +21,10 @@ interface BoardProps {
   grainDirection?: 'vertical' | 'horizontal';
   hplBalancerOverride?: boolean;
   globalPosition?: [number, number, number];
+  assemblyPartKey?: string;
 }
 
-export function Board({ position, args, color, textureUrl, materialType, transparent, opacity, isFrontPanel, isShelf, grainDirection, hplBalancerOverride, globalPosition }: BoardProps) {
+export function Board({ position, args, color, textureUrl, materialType, transparent, opacity, isFrontPanel, isShelf, grainDirection, hplBalancerOverride, globalPosition, assemblyPartKey }: BoardProps) {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   
   const { settings } = useStudioRender();
@@ -148,10 +150,15 @@ export function Board({ position, args, color, textureUrl, materialType, transpa
 
   const storeColor = useStore((state) => state.structureColor);
   const isTransparentGlobal = useStore((state) => state.isTransparent);
+  const assemblyStyle = useAssemblyBoardStyle(assemblyPartKey);
   
   const finalColor = color || storeColor;
-  const isTransp = transparent || isTransparentGlobal;
-  const currentOpacity = isTransparentGlobal ? 0.3 : (opacity !== undefined ? opacity : 1);
+  const isTransp = assemblyStyle
+    ? (assemblyStyle.isHighlighted ? false : (transparent || assemblyStyle.forceTransparent))
+    : (transparent || isTransparentGlobal);
+  const currentOpacity = assemblyStyle
+    ? (assemblyStyle.isHighlighted ? 1 : (assemblyStyle.forceTransparent ? assemblyStyle.xrayOpacity : (opacity !== undefined ? opacity : 1)))
+    : (isTransparentGlobal ? 0.3 : (opacity !== undefined ? opacity : 1));
 
   
   const storeHplBalancer = useStore((state) => state.hplBalancer);
@@ -233,13 +240,13 @@ export function Board({ position, args, color, textureUrl, materialType, transpa
   const faces = [0, 1, 2, 3, 4, 5];
   
   return (
-    <mesh position={position} castShadow={!isTransp} receiveShadow={!isTransp}>
+    <mesh position={position} castShadow={!isTransp} receiveShadow={!isTransp} renderOrder={assemblyStyle?.isHighlighted ? 5 : 0}>
       <boxGeometry args={args} />
       {faces.map((idx) => {
         const props = idx === trascaraFace ? whiteMatProps : baseMatProps;
         return (
           <meshStandardMaterial 
-            key={`${idx}-${texture ? texture.uuid : (props.color || 'solid')}-${idx === trascaraFace}-${props.roughness}`}
+            key={`${idx}-${texture ? texture.uuid : (props.color || 'solid')}-${idx === trascaraFace}-${props.roughness}-${assemblyStyle ? `${assemblyStyle.isHighlighted}-${assemblyStyle.forceTransparent}` : 'std'}`}
             attach={`material-${idx}`}
             color={props.color}
             map={props.map}
@@ -249,11 +256,19 @@ export function Board({ position, args, color, textureUrl, materialType, transpa
             roughness={props.roughness}
             metalness={props.metalness}
             depthWrite={props.depthWrite}
+            emissive={assemblyStyle?.isHighlighted ? '#f97316' : '#000000'}
+            emissiveIntensity={assemblyStyle?.isHighlighted ? 0.22 : 0}
           />
         );
       })}
       {!isStudioRendering && (
-        isTransparentGlobal ? (
+        assemblyStyle ? (
+          assemblyStyle.isHighlighted ? (
+            <Edges scale={1.004} threshold={15} color="#f97316" renderOrder={10} />
+          ) : (
+            <Edges scale={1} threshold={15} color={assemblyStyle.edgeColor} />
+          )
+        ) : isTransparentGlobal ? (
           <Edges scale={1} threshold={15} color="#555555" />
         ) : (
           <Edges scale={1} threshold={15} color="#18181b" />

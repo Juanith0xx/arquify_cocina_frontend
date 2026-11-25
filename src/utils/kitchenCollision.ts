@@ -1611,13 +1611,27 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     else if (v === '1_door_1_drawer') { w = 60; name = 'Base 1 Pta + 1 Cajón'; }
     else if (v === '2_doors') { w = 80; name = 'Base 2 Puertas'; }
     else if (v === '4_drawers') { w = 80; name = 'Base 4 Cajones'; }
+    else if (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie') { w = 60; name = 'Base Verdulero (3 Cajones)'; variant = '3_drawers_veggie'; }
     else if (v === '2_pot_drawers') { w = 80; name = 'Base 2 Olleros'; }
+    else if (v === '2_drawers_1_pot') { w = 80; name = 'Base 2 Cajones + 1 Ollero'; }
     else if (v === 'sink_u_drawer') { w = 90; name = 'Fregadero Cajón en U'; }
+    else if (v === 'sink_2_doors' || v === 'base_sink_2_doors') { w = 80; name = 'Base Lavaplatos (2 Puertas)'; variant = 'base_sink_2_doors'; }
+    else if (v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers') { w = 80; name = 'Base Encimera (3 Cajones, 1° Fijo)'; variant = 'base_cooktop_3_drawers'; }
     else if (v === 'spice_rack') { w = 15; name = 'Especiero Extraíble'; }
     else if (v === 'wine_rack') { w = 20; name = 'Botellero Base'; }
     else if (v === 'corner_blind') { w = 110; name = 'Esquinero Ciego'; variant = 'corner_blind_right'; }
     else if (v === 'corner_l') { w = 90; d = 90; name = 'Esquinero en L'; }
-    return { type: 'base', variant, name, width: w, height: 80, depth: d, blindWidth: v === 'corner_blind' ? 60 : undefined };
+    return { 
+      type: 'base', 
+      variant, 
+      name, 
+      width: w, 
+      height: 80, 
+      depth: d, 
+      blindWidth: v === 'corner_blind' ? 60 : undefined,
+      shelvesCount: (v === 'sink_2_doors' || v === 'base_sink_2_doors') ? 0 : undefined,
+      drawersCount: (v === '3_drawers_veggie' || v === 'base_3_drawers_veggie' || v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers' || v === '2_drawers_1_pot') ? 3 : (v === '4_drawers' ? 4 : (v === '2_pot_drawers' ? 2 : undefined))
+    };
   }
 
   // Torres
@@ -1646,8 +1660,8 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     let d = 35;
     let name = 'Módulo Aéreo';
     let variant = v;
-    if (v === '1_door') { w = 60; name = 'Aéreo 1 Puerta'; }
-    else if (v === '2_doors') { w = 80; name = 'Aéreo 2 Puertas'; }
+    if (v === '1_door') { variant = 'wall_1_door'; w = 60; name = 'Aéreo 1 Puerta'; }
+    else if (v === '2_doors') { variant = 'wall_2_doors'; w = 80; name = 'Aéreo 2 Puertas'; }
     else if (v === 'lift_up') { variant = 'wall_lift_up'; w = 80; h = 40; name = 'Aéreo Puerta Elevable'; }
     else if (v === 'lift_up_double') { variant = 'wall_lift_up_double'; w = 80; h = 70; name = 'Aéreo Doble Elevable'; }
     else if (v === 'microwave_niche') { variant = 'wall_microwave_niche'; w = 60; h = 80; d = 38; name = 'Aéreo Nicho Microondas'; }
@@ -1655,6 +1669,7 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     else if (v === 'corner_blind') { variant = 'wall_corner_blind_right'; w = 70; h = 70; name = 'Aéreo Esquinero Ciego'; }
     else if (v === 'wine_rack') { variant = 'wall_wine_rack'; w = 20; h = 70; name = 'Aéreo Botellero'; }
     else if (v === 'hood_new_flow' || v === 'hood_neu_flow') { variant = 'wall_hood_new_flow'; w = 60; h = 70; d = 35; name = 'New Flow 60'; }
+    else if (v === 'door_shelf' || v === 'wall_door_shelf') { variant = 'wall_door_shelf'; w = 60; h = 80; d = 35; name = 'Aéreo Puerta + Repisa Inferior'; }
     return { type: 'wall', variant, name, width: w, height: h, depth: d };
   }
 
