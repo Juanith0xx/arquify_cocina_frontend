@@ -2574,7 +2574,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                         </div>
                         <div className="flex flex-col min-w-0">
                           <div className={`text-xs font-bold leading-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                            Cubiertas Qstone
+                            Cubiertas
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                             {countertopConfig.enabled
