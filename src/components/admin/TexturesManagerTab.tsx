@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Sparkles,
   Upload,
@@ -83,9 +83,15 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
     rejectTexture,
     deleteTexture,
     resetTexturesToDefault,
+    syncCloudTextures,
+    saveTextureToCloud,
     themeMode
   } = useAdminStore();
   const isLight = themeMode === 'light';
+
+  useEffect(() => {
+    void syncCloudTextures();
+  }, [syncCloudTextures]);
 
   const matchedProvider = useMemo(() => {
     if (!currentProviderId && !currentProviderName) return undefined;
@@ -105,6 +111,7 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTextureId, setEditingTextureId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'warning' | 'info'; text: string } | null>(null);
   const [approvalMode, setApprovalMode] = useState<'approved' | 'pending'>(isSuperAdmin ? 'approved' : 'pending');
 
@@ -264,59 +271,153 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
     setIsFormOpen(true);
   };
 
-  const handleCreateTexture = (e: React.FormEvent) => {
+  const handleCreateTexture = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!name.trim() || !previewUrl) {
       alert('Por favor ingrese un nombre y cargue una imagen o textura para el renderizado.');
       return;
     }
 
     const formattedFormat = `${sheetWidthM} x ${sheetHeightM} m`;
+    setIsSaving(true);
 
-    if (editingTextureId) {
-      const existingTex = textures.find((t) => t.id === editingTextureId);
-      const isStone =
+    try {
+      if (editingTextureId) {
+        const existingTex = textures.find((t) => t.id === editingTextureId);
+        const isStone =
+          category === 'piedras_marmoles' ||
+          currentSelectedProvider.name.toLowerCase().includes('qstone') ||
+          currentSelectedProvider.name.toLowerCase().includes('sysprotec') ||
+          name.toLowerCase().includes('qstone');
+
+        updateTexture(
+          editingTextureId,
+          {
+            name: name.trim(),
+            code: code.trim() || existingTex?.code || `PRV-${Math.floor(Math.random() * 9000 + 1000)}`,
+            brand: currentSelectedProvider.name,
+            category,
+            finish,
+            sheetFormat: formattedFormat,
+            thicknessMm: Number(thicknessMm) || 18,
+            sheetWidthM: Number(sheetWidthM),
+            sheetHeightM: Number(sheetHeightM),
+            priceSheetClp: Number(priceSheetClp),
+            priceM2Clp,
+            url: previewUrl,
+            previewUrl: previewUrl,
+            providerId: currentSelectedProvider.id,
+            providerName: currentSelectedProvider.name,
+            commissionPercentage: commissionPct,
+            providerNetPriceClp: providerNetPayoutClp,
+            stock: Math.max(0, Number(stock) || 0)
+          },
+          { skipCloudSync: true }
+        );
+
+        const cloudRes = await saveTextureToCloud(editingTextureId, false);
+        const resolvedUrl = cloudRes.texture?.url || previewUrl;
+
+        // Sincronizar catálogo 3D activo si está aprobado
+        const currentApprovalStatus = existingTex?.approvalStatus || 'approved';
+        if (currentApprovalStatus === 'approved') {
+          if (!isStone) {
+            const closetStore = useClosetStore.getState();
+            if (closetStore.customTextures) {
+              closetStore.setCustomTextures([
+                ...closetStore.customTextures.filter((t) => t.id !== editingTextureId),
+                { id: editingTextureId, name: name.trim(), url: resolvedUrl },
+              ]);
+            }
+          } else {
+            const isSintered = name.toLowerCase().includes('sinteriz') || category === 'piedras_marmoles';
+            useKitchenStore.getState().addQstoneCatalogItem({
+              id: editingTextureId,
+              code: code.trim() || 'QS-CUSTOM',
+              name: name.trim(),
+              materialType: isSintered ? 'sinterizado' : 'quarzo',
+              thicknessMm: name.includes('20') ? 20 : (name.includes('18') ? 18 : 12),
+              priceM2Clp: priceM2Clp || Math.round(priceSheetClp / 3.965) || 280000,
+              sheetWidthMm: 3200,
+              sheetHeightMm: 1600,
+              colorHex: resolvedUrl.startsWith('#') ? resolvedUrl : '#F5F5F7',
+              textureUrl: resolvedUrl,
+              finish: finish || 'Pulido Seda',
+              description: `${currentSelectedProvider.name} - Formato Placa`,
+              active: true,
+            });
+          }
+        }
+
+        if (cloudRes.ok) {
+          showToast(`Terminación "${name}" actualizada y guardada en PostgreSQL (Railway).`, 'success');
+        } else {
+          showToast(
+            `Terminación "${name}" actualizada localmente, pero no se pudo guardar en PostgreSQL: ${cloudRes.error || 'Sin conexión'}`,
+            'warning'
+          );
+        }
+        setIsFormOpen(false);
+        setEditingTextureId(null);
+        setName('');
+        setCode('');
+        setPreviewUrl('');
+        return;
+      }
+
+      // Si quien crea es un proveedor o superadmin especificando flujo de aprobación:
+      const initialApprovalStatus = isSuperAdmin ? approvalMode : 'pending';
+
+      const newId = addTexture(
+        {
+          name: name.trim(),
+          code: code.trim() || `PRV-${Math.floor(Math.random() * 9000 + 1000)}`,
+          brand: currentSelectedProvider.name,
+          category,
+          finish,
+          sheetFormat: formattedFormat,
+          thicknessMm: Number(thicknessMm) || 18,
+          sheetWidthM: Number(sheetWidthM),
+          sheetHeightM: Number(sheetHeightM),
+          priceSheetClp: Number(priceSheetClp),
+          priceM2Clp,
+          url: previewUrl,
+          previewUrl: previewUrl,
+          active: initialApprovalStatus === 'approved',
+          providerId: currentSelectedProvider.id,
+          providerName: currentSelectedProvider.name,
+          commissionPercentage: commissionPct,
+          providerNetPriceClp: providerNetPayoutClp,
+          approvalStatus: initialApprovalStatus,
+          stock: Math.max(0, Number(stock) || 0)
+        },
+        { skipCloudSync: true }
+      );
+
+      const cloudRes = await saveTextureToCloud(newId, true);
+      const resolvedUrl = cloudRes.texture?.url || previewUrl;
+
+      // Inyectar en el store de Clóset / TexturesSection sólo si está aprobado Y NO es piedra
+      const isStoneNew =
         category === 'piedras_marmoles' ||
         currentSelectedProvider.name.toLowerCase().includes('qstone') ||
         currentSelectedProvider.name.toLowerCase().includes('sysprotec') ||
         name.toLowerCase().includes('qstone');
 
-      updateTexture(editingTextureId, {
-        name: name.trim(),
-        code: code.trim() || existingTex?.code || `PRV-${Math.floor(Math.random() * 9000 + 1000)}`,
-        brand: currentSelectedProvider.name,
-        category,
-        finish,
-        sheetFormat: formattedFormat,
-        thicknessMm: Number(thicknessMm) || 18,
-        sheetWidthM: Number(sheetWidthM),
-        sheetHeightM: Number(sheetHeightM),
-        priceSheetClp: Number(priceSheetClp),
-        priceM2Clp,
-        url: previewUrl,
-        previewUrl: previewUrl,
-        providerId: currentSelectedProvider.id,
-        providerName: currentSelectedProvider.name,
-        commissionPercentage: commissionPct,
-        providerNetPriceClp: providerNetPayoutClp,
-        stock: Math.max(0, Number(stock) || 0)
-      });
-
-      // Sincronizar catálogo 3D activo si está aprobado
-      const currentApprovalStatus = existingTex?.approvalStatus || 'approved';
-      if (currentApprovalStatus === 'approved') {
-        if (!isStone) {
+      if (initialApprovalStatus === 'approved') {
+        if (!isStoneNew) {
           const closetStore = useClosetStore.getState();
           if (closetStore.customTextures) {
             closetStore.setCustomTextures([
-              ...closetStore.customTextures.filter((t) => t.id !== editingTextureId),
-              { id: editingTextureId, name: name.trim(), url: previewUrl },
+              ...closetStore.customTextures.filter((t) => t.id !== newId),
+              { id: newId, name: name.trim(), url: resolvedUrl },
             ]);
           }
         } else {
           const isSintered = name.toLowerCase().includes('sinteriz') || category === 'piedras_marmoles';
           useKitchenStore.getState().addQstoneCatalogItem({
-            id: editingTextureId,
+            id: newId,
             code: code.trim() || 'QS-CUSTOM',
             name: name.trim(),
             materialType: isSintered ? 'sinterizado' : 'quarzo',
@@ -324,94 +425,40 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
             priceM2Clp: priceM2Clp || Math.round(priceSheetClp / 3.965) || 280000,
             sheetWidthMm: 3200,
             sheetHeightMm: 1600,
-            colorHex: previewUrl.startsWith('#') ? previewUrl : '#F5F5F7',
-            textureUrl: previewUrl,
+            colorHex: resolvedUrl.startsWith('#') ? resolvedUrl : '#F5F5F7',
+            textureUrl: resolvedUrl,
             finish: finish || 'Pulido Seda',
             description: `${currentSelectedProvider.name} - Formato Placa`,
             active: true,
           });
         }
+        if (cloudRes.ok) {
+          showToast(`Terminación "${name}" guardada en PostgreSQL (Railway) y aprobada de inmediato.`, 'success');
+        } else {
+          showToast(
+            `Terminación "${name}" creada localmente, pero no se pudo guardar en PostgreSQL: ${cloudRes.error || 'Sin conexión'}`,
+            'warning'
+          );
+        }
+      } else {
+        if (cloudRes.ok) {
+          showToast(`Terminación "${name}" guardada en PostgreSQL (Railway) y enviada a revisión (Pendiente de VB).`, 'warning');
+        } else {
+          showToast(
+            `Terminación "${name}" creada localmente (Pendiente de VB), pero falló el guardado en PostgreSQL: ${cloudRes.error || 'Sin conexión'}`,
+            'warning'
+          );
+        }
       }
 
-      showToast(`Terminación "${name}" actualizada con éxito.`, 'success');
       setIsFormOpen(false);
       setEditingTextureId(null);
       setName('');
       setCode('');
       setPreviewUrl('');
-      return;
+    } finally {
+      setIsSaving(false);
     }
-
-    // Si quien crea es un proveedor o superadmin especificando flujo de aprobación:
-    const initialApprovalStatus = isSuperAdmin ? approvalMode : 'pending';
-
-    const newId = addTexture({
-      name: name.trim(),
-      code: code.trim() || `PRV-${Math.floor(Math.random() * 9000 + 1000)}`,
-      brand: currentSelectedProvider.name,
-      category,
-      finish,
-      sheetFormat: formattedFormat,
-      thicknessMm: Number(thicknessMm) || 18,
-      sheetWidthM: Number(sheetWidthM),
-      sheetHeightM: Number(sheetHeightM),
-      priceSheetClp: Number(priceSheetClp),
-      priceM2Clp,
-      url: previewUrl,
-      previewUrl: previewUrl,
-      active: initialApprovalStatus === 'approved',
-      providerId: currentSelectedProvider.id,
-      providerName: currentSelectedProvider.name,
-      commissionPercentage: commissionPct,
-      providerNetPriceClp: providerNetPayoutClp,
-      approvalStatus: initialApprovalStatus,
-      stock: Math.max(0, Number(stock) || 0)
-    });
-
-    // Inyectar en el store de Clóset / TexturesSection sólo si está aprobado Y NO es piedra
-    const isStoneNew =
-      category === 'piedras_marmoles' ||
-      currentSelectedProvider.name.toLowerCase().includes('qstone') ||
-      currentSelectedProvider.name.toLowerCase().includes('sysprotec') ||
-      name.toLowerCase().includes('qstone');
-
-    if (initialApprovalStatus === 'approved') {
-      if (!isStoneNew) {
-        const closetStore = useClosetStore.getState();
-        if (closetStore.customTextures) {
-          closetStore.setCustomTextures([
-            ...closetStore.customTextures,
-            { id: newId, name: name.trim(), url: previewUrl },
-          ]);
-        }
-      } else {
-        const isSintered = name.toLowerCase().includes('sinteriz') || category === 'piedras_marmoles';
-        useKitchenStore.getState().addQstoneCatalogItem({
-          id: newId,
-          code: code.trim() || 'QS-CUSTOM',
-          name: name.trim(),
-          materialType: isSintered ? 'sinterizado' : 'quarzo',
-          thicknessMm: name.includes('20') ? 20 : (name.includes('18') ? 18 : 12),
-          priceM2Clp: priceM2Clp || Math.round(priceSheetClp / 3.965) || 280000,
-          sheetWidthMm: 3200,
-          sheetHeightMm: 1600,
-          colorHex: previewUrl.startsWith('#') ? previewUrl : '#F5F5F7',
-          textureUrl: previewUrl,
-          finish: finish || 'Pulido Seda',
-          description: `${currentSelectedProvider.name} - Formato Placa`,
-          active: true,
-        });
-      }
-      showToast(`Terminación "${name}" creada y aprobada de inmediato.`, 'success');
-    } else {
-      showToast(`Terminación "${name}" enviada a revisión. Queda PENDIENTE de VB del Superadministrador.`, 'warning');
-    }
-
-    setIsFormOpen(false);
-    setEditingTextureId(null);
-    setName('');
-    setCode('');
-    setPreviewUrl('');
   };
 
   const handleApprove = (id: string, texName: string) => {
@@ -1141,9 +1188,12 @@ export function TexturesManagerTab({ currentProviderId, currentProviderName, isS
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer"
+                disabled={isSaving}
+                className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer"
               >
-                {editingTextureId
+                {isSaving
+                  ? 'Guardando en PostgreSQL...'
+                  : editingTextureId
                   ? 'Guardar Cambios'
                   : isSuperAdmin
                   ? 'Guardar y Publicar en 3D'

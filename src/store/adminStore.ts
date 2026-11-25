@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { getSupabase } from '../lib/supabase';
 import { useSupabaseAuthStore } from './supabaseAuthStore';
 import { useKitchenStore } from './kitchenStore';
+import { useStore as useClosetStore } from '../store';
+import {
+  fetchCloudTextures,
+  saveCloudTexture,
+  deleteCloudTexture,
+} from '../utils/texturesApiService';
 
 export type ProjectType = 'closet' | 'kitchen' | 'special' | 'hpl-bathroom' | 'office' | 'chair';
 export type ProjectStatus = 'designed' | 'quoted' | 'sold' | 'in_production';
@@ -374,13 +380,25 @@ export interface AdminState {
 
   // Texturas y Decorativos
   textures: CustomTextureItem[];
-  addTexture: (texture: Omit<CustomTextureItem, 'id' | 'createdAt'>) => string;
-  updateTexture: (id: string, updates: Partial<CustomTextureItem>) => void;
+  addTexture: (
+    texture: Omit<CustomTextureItem, 'id' | 'createdAt'>,
+    options?: { skipCloudSync?: boolean }
+  ) => string;
+  updateTexture: (
+    id: string,
+    updates: Partial<CustomTextureItem>,
+    options?: { skipCloudSync?: boolean }
+  ) => void;
   toggleTextureActive: (id: string) => void;
   approveTexture: (id: string) => void;
   rejectTexture: (id: string, reason?: string) => void;
   deleteTexture: (id: string) => void;
   resetTexturesToDefault: () => void;
+  syncCloudTextures: () => Promise<void>;
+  saveTextureToCloud: (
+    id: string,
+    isNew?: boolean
+  ) => Promise<{ ok: boolean; texture?: CustomTextureItem; error?: string }>;
 
   // Tarifas de Manufactura B2B
   manufacturingRates: ManufacturingRateConfig;
@@ -3166,6 +3184,36 @@ function syncTextureToKitchenStore(tex: CustomTextureItem) {
   }
 }
 
+function isStoneTextureItem(tex: CustomTextureItem): boolean {
+  return (
+    tex.category === 'piedras_marmoles' ||
+    Boolean(tex.brand?.toLowerCase().includes('qstone')) ||
+    Boolean(tex.brand?.toLowerCase().includes('sysprotec')) ||
+    tex.name.toLowerCase().includes('qstone') ||
+    Boolean(tex.providerName?.toLowerCase().includes('qstone')) ||
+    Boolean(tex.providerName?.toLowerCase().includes('sysprotec'))
+  );
+}
+
+function syncTexturesTo3DStores(textures: CustomTextureItem[]) {
+  try {
+    textures.forEach(syncTextureToKitchenStore);
+  } catch (e) {
+    console.warn('Error sincronizando texturas con kitchenStore:', e);
+  }
+  try {
+    const closetStore = useClosetStore.getState();
+    if (closetStore && typeof closetStore.setCustomTextures === 'function') {
+      const approvedNonStone = textures
+        .filter((t) => t.active && (t.approvalStatus === 'approved' || !t.approvalStatus) && !isStoneTextureItem(t) && t.url)
+        .map((t) => ({ id: t.id, name: t.name, url: t.url }));
+      closetStore.setCustomTextures(approvedNonStone);
+    }
+  } catch (e) {
+    console.warn('Error sincronizando texturas con closetStore:', e);
+  }
+}
+
 export const useAdminStore = create<AdminState>((set, get) => {
   const initial = getInitialState();
 
@@ -4010,14 +4058,22 @@ export const useAdminStore = create<AdminState>((set, get) => {
       
       // Si el insumo corresponde a una textura personalizada, actualizar el precio de la textura
       let currentTextures = get().textures;
+      let updatedTexId: string | null = null;
       if (id.startsWith('sup-')) {
         const texId = id.replace('sup-', '');
-        currentTextures = currentTextures.map((t) =>
-          t.id === texId ? { ...t, priceSheetClp: validPrice, priceM2Clp: Math.round(validPrice / 4.57) } : t
-        );
+        currentTextures = currentTextures.map((t) => {
+          if (t.id === texId) {
+            updatedTexId = texId;
+            return { ...t, priceSheetClp: validPrice, priceM2Clp: Math.round(validPrice / 4.57) };
+          }
+          return t;
+        });
       }
 
       persist({ supplies: currentSupplies, textures: currentTextures });
+      if (updatedTexId) {
+        void get().saveTextureToCloud(updatedTexId, false);
+      }
       try {
         useKitchenStore.getState().updateQstoneCatalogItemPrice(id, validPrice);
       } catch (e) {
@@ -4030,10 +4086,12 @@ export const useAdminStore = create<AdminState>((set, get) => {
       
       // Sincronizar hacia textures si corresponde
       let currentTextures = get().textures;
+      let updatedTexId: string | null = null;
       if (id.startsWith('sup-')) {
         const texId = id.replace('sup-', '');
         currentTextures = currentTextures.map((t) => {
           if (t.id === texId) {
+            updatedTexId = texId;
             return {
               ...t,
               ...(updates.priceClp !== undefined
@@ -4047,6 +4105,9 @@ export const useAdminStore = create<AdminState>((set, get) => {
       }
 
       persist({ supplies: currentSupplies, textures: currentTextures });
+      if (updatedTexId) {
+        void get().saveTextureToCloud(updatedTexId, false);
+      }
       try {
         if (updates.priceClp !== undefined) {
           useKitchenStore.getState().updateQstoneCatalogItemPrice(id, updates.priceClp);
@@ -4114,7 +4175,56 @@ export const useAdminStore = create<AdminState>((set, get) => {
 
     textures: initial.textures,
 
-    addTexture: (textureData) => {
+    syncCloudTextures: async () => {
+      const cloudTextures = await fetchCloudTextures();
+      if (!cloudTextures) return;
+
+      const defaultMap = new Map<string, CustomTextureItem>();
+      DEFAULT_CUSTOM_TEXTURES.forEach((t) => defaultMap.set(t.id, t));
+
+      const cloudIds = new Set<string>();
+      const mergedCloud = cloudTextures
+        .filter((t) => t && t.id && !DEPRECATED_FICTITIOUS_IDS.has(t.id))
+        .map((t) => {
+          cloudIds.add(t.id);
+          const def = defaultMap.get(t.id);
+          return def ? { ...def, ...t } : t;
+        });
+
+      const remainingDefaults = DEFAULT_CUSTOM_TEXTURES.filter((t) => !cloudIds.has(t.id));
+      const mergedTextures = [...mergedCloud, ...remainingDefaults];
+
+      const validTextureSupplyIds = new Set(mergedTextures.map((t) => `sup-${t.id}`));
+      const baseSupplies = get().supplies.filter(
+        (s) => !s.id.startsWith('sup-tex-') || validTextureSupplyIds.has(s.id)
+      );
+      const mergedSupplies = mergeTexturesIntoSupplies(baseSupplies, mergedTextures);
+
+      persist({ textures: mergedTextures, supplies: mergedSupplies });
+      syncTexturesTo3DStores(mergedTextures);
+    },
+
+    saveTextureToCloud: async (id, isNew = false) => {
+      const target = get().textures.find((t) => t.id === id);
+      if (!target) {
+        return { ok: false, error: 'Textura no encontrada en el estado local' };
+      }
+
+      const res = await saveCloudTexture(target, isNew);
+      if (res.ok && res.texture) {
+        const canonical = res.texture;
+        const currentTextures = get().textures.map((t) => (t.id === id ? canonical : t));
+        const supItem = textureToSupplyItem(canonical);
+        const currentSupplies = get().supplies.map((s) =>
+          s.id === `sup-${id}` || s.code === canonical.code ? { ...s, ...supItem } : s
+        );
+        persist({ textures: currentTextures, supplies: currentSupplies });
+        syncTexturesTo3DStores(currentTextures);
+      }
+      return res;
+    },
+
+    addTexture: (textureData, options) => {
       const newId = `tex-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const newTex: CustomTextureItem = {
         ...textureData,
@@ -4127,10 +4237,13 @@ export const useAdminStore = create<AdminState>((set, get) => {
       const currentSupplies = [supItem, ...get().supplies.filter((s) => s.id !== supItem.id && s.code !== supItem.code)];
       persist({ textures: currentTextures, supplies: currentSupplies });
       syncTextureToKitchenStore(newTex);
+      if (!options?.skipCloudSync) {
+        void get().saveTextureToCloud(newId, true);
+      }
       return newId;
     },
 
-    updateTexture: (id, updates) => {
+    updateTexture: (id, updates, options) => {
       const currentTextures = get().textures.map((t) => (t.id === id ? { ...t, ...updates } : t));
       const target = currentTextures.find((t) => t.id === id);
       let currentSupplies = get().supplies;
@@ -4140,13 +4253,19 @@ export const useAdminStore = create<AdminState>((set, get) => {
       }
       persist({ textures: currentTextures, supplies: currentSupplies });
       if (target) syncTextureToKitchenStore(target);
+      if (!options?.skipCloudSync && target) {
+        void get().saveTextureToCloud(id, false);
+      }
     },
 
     toggleTextureActive: (id) => {
       const currentTextures = get().textures.map((t) => (t.id === id ? { ...t, active: !t.active } : t));
       persist({ textures: currentTextures });
       const updated = currentTextures.find((t) => t.id === id);
-      if (updated) syncTextureToKitchenStore(updated);
+      if (updated) {
+        syncTextureToKitchenStore(updated);
+        void get().saveTextureToCloud(id, false);
+      }
     },
 
     approveTexture: (id) => {
@@ -4155,7 +4274,10 @@ export const useAdminStore = create<AdminState>((set, get) => {
       );
       persist({ textures: currentTextures });
       const updated = currentTextures.find((t) => t.id === id);
-      if (updated) syncTextureToKitchenStore(updated);
+      if (updated) {
+        syncTextureToKitchenStore(updated);
+        void get().saveTextureToCloud(id, false);
+      }
     },
 
     rejectTexture: (id, reason) => {
@@ -4166,6 +4288,9 @@ export const useAdminStore = create<AdminState>((set, get) => {
       try {
         useKitchenStore.getState().removeQstoneCatalogItem(id);
       } catch (e) {}
+      if (currentTextures.some((t) => t.id === id)) {
+        void get().saveTextureToCloud(id, false);
+      }
     },
 
     deleteTexture: (id) => {
@@ -4175,6 +4300,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       try {
         useKitchenStore.getState().removeQstoneCatalogItem(id);
       } catch (e) {}
+      void deleteCloudTexture(id);
     },
 
     resetTexturesToDefault: () => {

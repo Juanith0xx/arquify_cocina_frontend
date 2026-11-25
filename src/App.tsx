@@ -8,6 +8,7 @@ import { HplBathroomConfigurator } from './pages/HplBathroomConfigurator';
 import OfficeConfigurator from './pages/OfficeConfigurator';
 import { ChairConfigurator } from './pages/ChairConfigurator';
 import { useSupabaseAuthStore } from './store/supabaseAuthStore';
+import { useAdminStore } from './store/adminStore';
 
 interface Props {
   children: ReactNode;
@@ -75,6 +76,7 @@ export default function App() {
     if (!assemblyParams) {
       checkSession();
     }
+    void useAdminStore.getState().syncCloudTextures();
   }, [checkSession, assemblyParams]);
 
   if (assemblyParams) {
