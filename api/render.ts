@@ -12,7 +12,16 @@ try {
 dotenv.config({ override: true });
 
 export async function handleRenderRequest(body: any) {
-  const { imageBase64, prompt, propertyType, environment, lighting, hasPeople, hasProps, stagingIntensity = 2, renderStyle, bimManifest } = body || {};
+  const {
+    imageBase64,
+    propertyType,
+    environment,
+    lighting,
+    hasPeople,
+    hasProps,
+    stagingIntensity = 2,
+    bimManifest,
+  } = body || {};
 
   if (!imageBase64) {
     throw new Error('Image base64 data is required');
@@ -28,12 +37,14 @@ export async function handleRenderRequest(body: any) {
         apiKey = parsed.VITE_GEMINI_API_KEY.trim();
       }
     }
-  } catch (e) {
+  } catch {
     // fallback to process.env
   }
 
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY no está configurada en el servidor de Vercel. Por favor, asegúrate de haber añadido GEMINI_API_KEY en Vercel Dashboard -> Project Settings -> Environment Variables y desplegado nuevamente.');
+    throw new Error(
+      'GEMINI_API_KEY no está configurada en el servidor de Vercel. Por favor, asegúrate de haber añadido GEMINI_API_KEY en Vercel Dashboard -> Project Settings -> Environment Variables y desplegado nuevamente.'
+    );
   }
 
   const ai = new GoogleGenAI({
@@ -46,116 +57,156 @@ export async function handleRenderRequest(body: any) {
   });
 
   const hasIsland = Boolean(bimManifest?.hasIsland);
+  const hasCountertop = bimManifest?.countertop?.enabled !== false;
+  const archElements = Array.isArray(bimManifest?.architecturalElements) ? bimManifest.architecturalElements : [];
+  const hasModeledWindows = archElements.some((el: any) => el?.type === 'window');
+  const isBlindWallsEnv =
+    !environment ||
+    String(environment).toLowerCase().includes('muros ciegos') ||
+    String(environment).toLowerCase().includes('sin ventanas');
 
-  // Especificación detallada del proyecto BIM
+  // Especificación detallada pieza por pieza del proyecto BIM
   const inventorySection = bimManifest?.rawTextPromptSpec
     ? `
-MANDATORY ARCHITECTURAL BIM SPECIFICATION & STRICT BILL OF QUANTITIES:
+OFFICIAL PIECE-BY-PIECE BIM INVENTORY (GROUND TRUTH — MUST MATCH INPUT IMAGE 1:1):
 ${bimManifest.rawTextPromptSpec}
-`
+`.trim()
     : `
-EXACT MATERIAL & FINISH SPECIFICATIONS:
-- Cabinet Fronts: ${bimManifest?.cabinetFronts || 'Melamina madera natural'}${hasIsland && bimManifest?.islandFronts ? `\n- Island Fronts: ${bimManifest.islandFronts}` : ''}
-- Wood Tone & Grain Finish: ${bimManifest?.woodToneDetails || 'Roble nórdico claro rubio / light blonde oak, veta sutil limpia'}
+EXACT MATERIAL & FINISH SPECIFICATIONS (MATCH INPUT IMAGE 1:1):
+- Cabinet Fronts: ${bimManifest?.cabinetFronts || 'Seguir exactamente los colores y texturas de la imagen de entrada'}${hasIsland && bimManifest?.islandFronts ? `\n- Island Fronts: ${bimManifest.islandFronts}` : ''}
+- Fronts Finish & Tone: ${bimManifest?.woodToneDetails || 'Conservar exactamente el tono, color y veta de la imagen de entrada'}
 - Modules Architecture & Layout: ${bimManifest?.moduleArchitecture || 'Disposición exacta según captura 3D'}
-- Base Support & Zócalo: ${bimManifest?.socleDirective || bimManifest?.socle?.directive || bimManifest?.socle || 'Seguir exactamente la imagen de entrada'}
-- Countertop: ${bimManifest?.countertop?.description || bimManifest?.countertop || 'Piedra sintetizada Qstone gris'}
-- Hardware / Handles: ${bimManifest?.hardwareSummary || bimManifest?.hardware || 'Tiradores en acabado Negro Mate'}
-- Flooring: ${bimManifest?.finishSummary?.floorDescription || bimManifest?.flooring || 'Baldosas cerámicas blancas en cuadrícula cuadrada regular con fragüe gris'}
-- Walls Finish: ${bimManifest?.finishSummary?.wallColor || bimManifest?.wallFinish || 'Pintura lisa mate color muro actual'}
-`;
+- Base Support & Zócalo: ${bimManifest?.socleDirective || bimManifest?.socle?.directive || 'Seguir exactamente la imagen de entrada'}
+- Countertop: ${bimManifest?.countertop?.description || 'Seguir exactamente la cubierta de la imagen de entrada'}
+- Hardware / Handles: ${bimManifest?.hardwareSummary || bimManifest?.hardware || 'Seguir exactamente los tiradores o sistema sin tirador de la imagen de entrada'}
+- Flooring: ${bimManifest?.finishSummary?.floorDescription || bimManifest?.flooring || 'Seguir exactamente el piso de la imagen de entrada'}
+- Walls Finish: ${bimManifest?.finishSummary?.wallColor || bimManifest?.wallFinish || 'Seguir exactamente el acabado de muros de la imagen de entrada'}
+`.trim();
 
-  const totalCount = bimManifest?.totalModulesCount ? `${bimManifest.totalModulesCount} modules` : 'the exact count shown in the input 3D model';
+  const totalCount = bimManifest?.totalModulesCount
+    ? `${bimManifest.totalModulesCount} exact modeled items`
+    : 'the exact count visible in the input 3D capture';
 
+  // Directivas estrictas extraídas del manifiesto real
+  const strictDirectivesList = Array.isArray(bimManifest?.strictNegativeDirectives) && bimManifest.strictNegativeDirectives.length > 0
+    ? bimManifest.strictNegativeDirectives.map((d: string) => `   - ${d}`).join('\n')
+    : '';
+
+  // Gestión estricta de ventanas y vista exterior (nunca abrir ventanas en muros ciegos)
+  const environmentSection =
+    isBlindWallsEnv || !hasModeledWindows
+      ? `- SOLID WALLS PRESERVATION: Keep all room walls completely solid and continuous exactly as shown in the 3D input capture (${hasModeledWindows ? 'no exterior view requested' : '0 windows modeled in project'}). Do NOT cut, carve, or invent new windows or glass openings in any wall.`
+      : `- EXTERIOR VIEW THROUGH EXISTING WINDOWS ONLY: Render a realistic "${environment}" exterior vista strictly visible ONLY through the window openings that ALREADY EXIST in the 3D input capture. Keep every window frame's exact position, width, height, and elevation unchanged, and keep all other wall areas solid.`;
+
+  // Gestión estricta de staging / decoración (sin modificar muebles, cubiertas ni decorativos modelados)
   const intensityNum = Number(stagingIntensity) || 2;
   const stagingPropsSection = !hasProps
-    ? '- NO PROPS: Keep countertops and surfaces completely clean, pristine, polished, and free of clutter or staging objects.'
+    ? `- ZERO ADDED PROPS (STRICT PURE PROJECT RENDER):
+     * Do NOT add any new utensils, coffee makers, cutting boards, dishes, bottles, books, towels, plants, bowls, or decorative items anywhere.
+     * Keep every countertop, shelf, niche, and floor surface 100% pure and identical to the 3D capture, preserving ONLY the appliances and decorative items already modeled in the input scene.`
     : intensityNum === 1
-    ? `- TASTEFUL DECORATION & MINIMALIST STAGING (LEVEL 1 - SUBTLE & REFINED):
-     * Keep countertops 85% bare, clean, and uncluttered so the visual focus remains 100% on the pristine cabinetry and countertop stone.
-     * Rest only 1 or 2 high-end designer accent items naturally on the countertop: e.g. a minimalist ceramic vase with a single botanical sprig, or a sleek designer espresso machine.
-     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`
+    ? `- MINIMALIST STAGING (LEVEL 1 — STRICTLY NON-DESTRUCTIVE):
+     * Keep countertops 90% bare. Place at most 1 or 2 small, understated tabletop accents resting strictly on top of empty horizontal countertop space (never blocking sinks, cooktops, faucets, handles, or cabinet seams).
+     * Every cabinet, drawer, door, countertop edge, backsplash, appliance, and modeled decorative item stays 100% unchanged in geometry, size, and position.`
     : intensityNum === 3
-    ? `- TASTEFUL DECORATION & RICH LIVED-IN STAGING (LEVEL 3 - ABUNDANT & VIBRANT):
-     * Create an authentic, warm, inhabited high-end kitchen atmosphere with generous culinary and lifestyle staging resting ONLY ON THE EXISTING COUNTERTOP SURFACES${hasIsland ? ' AND ISLAND' : ''}.
-     * Include: artisan wooden cutting board with sliced bread and fresh citrus, a premium espresso machine or kettle, clear glass canisters with dry grains or pasta, small ceramic pots with living herbs (basil/rosemary), a decorative fruit bowl, olive oil bottles, pepper grinder, stacked cookbooks, and a neatly folded linen towel.
-     * The kitchen feels actively loved and used, yet strictly preserves all cabinetry geometry, lines, and finishes.
-     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`
-    : `- TASTEFUL DECORATION & LIVING PROPS (LEVEL 2 - BALANCED EDITORIAL INTERIOR):
-     * Place rich, realistic, architectural lifestyle elements resting naturally ONLY ON THE EXISTING COUNTERTOP SURFACES${hasIsland ? ' AND ISLAND' : ''}.
-     * Include: a sleek designer coffee machine or stainless/matte kettle, an artisan wood cutting board with fresh citrus/bread, small ceramic pots with fresh green herbs (basil/rosemary) or a delicate minimalist vase with natural greenery, elegant salt/pepper mills, and a neatly folded linen kitchen towel.
-     * Countertops maintain a clean, organized, editorial balance.
-     * STRICT IMMUTABILITY OF FURNITURE: All decorative objects must ONLY sit on top of existing horizontal surfaces (countertops). Under NO circumstance should any cabinet, drawer, door, appliance, handle, island, peninsula, or wall module be added, removed, resized, or altered. The cabinetry architecture remains 100% identical to the 3D capture.`;
+    ? `- LIVED-IN EDITORIAL STAGING (LEVEL 3 — STRICTLY NON-DESTRUCTIVE):
+     * Place tasteful tabletop culinary accents (e.g., wooden cutting board, ceramic herb pot, espresso machine, linen towel) resting strictly on top of existing horizontal countertop surfaces${hasIsland ? ' and island top' : ''}, never obstructing sinks, cooktops, faucets, or handles.
+     * Every cabinet, drawer, door, countertop thickness/overhang/waterfall, backsplash, appliance, and modeled decorative item stays 100% unchanged in geometry, size, and position.`
+    : `- BALANCED EDITORIAL STAGING (LEVEL 2 — STRICTLY NON-DESTRUCTIVE):
+     * Place a few restrained tabletop accents (e.g., sleek espresso machine or kettle, small wooden cutting board, small ceramic herb pot) resting strictly on top of existing horizontal countertop surfaces${hasIsland ? ' and island top' : ''}, never obstructing sinks, cooktops, faucets, or handles.
+     * Every cabinet, drawer, door, countertop thickness/overhang/waterfall, backsplash, appliance, and modeled decorative item stays 100% unchanged in geometry, size, and position.`;
+
+  // Detalle real de herrajes y acabados sin valores hardcodeados
+  const realFrontsTone =
+    bimManifest?.finishSummary?.woodToneDetails ||
+    bimManifest?.woodToneDetails ||
+    'Preserve the exact colors, tones, and finishes visible on every cabinet front in the input 3D capture.';
+  const realHardware =
+    bimManifest?.hardwareSummary ||
+    bimManifest?.hardware ||
+    'Preserve the exact handle shape, placement, and finish (or handleless Gola/push fronts) visible in the input 3D capture.';
+  const realFloor =
+    bimManifest?.finishSummary?.floorDescription ||
+    bimManifest?.flooring ||
+    'Preserve the exact floor material, tile grid/planks, and color visible in the input 3D capture.';
+  const realWalls =
+    bimManifest?.finishSummary?.wallColor ||
+    bimManifest?.wallFinish ||
+    'Preserve the exact wall paint/finish color visible in the input 3D capture.';
+  const realCountertop =
+    bimManifest?.countertop?.description ||
+    'Preserve the exact countertop material, thickness, overhang, backsplash, and edge profile visible in the input 3D capture.';
+  const realSocle =
+    bimManifest?.socle?.directive ||
+    bimManifest?.socleDirective ||
+    'Preserve the exact base support (closed kickplate or legs) visible in the input 3D capture.';
+  const realIslandBack = bimManifest?.islandBack?.enabled ? `\n   - Island Back/Sides: ${bimManifest.islandBack.description}` : '';
 
   const structuredPrompt = `
-You are a professional architectural rendering engine. Perform a strict photorealistic restyling of this exact 3D CAD/BIM viewport capture.
+You are a precision architectural photorealistic relighting & PBR material rendering engine.
+TASK: Convert the attached 3D CAD/BIM viewport screenshot into a photorealistic architectural photograph by ONLY upgrading lighting, global illumination, soft shadows, reflections, and physical surface realism — while keeping 100% PIXEL-LOCKED GEOMETRIC, DIMENSIONAL, AND STRUCTURAL FIDELITY to the input 3D image and the piece-by-piece BIM inventory below.
+
+PRIMARY RULE — INPUT IMAGE IS GEOMETRIC GROUND TRUTH:
+- Treat the input 3D image as an immutable architectural CAD projection.
+- Every silhouette, cabinet outline, width, height, depth, gap, door split, drawer seam, open shelf, appliance, sink, faucet, cooktop, countertop edge/thickness/overhang/waterfall, backsplash height, kickplate/legs, handle position, decorative object, wall corner, door, window, and pillar must remain in its EXACT pixel coordinates and proportions.
+- Never add, remove, resize, relocate, reshape, or restyle the geometry of ANY piece of furniture, countertop, appliance, architectural element, or decorative element.
 
 ${inventorySection}
 
-CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
-1. STRICT INVENTORY CONFINEMENT (ZERO INVENTED OR REMOVED MODULES):
-   - The scene contains ONLY AND STRICTLY ${totalCount} as detailed in the official BIM inventory above.
-   - You MUST NOT generate, add, duplicate, or infer any extra cabinet, shelf, hanging unit, kitchen island, cart, or appliance.
-   - Any wall or floor space not occupied in the 3D capture must remain completely empty and clean.
+PIECE-BY-PIECE VERIFICATION CHECKLIST (STRICT 1:1 COMPLIANCE):
+1. EXACT MODULE COUNT & BOUNDARIES:
+   - Render ONLY the ${totalCount} present in the input 3D image and listed in the BIM inventory.
+   - Keep all empty wall regions and open floor areas completely empty and clean exactly as framed in the input image.
+${strictDirectivesList ? `${strictDirectivesList}\n` : ''}
+2. EXACT FRONTS, DOORS, DRAWERS & OPENINGS:
+   - Closed solid doors in the 3D capture remain closed, solid, and opaque with the exact seam lines shown.
+   - Drawer banks preserve the exact count and horizontal division heights visible in the 3D capture.
+   - Open niches, shelves, wine racks, and built-in appliance cutouts appear ONLY where modeled in the 3D capture.
 
-2. DOOR & DRAWER INTEGRITY (PROHIBITED MODIFICATIONS):
-   - All modules cataloged with doors MUST remain closed with solid, smooth, opaque melamine fronts. UNDER NO CIRCUMSTANCES should closed doors be converted into open display shelves, glass cabinets, or niches.
-   - All modules cataloged with drawers MUST reproduce the exact horizontal split lines and count of drawers listed.
+3. COUNTERTOPS, SINKS, COOKTOPS & WATERFALLS:
+   - ${realCountertop}${realIslandBack}
+   ${hasCountertop ? '- Preserve exact countertop edge thickness, overhang length, backsplash height, and side terminations shown in the 3D capture.' : '- Keep the cabinets without any added stone countertop, matching the input 3D capture.'}
 
-3. ${bimManifest?.islandDirectives?.description || (hasIsland 
-    ? 'ISLAND FIDELITY:\n   - Replicate the exact island geometry and bounds from the 3D capture.' 
-    : 'STRICT OPEN FLOOR PRESERVATION - ABSOLUTELY NO ISLAND, PENINSULA OR BREAKFAST BAR:\n   - This kitchen has NO island, NO peninsula, and NO breakfast bar.\n   - The center and foreground floor is 100% EMPTY, bare, open floor tile space.\n   - ABSOLUTELY FORBIDDEN: DO NOT invent, generate, add, or suggest any kitchen island, peninsula, dining counter, bar, table, or floating module in the open floor. The tiled floor MUST remain completely bare and open.')}
+4. FLOOR PLAN & OPEN SPACE PRESERVATION:
+   - ${bimManifest?.islandDirectives?.description || (hasIsland ? 'Keep the modeled island in its exact footprint and position.' : 'Keep the central and foreground floor completely open and bare exactly as shown in the input 3D capture.')}
 
-4. BUILT-IN & FREESTANDING APPLIANCES FIDELITY:
-   - Freestanding appliances (stove/cooker, refrigerator) and built-in appliances (sink, cooktop, ovens) must remain in their exact specified positions and dimensions with professional stainless steel/black finishes.
-   - Do not distort, remove, invent, or relocate any appliances.
+5. BASE SUPPORT / ZÓCALO:
+   - ${realSocle}
 
-5. STRICT COUNTERTOP SPECIFICATION:
-   ${bimManifest?.countertop?.description ? `- ${bimManifest.countertop.description}` : '- Follow the exact countertop in the input capture.'}
-   ${bimManifest?.countertop?.hasWaterfallLeft ? '- Left waterfall: extends down to the floor in stone.' : ''}
-   ${bimManifest?.countertop?.hasWaterfallRight ? '- Right waterfall: extends down to the floor in stone.' : ''}
-   ${bimManifest?.countertop && !bimManifest.countertop.hasWaterfallLeft && !bimManifest.countertop.hasWaterfallRight ? '- Straight end finish on both sides (no waterfall drops to the floor).' : ''}
+6. MATERIALS, COLORS & HARDWARE (EXACT PROJECT MATCH — NO COLOR DRIFT):
+   - Cabinet Fronts & Tones: ${realFrontsTone}
+   - Hardware / Opening System: ${realHardware}
+   - Floor: ${realFloor}
+   - Walls: ${realWalls}
+   ${bimManifest?.finishSummary?.spaceDecorationSummary ? `- Configured Room Finishes/Decor: ${bimManifest.finishSummary.spaceDecorationSummary}` : ''}
+   - Match the exact hue, brightness, contrast, and material family of every surface in the input 3D capture (do not swap wood for solid color, solid color for wood, light for dark, dark for light, or change handle finish/model).
 
-6. BASE SUPPORT & ZÓCALO FIDELITY:
-   ${bimManifest?.socle?.directive || bimManifest?.socleDirective ? `- STRICT BASE DIRECTIVE: ${bimManifest?.socle?.directive || bimManifest?.socleDirective}` : '- Follow the exact base support in the input capture.'}
+7. ARCHITECTURAL ENVIRONMENT & WINDOWS:
+   ${environmentSection}
 
-7. STRICT MATERIAL & WOOD TONE FIDELITY:
-   - Wood Tone: ${bimManifest?.finishSummary?.woodToneDetails || bimManifest?.woodToneDetails || 'Roble nórdico claro rubio / light blonde oak, veta sutil limpia'}.
-   - Hardware: ${bimManifest?.hardwareSummary || bimManifest?.hardware || 'Tiradores en acabado Negro Mate'}.
-   - Floor: ${bimManifest?.finishSummary?.floorDescription || bimManifest?.flooring || 'Baldosas cerámicas'}.
-   - Walls: ${bimManifest?.finishSummary?.wallColor || bimManifest?.wallFinish || 'Pintura lisa'}.
-
-8. ARCHITECTURAL STAGING & PROPS (DECORATION):
-   - Maintain pristine architectural staging and high-end interior editorial realism.
-   ${hasPeople ? '- HUMAN STAGING: 1 realistic person standing naturally inside the open room floor space, without obstructing or modifying any cabinetry design.' : '- NO HUMANS: STRICTLY NO PEOPLE, no figures, no silhouettes anywhere in the scene.'}
+8. STAGING & HUMAN PRESENCE:
+   ${hasPeople ? '- HUMAN STAGING: 1 realistic person standing naturally in the open floor space without blocking or modifying any furniture.' : '- NO PEOPLE: Keep the scene completely free of people, figures, or silhouettes.'}
    ${stagingPropsSection}
 
-9. CAMERA POSE & PERSPECTIVE IMMUTABILITY:
-   - DO NOT change the camera angle, elevation, pitch, yaw, or framing.
-   - Maintain the exact camera perspective from the input capture.
-   - ARCHITECTURAL 2-POINT PERSPECTIVE: Keep all vertical cabinetry lines, tall units, door seams, and wall corners strictly plumb, parallel, and vertical (architectural tilt-shift lens look, zero converging vertical distortion).
+9. CAMERA & PERSPECTIVE LOCK:
+   - Keep the exact camera angle, focal length, framing, crop, and vertical line alignment of the input 3D image. Do not zoom, pan, tilt, or recompose the shot.
 
-10. PHOTOREALISTIC RESTYLING TASK:
-   - Replace the flat/shaded 3D viewport look with high-end architectural editorial rendering: physically accurate daylight, subtle contact ambient occlusion, realistic reflections on stone countertops, smooth Scandinavian wood grain, and crisp black hardware.
-   - PHYSICAL MATERIALITY & REALISTIC FINISHES:
-     * Subtle micro-bevels (1mm soft chamfer) on cabinet edges to catch natural specular light, avoiding computer-generated sharp artificial edges.
-     * Accurate diffuse and specular reflections on countertops (natural stone/quartz reflection without excessive glare).
-     * Soft, silky matte anti-fingerprint texture on solid melamine fronts with clean tactile grain on wood fronts.
-     * Hardware: Crisp matte powder-coated black finish on handles.
-   - STRICT LIGHTING FIDELITY (NO INVENTED LIGHT FIXTURES):
-     * ABSOLUTELY DO NOT add, invent, or draw any under-cabinet LED light strips, spotlights, or hidden light bars unless they are physically modeled in the 3D input geometry. The cabinetry must reflect strictly what is manufactured and sold.
-     * Ambient Lighting: ${lighting || 'Luz natural de sol de mañana, suave y brillante'}.
-     * Property context: ${propertyType || 'Casa Residencial moderna'}.
-  `.trim();
+10. PHOTOREALISTIC LIGHTING & PBR SHADING UPGRADE ONLY:
+   - Replace flat WebGL shading with physically accurate architectural photography lighting: natural contact ambient occlusion in cabinet joints and floor edges, realistic micro-bevel highlights (1mm soft edge specular), physically accurate matte/satin/stone reflections matching each specified material, and realistic stainless steel/glass shading ONLY on modeled appliances/sinks/faucets.
+   - Do NOT invent under-cabinet LED strips, recessed spotlights, pendant lamps, or fixtures that are not modeled in the 3D input image.
+   - Lighting mood: ${lighting || 'Mañana Luminosa (Luz Natural Sol)'}.
+   - Architectural context: ${propertyType || 'Casa Residencial'}.
+`.trim();
 
-  let mimeType = 'image/jpeg';
-  const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+  let mimeType = 'image/png';
+  const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
   if (mimeMatch) {
     mimeType = mimeMatch[1];
   }
-  const cleanImageBase64 = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+  const cleanImageBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
   let response;
+  let modelUsed = 'gemini-nano-banana-2.1';
   try {
     response = await ai.models.generateContent({
       model: 'gemini-nano-banana-2.1',
@@ -172,9 +223,13 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
           },
         ],
       },
+      config: {
+        temperature: 0.2,
+      },
     });
   } catch (nanoError: any) {
     console.warn('Fallback a gemini-3.1-flash-lite-image por:', nanoError?.message);
+    modelUsed = 'gemini-3.1-flash-lite-image';
     response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
       contents: {
@@ -189,6 +244,9 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
             text: structuredPrompt,
           },
         ],
+      },
+      config: {
+        temperature: 0.2,
       },
     });
   }
@@ -207,7 +265,7 @@ CRITICAL ABSOLUTE LAYOUT FIDELITY & ZERO-HALLUCINATION ENFORCEMENT:
     throw new Error(responseText || 'No image content returned from NanoBanana model');
   }
 
-  return { imageUrl: generatedImageUrl };
+  return { imageUrl: generatedImageUrl, modelUsed };
 }
 
 export default async function handler(req: any, res: any) {
@@ -224,7 +282,8 @@ export default async function handler(req: any, res: any) {
     let userMsg = 'Error al generar el render fotográfico.';
 
     if (errStr.includes('429') || errStr.includes('Quota exceeded') || errStr.includes('RESOURCE_EXHAUSTED')) {
-      userMsg = 'Límite de cuota alcanzado (Error 429) en la API Key gratuita para el modelo NanoBanana. Activa una clave de API con facturación en la configuración de la plataforma para continuar generando renders sin restricciones.';
+      userMsg =
+        'Límite de cuota alcanzado (Error 429) en la API Key gratuita para el modelo NanoBanana. Activa una clave de API con facturación en la configuración de la plataforma para continuar generando renders sin restricciones.';
     } else if (error?.message) {
       userMsg = error.message;
     }

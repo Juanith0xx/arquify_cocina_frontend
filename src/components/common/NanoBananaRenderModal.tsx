@@ -23,7 +23,12 @@ import {
 import { useAdminStore } from '../../store/adminStore';
 import { useSupabaseAuthStore } from '../../store/supabaseAuthStore';
 import { useKitchenStore } from '../../store/kitchenStore';
-import { extractDetailedKitchenBimManifest, DetailedBimManifest } from '../../utils/nanoBananaExtractor';
+import { useStore } from '../../store';
+import {
+  extractDetailedKitchenBimManifest,
+  extractClosetBimManifest,
+  DetailedBimManifest,
+} from '../../utils/nanoBananaExtractor';
 
 interface NanoBananaRenderModalProps {
   isOpen: boolean;
@@ -61,9 +66,16 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
   const [showBimDetails, setShowBimDetails] = useState<boolean>(false);
 
   const kitchenState = useKitchenStore();
+  const closetModules = useStore((state) => state.modules);
   const auditedBim: DetailedBimManifest | null = React.useMemo(() => {
     try {
-      return extractDetailedKitchenBimManifest(kitchenState);
+      if (kitchenState.cabinets && kitchenState.cabinets.length > 0) {
+        return extractDetailedKitchenBimManifest(kitchenState);
+      }
+      if (closetModules && closetModules.length > 0) {
+        return extractClosetBimManifest(useStore.getState());
+      }
+      return null;
     } catch (e) {
       console.warn('Error al extraer auditoría BIM:', e);
       return null;
@@ -71,6 +83,12 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
   }, [
     kitchenState.cabinets,
     kitchenState.countertopConfig,
+    kitchenState.qstoneCatalog,
+    kitchenState.islandBackConfig,
+    kitchenState.architecturalElements,
+    kitchenState.spaceDecoration,
+    kitchenState.walls,
+    kitchenState.roomConfig,
     kitchenState.showSocle,
     kitchenState.socleFinish,
     kitchenState.socleHeight,
@@ -78,6 +96,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
     kitchenState.golaSystem,
     kitchenState.floorType,
     kitchenState.wallColor,
+    closetModules,
   ]);
 
   if (!isOpen) return null;
@@ -97,15 +116,50 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
       return;
     }
 
-    // 3. Captura del Canvas 3D
+    // 2.5 Validación de Vista 3D en Configurador de Cocina
+    const currentKitchenSnapshot = useKitchenStore.getState();
+    if (currentKitchenSnapshot.cabinets.length > 0 && currentKitchenSnapshot.viewMode === '2d') {
+      setErrorMessage('Estás en Vista 2D. Cambia a Vista 3D antes de generar el render fotográfico para capturar los muebles en perspectiva real.');
+      return;
+    }
+
+    // 3. Captura limpia del Canvas 3D (ocultando temporalmente selecciones, cotas y marcas MEP)
     setIsGenerating(true);
-    setProgressStatus('Capturando viewport 3D del proyecto...');
+    setProgressStatus('Limpiando overlays y capturando viewport 3D...');
 
     let canvasDataUrl = '';
+    const prevKitchenUi = {
+      activeCabinetId: currentKitchenSnapshot.activeCabinetId,
+      activeArchElementId: currentKitchenSnapshot.activeArchElementId,
+      activeWallId: currentKitchenSnapshot.activeWallId,
+      showMep: currentKitchenSnapshot.showMep,
+      showMepDimensions: currentKitchenSnapshot.showMepDimensions,
+      showMepClashes: currentKitchenSnapshot.showMepClashes,
+      isWallDecoTabOpen: currentKitchenSnapshot.isWallDecoTabOpen,
+      activeDecoWallId: currentKitchenSnapshot.activeDecoWallId,
+    };
+    const prevShowDimensions = useStore.getState().showDimensions;
+
     try {
+      useKitchenStore.setState({
+        activeCabinetId: null,
+        activeArchElementId: null,
+        activeWallId: null,
+        showMep: false,
+        showMepDimensions: false,
+        showMepClashes: false,
+        isWallDecoTabOpen: false,
+        activeDecoWallId: null,
+      });
+      useStore.setState({ showDimensions: false });
+
+      // Esperar 2 frames para que Three.js renderice la escena limpia sin cotas ni bordes de selección
+      await new Promise((r) => requestAnimationFrame(r));
+      await new Promise((r) => requestAnimationFrame(r));
+
       const canvas = document.querySelector('canvas');
       if (canvas) {
-        // Redimensionar y optimizar la imagen para mantener alta fidelidad visual sin exceder los límites de tokens
+        // Captura PNG sin pérdida para preservar nítidamente líneas de cajones, puertas, tiradores y cubiertas
         const maxDim = 1536;
         let w = canvas.width;
         let h = canvas.height;
@@ -123,14 +177,19 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
         tempCanvas.height = h;
         const ctx = tempCanvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(canvas, 0, 0, w, h);
-          canvasDataUrl = tempCanvas.toDataURL('image/jpeg', 0.90);
+          canvasDataUrl = tempCanvas.toDataURL('image/png');
         } else {
-          canvasDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+          canvasDataUrl = canvas.toDataURL('image/png');
         }
       }
     } catch (err) {
       console.warn('Advertencia al capturar canvas 3D:', err);
+    } finally {
+      useKitchenStore.setState(prevKitchenUi);
+      useStore.setState({ showDimensions: prevShowDimensions });
     }
 
     if (!canvasDataUrl) {
@@ -140,17 +199,23 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
     }
 
     try {
-      setProgressStatus('Auditando código y despiece del proyecto (Cero Alucinación)...');
-      await new Promise((r) => setTimeout(r, 400));
+      setProgressStatus('Auditando código y despiece del proyecto (Fidelidad 1:1)...');
+      await new Promise((r) => setTimeout(r, 250));
 
-      let bimManifest = auditedBim;
-      if (!bimManifest) {
-        try {
-          const kitchenState = useKitchenStore.getState();
-          bimManifest = extractDetailedKitchenBimManifest(kitchenState);
-        } catch (e) {
-          console.warn('No se pudo extraer bimManifest detallado de cocina:', e);
+      let bimManifest: DetailedBimManifest | null = null;
+      try {
+        const freshKitchen = useKitchenStore.getState();
+        if (freshKitchen.cabinets && freshKitchen.cabinets.length > 0) {
+          bimManifest = extractDetailedKitchenBimManifest(freshKitchen);
+        } else {
+          const freshCloset = useStore.getState();
+          if (freshCloset.modules && freshCloset.modules.length > 0) {
+            bimManifest = extractClosetBimManifest(freshCloset);
+          }
         }
+      } catch (e) {
+        console.warn('No se pudo extraer bimManifest detallado del proyecto:', e);
+        bimManifest = auditedBim;
       }
 
       setProgressStatus('Aplicando motor de iluminación y materiales NanoBanana AI...');
@@ -620,7 +685,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
                       </span>
                     </div>
                     <p className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                      {auditedBim.breakdown.baseCount} bajos · {auditedBim.breakdown.wallCount} aéreos · {auditedBim.breakdown.tallCount} torres · {auditedBim.hasIsland ? `${auditedBim.breakdown.islandCount} en isla` : '0 islas (piso despejado)'} · Cubierta: {auditedBim.countertop.productName} ({auditedBim.countertop.regruesoCm}cm)
+                      {auditedBim.breakdown.baseCount} bajos · {auditedBim.breakdown.wallCount} aéreos · {auditedBim.breakdown.tallCount} torres · {auditedBim.hasIsland ? `${auditedBim.breakdown.islandCount} en isla` : '0 islas (piso despejado)'} · {auditedBim.countertop.enabled ? `Cubierta: ${auditedBim.countertop.productName} (${auditedBim.countertop.regruesoCm > 0 ? `regrueso ${auditedBim.countertop.regruesoCm}cm` : `canto simple ${auditedBim.countertop.thicknessMm}mm`})` : 'Sin cubierta'}
                     </p>
                   </div>
                 </div>
