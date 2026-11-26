@@ -102,8 +102,12 @@ function buildSystemInstruction(catalog: any, currentState: any, planConfirmed: 
   const compactFloors = (catalog?.floorTypes || []).map((f: any) => `${f.id} (${f.name})`);
 
   return `
-Eres el **Arquitecto y Diseñador de Cocinas IA de Arquify**, un agente senior experto en diseño interior, ergonomía de cocinas y modulación industrial en melamina/HPL.
+Eres **Ettore**, el Arquitecto y Diseñador de Cocinas IA de Arquify, un agente senior experto en diseño interior, ergonomía de cocinas y modulación industrial en melamina/HPL.
 Tu misión es traducir planos, croquis a mano, fotos de inspiración e instrucciones del cliente al estado REAL y ejecutable de nuestro Configurador de Cocinas 3D/2D.
+
+PERSONALIDAD Y ESTILO DE CONVERSACIÓN (OBLIGATORIO):
+- Tu nombre es **Ettore**. Mantén una conversación cercana, cálida y profesional con un **20% de humor sutil y siempre muy respetuoso** (un guiño ligero e ingenioso sobre diseño o cocinas de vez en cuando, nunca sarcástico, nunca exagerado ni fuera de lugar).
+- **Sé breve y directo:** escribe respuestas cortas en "reply" (idealmente **2 a 4 frases concisas**, sin párrafos extensos ni listas largas; los detalles técnicos de módulos y adaptaciones ya se muestran aparte en la interfaz).
 
 ================================================================
 REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
@@ -193,7 +197,7 @@ FORMATO DE RESPUESTA OBLIGATORIO (JSON PURO SIN MARKDOWN)
 ================================================================
 Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
 {
-  "reply": "Respuesta clara, cálida y técnica en español para el usuario.",
+  "reply": "Respuesta breve (2 a 4 frases cortas), cálida, respetuosa y con un toque sutil de humor en español como Ettore.",
   "stage": "awaiting_plan_confirmation" | "ready_to_design" | "iterating",
   "actionType": "apply_floor_plan" | "apply_full_design" | "patch_design" | "reply_only",
   "catalogAdaptations": ["Lista de adaptaciones realizadas respecto a la foto o pedido (vacía si no hubo)."],
@@ -303,7 +307,7 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
   // Bloqueo de seguridad en servidor equivalente a NanoBanana (solo usuarios de pago)
   if (userRole === 'free_user') {
     const err: any = new Error(
-      'El Diseñador IA de Cocinas es exclusivo para usuarios con plan de pago activo.'
+      'Ettore (Diseñador IA de Cocinas) es exclusivo para usuarios con plan de pago activo.'
     );
     err.statusCode = 403;
     throw err;
@@ -326,7 +330,7 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
   // Construir contexto conversacional reciente (últimos 10 mensajes para eficiencia)
   const recentHistory = (history || [])
     .slice(-10)
-    .map((m) => `${m.role === 'user' ? 'CLIENTE' : 'DISEÑADOR_IA'}: ${m.text}`)
+    .map((m) => `${m.role === 'user' ? 'CLIENTE' : 'ETTORE'}: ${m.text}`)
     .join('\n');
 
   const userParts: any[] = [];
@@ -426,7 +430,7 @@ export default async function handler(req: any, res: any) {
     console.error('Error in /api/kitchen-ai-agent:', error);
     const status = error?.statusCode || 500;
     const errStr = String(error?.message || error || '');
-    let userMsg = 'Error al procesar la solicitud con el Diseñador IA.';
+    let userMsg = 'Error al procesar la solicitud con Ettore.';
 
     if (errStr.includes('429') || errStr.includes('Quota exceeded') || errStr.includes('RESOURCE_EXHAUSTED')) {
       userMsg = 'Límite de cuota alcanzado en la API de Gemini. Intenta nuevamente en unos momentos.';

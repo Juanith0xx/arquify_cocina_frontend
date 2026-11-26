@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
   X,
   Send,
   ImagePlus,
@@ -95,10 +94,12 @@ async function compressImageToDataUrl(file: File, maxDim = 1280): Promise<string
   });
 }
 
+const ETTORE_AVATAR_URL = '/assets/ettore-avatar.jpg';
+
 const INITIAL_WELCOME_MESSAGE: ChatMessageItem = {
   id: 'welcome_ai_designer',
   role: 'assistant',
-  text: 'Hola, soy tu Diseñador de Cocinas IA. Sube una foto o croquis a mano del plano de tu cocina (con medidas, puertas, ventanas o conexiones) y lo cargaré en el Configurador de Área para que lo valides. Si ya configuraste tu espacio en pantalla, presiona "Confirmar área actual (OK)" y sube una foto de inspiración o descríbeme el estilo que buscas.',
+  text: '¡Hola! Soy Ettore, tu diseñador de cocinas IA. Sube un plano o croquis (prometo no juzgar el pulso) y lo cargo en tu área. Si tu espacio ya está listo, pulsa "OK" y cuéntame o muéstrame qué estilo tienes en mente.',
   timestamp: Date.now(),
 };
 
@@ -379,7 +380,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
       {
         id: `ast_ok_${Date.now() + 1}`,
         role: 'assistant',
-        text: 'Perfecto, plano validado. Ahora puedes subir una o varias fotos de cocinas de inspiración o describirme el estilo, distribución y colores que buscas. Adaptaré la propuesta estrictamente a nuestros módulos y acabados de catálogo.',
+        text: '¡Excelente, plano aprobado! Ahora viene la parte entretenida: sube fotos de inspiración o cuéntame el estilo y colores que buscas, y lo aterrizo con módulos reales de catálogo.',
         timestamp: Date.now(),
       },
     ]);
@@ -469,7 +470,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || 'Error al comunicarse con el Diseñador IA.');
+        throw new Error(data?.error || 'Error al comunicarse con Ettore.');
       }
 
       const structured = data as AiAgentStructuredResponse;
@@ -569,18 +570,20 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
         }`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-black shadow-sm shrink-0">
-            <Sparkles size={16} />
-          </div>
+          <img
+            src={ETTORE_AVATAR_URL}
+            alt="Ettore"
+            className="w-9 h-9 rounded-xl object-cover border border-black/15 shadow-sm shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-extrabold tracking-tight truncate">Diseñador IA</h3>
+              <h3 className="text-sm font-extrabold tracking-tight truncate">Ettore</h3>
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-500 font-mono font-bold uppercase">
                 PRO
               </span>
             </div>
             <p className={`text-[10px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-              Planos, inspiración y modulación real de catálogo
+              Diseñador IA · Planos y catálogo real
             </p>
           </div>
         </div>
@@ -620,7 +623,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
           <button
             type="button"
             onClick={onClose}
-            title="Cerrar Diseñador IA"
+            title="Cerrar chat con Ettore"
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isLight ? 'text-slate-500 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/10 hover:text-white'
             }`}
@@ -640,7 +643,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
             <div>
               <h4 className="font-extrabold text-base">Módulo Exclusivo para Usuarios de Pago</h4>
               <p className={`text-xs mt-1.5 leading-relaxed ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                El Agente de Diseño de Cocinas con Inteligencia Artificial está habilitado únicamente para clientes con suscripción activa, al igual que los Renders Fotográficos NanoBanana AI.
+                Ettore, tu Diseñador de Cocinas IA, está habilitado únicamente para clientes con suscripción activa, al igual que los Renders Fotográficos NanoBanana AI.
               </p>
             </div>
           </div>
@@ -777,9 +780,19 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
             {messages.map((msg) => {
               const isUser = msg.role === 'user';
               return (
-                <div key={msg.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                <div
+                  key={msg.id}
+                  className={`flex ${isUser ? 'flex-col items-end' : 'items-end gap-2'}`}
+                >
+                  {!isUser && (
+                    <img
+                      src={ETTORE_AVATAR_URL}
+                      alt="Ettore"
+                      className="w-6 h-6 rounded-full object-cover border border-black/15 shrink-0 mb-0.5"
+                    />
+                  )}
                   <div
-                    className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-xs ${
+                    className={`${isUser ? 'max-w-[92%]' : 'max-w-[86%]'} rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-xs ${
                       isUser
                         ? 'bg-orange-500 text-black font-medium rounded-br-sm'
                         : isLight
@@ -898,7 +911,12 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
             })}
 
             {isSending && (
-              <div className="flex items-start">
+              <div className="flex items-end gap-2">
+                <img
+                  src={ETTORE_AVATAR_URL}
+                  alt="Ettore"
+                  className="w-6 h-6 rounded-full object-cover border border-black/15 shrink-0 mb-0.5"
+                />
                 <div
                   className={`rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-xs border flex items-center gap-2 ${
                     isLight
@@ -907,7 +925,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
                   }`}
                 >
                   <Loader2 size={14} className="animate-spin text-orange-500" />
-                  <span>Analizando medidas, reglas y catálogo...</span>
+                  <span>Ettore está revisando medidas y catálogo...</span>
                 </div>
               </div>
             )}
@@ -1137,7 +1155,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
                     ? 'bg-orange-500/30 text-black/40 cursor-not-allowed'
                     : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-md cursor-pointer active:scale-95'
                 }`}
-                title="Enviar al Diseñador IA"
+                title="Enviar a Ettore"
               >
                 {isSending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
               </button>

@@ -21,7 +21,7 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search, MessageSquare, Lock } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search, Lock } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
@@ -867,12 +867,20 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             }`}
             title={
               isFreeUser
-                ? 'Diseñador IA de Cocinas (Exclusivo para usuarios de pago)'
-                : 'Abrir chat con el Diseñador de Cocinas IA'
+                ? 'Ettore · Diseñador IA (Exclusivo para usuarios de pago)'
+                : 'Abrir chat con Ettore (Diseñador IA)'
             }
           >
-            {isFreeUser ? <Lock size={13} /> : <MessageSquare size={14} />}
-            <span>Diseñador IA</span>
+            {isFreeUser ? (
+              <Lock size={13} />
+            ) : (
+              <img
+                src="/assets/ettore-avatar.jpg"
+                alt="Ettore"
+                className="w-4 h-4 rounded-full object-cover border border-black/20 shrink-0"
+              />
+            )}
+            <span>Ettore</span>
             <span
               className={`text-[9px] px-1 py-0.5 rounded font-mono font-bold uppercase ${
                 isAiChatOpen ? 'bg-black/20 text-black' : 'bg-orange-500/20 text-orange-500'
@@ -1097,8 +1105,16 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
               className="flex items-center justify-between p-3 rounded-xl border border-orange-500/30 bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
             >
               <div className="flex items-center gap-3">
-                {isFreeUser ? <Lock size={16} /> : <MessageSquare size={16} />}
-                <span>Diseñador IA (Chat Planos & Diseño)</span>
+                {isFreeUser ? (
+                  <Lock size={16} />
+                ) : (
+                  <img
+                    src="/assets/ettore-avatar.jpg"
+                    alt="Ettore"
+                    className="w-5 h-5 rounded-full object-cover border border-black/20 shrink-0"
+                  />
+                )}
+                <span>Ettore (Chat Planos & Diseño)</span>
               </div>
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500 text-black font-mono font-extrabold">PRO</span>
             </button>
@@ -1252,13 +1268,21 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                     }`}
                     title={
                       isFreeUser
-                        ? 'Chat Diseñador IA (Exclusivo para usuarios de pago)'
-                        : 'Abrir chat del Diseñador de Cocinas IA'
+                        ? 'Chat con Ettore (Exclusivo para usuarios de pago)'
+                        : 'Abrir chat con Ettore (Diseñador IA)'
                     }
                   >
                     <div className="flex items-center gap-2">
-                      {isFreeUser ? <Lock size={14} className="shrink-0" /> : <MessageSquare size={14} className="shrink-0" />}
-                      <span className="font-extrabold">Diseñador IA</span>
+                      {isFreeUser ? (
+                        <Lock size={14} className="shrink-0" />
+                      ) : (
+                        <img
+                          src="/assets/ettore-avatar.jpg"
+                          alt="Ettore"
+                          className="w-4 h-4 rounded-full object-cover border border-black/20 shrink-0"
+                        />
+                      )}
+                      <span className="font-extrabold">Ettore</span>
                     </div>
                     <span
                       className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
