@@ -141,6 +141,10 @@ export interface AiPatchDesignAction {
   addModules?: Array<AiDesignModuleItem & { wallLabel?: string; isIsland?: boolean }>;
   removeCabinetIds?: string[];
   removeByVariant?: string[];
+  moveIsland?: {
+    deltaXCm?: number;
+    deltaZCm?: number;
+  };
   updateCabinets?: Array<{
     cabinetId: string;
     widthCm?: number;
@@ -148,6 +152,11 @@ export interface AiPatchDesignAction {
     depthCm?: number;
     hingeSide?: 'left' | 'right';
     doorTexture?: string;
+    deltaXCm?: number;
+    deltaZCm?: number;
+    xCm?: number;
+    zCm?: number;
+    position?: [number, number, number];
   }>;
   addOpenings?: AiFloorPlanOpening[];
   addMepPoints?: AiFloorPlanMep[];
@@ -1627,7 +1636,85 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     if (removed > 0) appliedSummary.push(`Eliminados ${removed} módulo(s) por tipo`);
   }
 
-  // Actualizar módulos existentes respetando estrictamente medidas fijas/normativas de catálogo
+  // Mover la isla completa en bloque atómico validando muros, límites y despeje frontal
+  let islandMovedByBlock = false;
+  if (patch.moveIsland && !patch.clearIsland) {
+    const dx = Number(patch.moveIsland.deltaXCm) || 0;
+    const dz = Number(patch.moveIsland.deltaZCm) || 0;
+    if (Math.abs(dx) > 0.05 || Math.abs(dz) > 0.05) {
+      const st = useKitchenStore.getState();
+      const islandCabs = st.cabinets.filter((c) => c.type === 'island');
+      const nonIslandCabs = st.cabinets.filter((c) => c.type !== 'island');
+      const roomPoly: [number, number][] = (st.roomConfig?.vertices || []).map((v) => [v.x, v.y]);
+
+      if (islandCabs.length === 0) {
+        warnings.push('No existe una isla en el diseño actual para desplazar.');
+      } else {
+        const movedIslandCabs = islandCabs.map((c) => ({
+          ...c,
+          position: [
+            Math.round((c.position[0] + dx) * 10) / 10,
+            c.position[1],
+            Math.round((c.position[2] + dz) * 10) / 10,
+          ] as [number, number, number],
+        }));
+
+        let allValid = true;
+        for (const cand of movedIslandCabs) {
+          const validPhysics = isCandidateValid(
+            cand as any,
+            nonIslandCabs,
+            st.walls,
+            null,
+            roomPoly,
+            st.architecturalElements
+          );
+          const validAccess = hasClearFrontAccessAndNoClash(
+            {
+              position: cand.position,
+              width: cand.width,
+              depth: cand.depth,
+              height: cand.height,
+              rotation: cand.rotation || 0,
+              type: cand.type,
+              variant: cand.variant,
+            },
+            nonIslandCabs,
+            st.walls,
+            st.architecturalElements,
+            roomPoly
+          );
+          if (!validPhysics || !validAccess) {
+            allValid = false;
+            break;
+          }
+        }
+
+        if (allValid) {
+          const movedById = new Map(movedIslandCabs.map((c) => [c.id, c]));
+          const nextCabinets = st.cabinets.map((c) => movedById.get(c.id) || c);
+          useKitchenStore.setState({ cabinets: nextCabinets });
+          islandMovedByBlock = true;
+          const parts: string[] = [];
+          if (Math.abs(dx) > 0.05) parts.push(`${dx > 0 ? '+' : ''}${Math.round(dx)} cm en X`);
+          if (Math.abs(dz) > 0.05) parts.push(`${dz > 0 ? '+' : ''}${Math.round(dz)} cm en Z`);
+          appliedSummary.push(`Isla desplazada (${parts.join(', ')})`);
+        } else {
+          warnings.push(
+            'No se pudo desplazar la isla esa distancia porque invadiría un muro, el límite del recinto o bloquearía la apertura de otro mueble.'
+          );
+        }
+      }
+    }
+  }
+
+  // Actualizar módulos existentes respetando estrictamente medidas fijas/normativas de catálogo y colisiones
+  const pendingMoves: Array<{
+    cabinetId: string;
+    newPosition: [number, number, number];
+    label: string;
+  }> = [];
+
   for (const upd of patch.updateCabinets || []) {
     const cab = useKitchenStore.getState().cabinets.find((c) => c.id === upd.cabinetId);
     if (!cab) continue;
@@ -1667,6 +1754,99 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     if (Object.keys(changes).length > 0) {
       useKitchenStore.getState().updateCabinet(cab.id, changes);
       appliedSummary.push(`Actualizado ${getCabinetLabel(cab, 0)}`);
+    }
+
+    // Recopilar cambios de posición XZ para validarlos en lote atómico (evita auto-colisión entre módulos contiguos)
+    const skipRedundantIslandMove = islandMovedByBlock && cab.type === 'island';
+    if (!skipRedundantIslandMove) {
+      const hasPosUpdate =
+        upd.deltaXCm !== undefined ||
+        upd.deltaZCm !== undefined ||
+        upd.xCm !== undefined ||
+        upd.zCm !== undefined ||
+        (Array.isArray(upd.position) && upd.position.length >= 3);
+
+      if (hasPosUpdate) {
+        let nextX = cab.position[0];
+        let nextZ = cab.position[2];
+        if (Array.isArray(upd.position) && upd.position.length >= 3) {
+          if (Number.isFinite(Number(upd.position[0]))) nextX = Number(upd.position[0]);
+          if (Number.isFinite(Number(upd.position[2]))) nextZ = Number(upd.position[2]);
+        }
+        if (upd.xCm !== undefined && Number.isFinite(Number(upd.xCm))) nextX = Number(upd.xCm);
+        if (upd.zCm !== undefined && Number.isFinite(Number(upd.zCm))) nextZ = Number(upd.zCm);
+        if (upd.deltaXCm !== undefined && Number.isFinite(Number(upd.deltaXCm))) nextX += Number(upd.deltaXCm);
+        if (upd.deltaZCm !== undefined && Number.isFinite(Number(upd.deltaZCm))) nextZ += Number(upd.deltaZCm);
+
+        nextX = Math.round(nextX * 10) / 10;
+        nextZ = Math.round(nextZ * 10) / 10;
+
+        if (Math.abs(nextX - cab.position[0]) > 0.05 || Math.abs(nextZ - cab.position[2]) > 0.05) {
+          pendingMoves.push({
+            cabinetId: cab.id,
+            newPosition: [nextX, cab.position[1], nextZ],
+            label: getCabinetLabel(cab, 0),
+          });
+        }
+      }
+    }
+  }
+
+  if (pendingMoves.length > 0) {
+    const st = useKitchenStore.getState();
+    const roomPoly: [number, number][] = (st.roomConfig?.vertices || []).map((v) => [v.x, v.y]);
+    const moveMap = new Map(pendingMoves.map((m) => [m.cabinetId, m.newPosition]));
+    const proposedCabinets = st.cabinets.map((c) => {
+      const targetPos = moveMap.get(c.id);
+      return targetPos ? { ...c, position: targetPos } : c;
+    });
+
+    const validMoveIds = new Set<string>();
+    for (const move of pendingMoves) {
+      const movedCab = proposedCabinets.find((c) => c.id === move.cabinetId);
+      if (!movedCab) continue;
+      const others = proposedCabinets.filter((c) => c.id !== move.cabinetId);
+      const validPhysics = isCandidateValid(
+        movedCab as any,
+        others,
+        st.walls,
+        movedCab.id,
+        roomPoly,
+        st.architecturalElements
+      );
+      const validAccess = hasClearFrontAccessAndNoClash(
+        {
+          position: movedCab.position,
+          width: movedCab.width,
+          depth: movedCab.depth,
+          height: movedCab.height,
+          rotation: movedCab.rotation || 0,
+          type: movedCab.type,
+          variant: movedCab.variant,
+        },
+        others,
+        st.walls,
+        st.architecturalElements,
+        roomPoly
+      );
+
+      if (validPhysics && validAccess) {
+        validMoveIds.add(move.cabinetId);
+      } else {
+        warnings.push(
+          `No se pudo mover ${move.label} a la nueva posición porque colisiona con un muro, límite del recinto o la apertura de otro mueble.`
+        );
+      }
+    }
+
+    if (validMoveIds.size > 0) {
+      const nextCabinets = st.cabinets.map((c) => {
+        if (!validMoveIds.has(c.id)) return c;
+        const targetPos = moveMap.get(c.id)!;
+        return { ...c, position: targetPos };
+      });
+      useKitchenStore.setState({ cabinets: nextCabinets });
+      appliedSummary.push(`Reposicionado(s) ${validMoveIds.size} módulo(s)`);
     }
   }
 

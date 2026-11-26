@@ -127,7 +127,8 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
      * Cuando el plano ya está validado (planConfirmed = true, o el usuario da su OK y describe el estilo o sube fotos de inspiración), diseña la cocina completa usando actionType = "apply_full_design" y stage = "iterating".
      * Lee SIEMPRE las paredes, largos reales, puertas, ventanas, pilares y puntos MEP del ESTADO ACTUAL DEL PROYECTO (respetando cualquier corrección manual hecha por el usuario).
    - **ETAPA 3 (Iteración sobre diseño existente):**
-     * Si ya existen muebles en currentState.cabinets y el usuario pide cambios puntuales (cambiar colores, cambiar cubierta, cambiar tiradores/gola, agregar/quitar isla, agregar/quitar/redimensionar módulos, agregar accesorios), usa actionType = "patch_design" y stage = "iterating" para conservar el resto del trabajo manual.
+     * Si ya existen muebles en currentState.cabinets y el usuario pide cambios puntuales (cambiar colores, cambiar cubierta, cambiar tiradores/gola, agregar/quitar/mover isla, agregar/quitar/redimensionar/mover módulos, agregar accesorios), usa actionType = "patch_design" y stage = "iterating" para conservar el resto del trabajo manual.
+     * Para mover la isla completa en cm, usa preferentemente patchDesign.moveIsland = { deltaXCm, deltaZCm } deduciendo el signo de X y Z desde currentState.room.walls y currentState.cabinets[].position (en planta: X es eje horizontal, Z es eje vertical; nunca cambies Y). Para mover módulos individuales usa deltaXCm/deltaZCm o xCm/zCm en patchDesign.updateCabinets.
      * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
    - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
 
@@ -278,10 +279,13 @@ Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
   },
   "patchDesign": {
     "finishes": {},
+    "moveIsland": { "deltaXCm": 0, "deltaZCm": 0 },
     "addModules": [],
     "removeCabinetIds": [],
     "removeByVariant": [],
-    "updateCabinets": [],
+    "updateCabinets": [
+      { "cabinetId": "<id>", "widthCm": 80, "deltaXCm": 0, "deltaZCm": 0 }
+    ],
     "addOpenings": [],
     "addMepPoints": [],
     "clearIsland": false
