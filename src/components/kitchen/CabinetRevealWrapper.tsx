@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CabinetType, useKitchenStore } from '../../store/kitchenStore';
 import {
   KitchenBuildAnimationPlan,
+  advanceKitchenBuildAnimation,
   cancelKitchenBuildAnimation,
   completeKitchenBuildAnimation,
   getKitchenBuildAnimationPlan,
@@ -37,6 +38,7 @@ interface CabinetBlueprintOverlayProps {
   rotationY: number;
   groupRef: React.RefObject<THREE.Group | null>;
   lineMatRef: React.RefObject<THREE.LineBasicMaterial | null>;
+  fillMatRef: React.RefObject<THREE.MeshBasicMaterial | null>;
   scanMeshRef: React.RefObject<THREE.Mesh | null>;
   scanMatRef: React.RefObject<THREE.MeshBasicMaterial | null>;
 }
@@ -49,6 +51,7 @@ function CabinetBlueprintOverlay({
   rotationY,
   groupRef,
   lineMatRef,
+  fillMatRef,
   scanMeshRef,
   scanMatRef,
 }: CabinetBlueprintOverlayProps) {
@@ -65,12 +68,18 @@ function CabinetBlueprintOverlay({
     };
   }, [edgesGeometry]);
 
+  // Controlar visibilidad exclusivamente por ref (nunca como prop JSX) para que re-renders no lo apaguen
+  useLayoutEffect(() => {
+    if (groupRef.current) {
+      groupRef.current.visible = false;
+    }
+  }, [groupRef]);
+
   return (
     <group
       ref={groupRef}
       position={pivotPosition}
       rotation={[0, rotationY, 0]}
-      visible={false}
     >
       {/* Contorno técnico CAD que se traza rápidamente desde la base */}
       <lineSegments
@@ -88,6 +97,19 @@ function CabinetBlueprintOverlay({
         />
       </lineSegments>
 
+      {/* Volumen fantasma translúcido sutil tipo plano técnico */}
+      <mesh position={[0, height / 2, 0]} renderOrder={899}>
+        <boxGeometry args={[width, height, depth]} />
+        <meshBasicMaterial
+          ref={fillMatRef}
+          color="#f97316"
+          transparent
+          opacity={0.12}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+
       {/* Plano fino de barrido arquitectónico acompañando el trazado vertical */}
       <mesh
         ref={scanMeshRef}
@@ -100,7 +122,7 @@ function CabinetBlueprintOverlay({
           ref={scanMatRef}
           color="#fb923c"
           transparent
-          opacity={0.28}
+          opacity={0.34}
           side={THREE.DoubleSide}
           depthWrite={false}
           toneMapped={false}
@@ -130,6 +152,7 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
   const offsetGroupRef = useRef<THREE.Group | null>(null);
   const blueprintGroupRef = useRef<THREE.Group | null>(null);
   const lineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const fillMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const scanMeshRef = useRef<THREE.Mesh | null>(null);
   const scanMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const finishedRunIdRef = useRef<number | null>(null);
@@ -152,17 +175,14 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
     const offset = offsetGroupRef.current;
     if (!pivot || !offset) return;
 
-    if (plan && schedule) {
-      const elapsed = performance.now() - plan.startedAtMs;
-      if (elapsed < schedule.startMs + schedule.durationMs) {
-        finishedRunIdRef.current = null;
-        pivot.position.set(pivotX, pivotY, pivotZ);
-        offset.position.set(-pivotX, -pivotY, -pivotZ);
-        pivot.scale.set(0.96, 0.001, 0.96);
-        pivot.visible = false;
-        setShowOverlay(true);
-        return;
-      }
+    if (plan && schedule && plan.elapsedMs < schedule.startMs + schedule.durationMs) {
+      finishedRunIdRef.current = null;
+      pivot.position.set(pivotX, pivotY, pivotZ);
+      offset.position.set(-pivotX, -pivotY, -pivotZ);
+      pivot.scale.set(0.95, 0.001, 0.95);
+      pivot.visible = false;
+      setShowOverlay(true);
+      return;
     }
 
     // Estado neutro (identidad): sin transformación ni sobrecarga
@@ -174,14 +194,15 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
   }, [plan, schedule, pivotX, pivotY, pivotZ]);
 
   useFrame(() => {
-    if (!plan || !schedule) return;
-    if (finishedRunIdRef.current === plan.runId) return;
+    const currentPlan = getKitchenBuildAnimationPlan();
+    if (!currentPlan || !schedule || currentPlan.runId !== plan?.runId) return;
+    if (finishedRunIdRef.current === currentPlan.runId) return;
 
     const pivot = pivotGroupRef.current;
     const offset = offsetGroupRef.current;
     if (!pivot || !offset) return;
 
-    const elapsed = performance.now() - plan.startedAtMs;
+    const elapsed = currentPlan.elapsedMs;
     const localMs = elapsed - schedule.startMs;
 
     if (localMs < 0) {
@@ -193,28 +214,31 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
     const t = Math.min(1, localMs / schedule.durationMs);
 
     if (t < 1) {
-      // Fase 1: Trazado rápido del contorno arquitectónico (0% -> 38% crece; 55% -> 100% desvanece)
+      // Fase 1: Trazado rápido del contorno CAD (0% -> 42% crece; 58% -> 100% desvanece)
       const bp = blueprintGroupRef.current;
       if (bp) {
-        const bpGrow = easeOutCubic(Math.min(1, t / 0.38));
+        const bpGrow = easeOutCubic(Math.min(1, t / 0.42));
         bp.visible = true;
         bp.scale.set(1, Math.max(0.01, bpGrow), 1);
 
-        const bpFade = t <= 0.55 ? 1 : 1 - (t - 0.55) / 0.45;
+        const bpFade = t <= 0.58 ? 1 : 1 - (t - 0.58) / 0.42;
         if (lineMatRef.current) {
           lineMatRef.current.opacity = Math.max(0, 0.95 * bpFade);
         }
+        if (fillMatRef.current) {
+          fillMatRef.current.opacity = Math.max(0, 0.12 * bpFade);
+        }
         if (scanMatRef.current) {
-          const scanFade = t <= 0.45 ? 1 : Math.max(0, 1 - (t - 0.45) / 0.3);
-          scanMatRef.current.opacity = 0.28 * scanFade;
+          const scanFade = t <= 0.48 ? 1 : Math.max(0, 1 - (t - 0.48) / 0.32);
+          scanMatRef.current.opacity = 0.34 * scanFade;
         }
         if (scanMeshRef.current) {
-          scanMeshRef.current.visible = t < 0.75;
+          scanMeshRef.current.visible = t < 0.8;
         }
       }
 
-      // Fase 2: Despliegue del volumen real del mueble desde su base (20% -> 100%)
-      const solidProgress = Math.max(0, Math.min(1, (t - 0.2) / 0.8));
+      // Fase 2: Despliegue del volumen real del mueble desde su base (26% -> 100%)
+      const solidProgress = Math.max(0, Math.min(1, (t - 0.26) / 0.74));
       if (solidProgress <= 0) {
         pivot.visible = false;
       } else {
@@ -223,16 +247,16 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
         pivot.position.set(pivotX, pivotY, pivotZ);
         offset.position.set(-pivotX, -pivotY, -pivotZ);
         pivot.scale.set(
-          0.96 + 0.04 * eased,
-          0.08 + 0.92 * eased,
-          0.96 + 0.04 * eased
+          0.95 + 0.05 * eased,
+          0.06 + 0.94 * eased,
+          0.95 + 0.05 * eased
         );
       }
       return;
     }
 
     // Finalizado: restaurar matriz identidad exacta y retirar contorno auxiliar
-    finishedRunIdRef.current = plan.runId;
+    finishedRunIdRef.current = currentPlan.runId;
     pivot.position.set(0, 0, 0);
     pivot.scale.set(1, 1, 1);
     pivot.visible = true;
@@ -257,6 +281,7 @@ export function CabinetRevealWrapper({ cabinet, children }: CabinetRevealWrapper
           rotationY={safeRot}
           groupRef={blueprintGroupRef}
           lineMatRef={lineMatRef}
+          fillMatRef={fillMatRef}
           scanMeshRef={scanMeshRef}
           scanMatRef={scanMatRef}
         />
@@ -270,9 +295,8 @@ interface KitchenFinishingRevealProps {
 }
 
 /**
- * Envuelve las terminaciones finales (zócalo, cubierta, respaldo de isla) para que
- * se asienten suavemente como remate al concluir la secuencia de módulos, y además
- * cancela instantáneamente la animación si el usuario interactúa o cambia a vista 2D.
+ * Avanza el reloj virtual por frame, asienta las terminaciones finales (zócalo, cubierta,
+ * respaldo de isla) al cierre del armado y cancela instantáneamente ante nueva interacción del usuario.
  */
 export function KitchenFinishingReveal({ children }: KitchenFinishingRevealProps) {
   const plan = useActiveBuildPlan();
@@ -281,11 +305,34 @@ export function KitchenFinishingReveal({ children }: KitchenFinishingRevealProps
   const activeCabinetId = useKitchenStore((s) => s.activeCabinetId);
 
   const groupRef = useRef<THREE.Group | null>(null);
+  const startedSnapshotRef = useRef<{
+    runId: number;
+    initialViewMode: string;
+    initialActiveCabinetId: string | null;
+  } | null>(null);
 
-  // Cancelación instantánea si el usuario cambia a vista 2D, selecciona o arrastra un mueble
+  // Registrar estado inicial del run para cancelar solo ante acciones NUEVAS del usuario
   useEffect(() => {
-    if (!plan) return;
-    if (viewMode === '2d' || draggingCabinetId || activeCabinetId) {
+    if (!plan) {
+      startedSnapshotRef.current = null;
+      return;
+    }
+
+    if (!startedSnapshotRef.current || startedSnapshotRef.current.runId !== plan.runId) {
+      startedSnapshotRef.current = {
+        runId: plan.runId,
+        initialViewMode: viewMode,
+        initialActiveCabinetId: activeCabinetId,
+      };
+      return;
+    }
+
+    const snap = startedSnapshotRef.current;
+    const switchedTo2D = viewMode === '2d' && snap.initialViewMode !== '2d';
+    const selectedNewCabinet =
+      activeCabinetId !== null && activeCabinetId !== snap.initialActiveCabinetId;
+
+    if (draggingCabinetId || switchedTo2D || selectedNewCabinet) {
       cancelKitchenBuildAnimation();
     }
   }, [plan, viewMode, draggingCabinetId, activeCabinetId]);
@@ -294,40 +341,39 @@ export function KitchenFinishingReveal({ children }: KitchenFinishingRevealProps
     const grp = groupRef.current;
     if (!grp) return;
 
-    if (plan && plan.animateFinishing) {
-      const elapsed = performance.now() - plan.startedAtMs;
-      if (elapsed < plan.finishingStartMs + plan.finishingDurationMs) {
-        grp.visible = false;
-        grp.position.set(0, 6, 0);
-        return;
-      }
+    if (plan && plan.animateFinishing && plan.elapsedMs < plan.finishingStartMs + plan.finishingDurationMs) {
+      grp.visible = false;
+      grp.position.set(0, 8, 0);
+      return;
     }
 
     grp.visible = true;
     grp.position.set(0, 0, 0);
   }, [plan]);
 
-  useFrame(() => {
-    if (!plan) return;
-    const elapsed = performance.now() - plan.startedAtMs;
+  useFrame((_, delta) => {
+    const currentPlan = getKitchenBuildAnimationPlan();
+    if (!currentPlan) return;
+
+    const elapsed = advanceKitchenBuildAnimation(currentPlan.runId, delta);
 
     const grp = groupRef.current;
-    if (grp && plan.animateFinishing) {
-      const localMs = elapsed - plan.finishingStartMs;
+    if (grp && currentPlan.animateFinishing) {
+      const localMs = elapsed - currentPlan.finishingStartMs;
       if (localMs < 0) {
         grp.visible = false;
-      } else if (localMs < plan.finishingDurationMs) {
-        const eased = easeOutCubic(localMs / plan.finishingDurationMs);
+      } else if (localMs < currentPlan.finishingDurationMs) {
+        const eased = easeOutCubic(localMs / currentPlan.finishingDurationMs);
         grp.visible = true;
-        grp.position.set(0, (1 - eased) * 6, 0);
+        grp.position.set(0, (1 - eased) * 8, 0);
       } else {
         grp.visible = true;
         grp.position.set(0, 0, 0);
       }
     }
 
-    if (elapsed >= plan.totalDurationMs + 60) {
-      completeKitchenBuildAnimation(plan.runId);
+    if (elapsed >= currentPlan.totalDurationMs + 80) {
+      completeKitchenBuildAnimation(currentPlan.runId);
     }
   });
 

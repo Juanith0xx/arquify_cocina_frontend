@@ -1548,12 +1548,6 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
       ? placedCabinets.filter((c) => !prevCabinetIds.has(c.id)).map((c) => c.id)
       : placedCabinets.map((c) => c.id);
 
-  if (animatedIds.length > 0) {
-    startKitchenBuildAnimation(animatedIds, {
-      animateFinishing: design.replaceExistingCabinets !== false,
-    });
-  }
-
   // Aplicar gabinetes y guardar historial
   useKitchenStore.setState({
     history: [snapshot, ...(prevState.history || []).slice(0, 29)],
@@ -1582,6 +1576,12 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
   };
 
   applyFinishesToStore(finishesWithCountertop, sinkCabinetId, cooktopCabinetId, appliedSummary, warnings, adaptations);
+
+  if (animatedIds.length > 0) {
+    startKitchenBuildAnimation(animatedIds, {
+      animateFinishing: design.replaceExistingCabinets !== false,
+    });
+  }
 
   const finalState = useKitchenStore.getState();
   const clashes = detectMepClashes(finalState.mepPoints, finalState.cabinets, finalState.countertopConfig);
@@ -1935,10 +1935,6 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     appliedSummary.push(`Agregado ${entry.name} (${dims.width} cm)`);
   }
 
-  if (addedModuleIds.length > 0) {
-    startKitchenBuildAnimation(addedModuleIds, { animateFinishing: false });
-  }
-
   if (Array.isArray(patch.addOpenings) && patch.addOpenings.length > 0) {
     const st = useKitchenStore.getState();
     for (const op of patch.addOpenings) {
@@ -1961,6 +1957,10 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
   }
 
   applyFinishesToStore(patch.finishes, null, null, appliedSummary, warnings, adaptations);
+
+  if (addedModuleIds.length > 0) {
+    startKitchenBuildAnimation(addedModuleIds, { animateFinishing: false });
+  }
 
   const finalState = useKitchenStore.getState();
   const clashes = detectMepClashes(finalState.mepPoints, finalState.cabinets, finalState.countertopConfig);

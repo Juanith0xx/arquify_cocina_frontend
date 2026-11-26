@@ -5,7 +5,10 @@ export interface CabinetBuildScheduleItem {
 
 export interface KitchenBuildAnimationPlan {
   runId: number;
-  startedAtMs: number;
+  /** Reloj virtual acumulado solo con fotogramas reales pintados (evita saltos por montaje React/WebGL). */
+  elapsedMs: number;
+  /** Fotogramas iniciales de estabilización antes de iniciar el conteo para absorber compilación de shaders. */
+  warmupFramesRemaining: number;
   items: Map<string, CabinetBuildScheduleItem>;
   finishingStartMs: number;
   finishingDurationMs: number;
@@ -44,10 +47,10 @@ export function startKitchenBuildAnimation(
   const count = uniqueIds.length;
   const animateFinishing = Boolean(options?.animateFinishing);
 
-  // Tiempos adaptativos: siempre ágil (~1.2s a ~2.0s total) sin importar cuántos módulos tenga el proyecto
+  // Ritmo claramente perceptible mueble por mueble, siempre ágil (~1.5s a ~3.0s total)
   const staggerMs =
-    count > 1 ? Math.max(45, Math.min(115, Math.floor(1450 / (count - 1)))) : 0;
-  const itemDurationMs = count > 12 ? 225 : 260;
+    count > 1 ? Math.max(95, Math.min(150, Math.floor(2400 / (count - 1)))) : 0;
+  const itemDurationMs = 340;
 
   const items = new Map<string, CabinetBuildScheduleItem>();
   uniqueIds.forEach((id, idx) => {
@@ -58,8 +61,8 @@ export function startKitchenBuildAnimation(
   });
 
   const lastCabinetEndMs = (count - 1) * staggerMs + itemDurationMs;
-  const finishingDurationMs = 260;
-  const finishingStartMs = Math.max(0, lastCabinetEndMs - 100);
+  const finishingDurationMs = 280;
+  const finishingStartMs = Math.max(0, lastCabinetEndMs - 80);
   const totalDurationMs = animateFinishing
     ? finishingStartMs + finishingDurationMs
     : lastCabinetEndMs;
@@ -67,7 +70,8 @@ export function startKitchenBuildAnimation(
   currentRunId += 1;
   activePlan = {
     runId: currentRunId,
-    startedAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+    elapsedMs: 0,
+    warmupFramesRemaining: 3,
     items,
     finishingStartMs,
     finishingDurationMs,
@@ -76,6 +80,23 @@ export function startKitchenBuildAnimation(
   };
 
   emitChange();
+}
+
+/**
+ * Avanza el reloj virtual de la animación usando delta acotado por fotograma (máx. 33.3 ms),
+ * garantizando que picos de montaje o compilación WebGL nunca salten la secuencia.
+ */
+export function advanceKitchenBuildAnimation(runId: number, deltaSeconds: number): number {
+  if (!activePlan || activePlan.runId !== runId) return 0;
+
+  if (activePlan.warmupFramesRemaining > 0) {
+    activePlan.warmupFramesRemaining -= 1;
+    return 0;
+  }
+
+  const clampedDeltaMs = Math.min(Math.max(deltaSeconds, 0) * 1000, 33.33);
+  activePlan.elapsedMs += clampedDeltaMs;
+  return activePlan.elapsedMs;
 }
 
 export function cancelKitchenBuildAnimation(): void {
