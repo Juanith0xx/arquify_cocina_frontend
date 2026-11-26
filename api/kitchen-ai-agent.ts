@@ -1,0 +1,411 @@
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+import fs from 'fs';
+
+try {
+  if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local', override: true });
+  }
+} catch {
+  // ignore
+}
+dotenv.config({ override: true });
+
+interface IncomingChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+interface IncomingImage {
+  dataUrl: string;
+  label?: string; // 'plano' | 'inspiracion' | 'auto'
+}
+
+interface KitchenAgentRequestBody {
+  userRole?: string;
+  message: string;
+  images?: IncomingImage[];
+  history?: IncomingChatMessage[];
+  planConfirmed?: boolean;
+  currentState: any;
+  catalog: any;
+}
+
+function getGeminiApiKey(): string | undefined {
+  let apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  try {
+    if (fs.existsSync('.env.local')) {
+      const parsed = dotenv.parse(fs.readFileSync('.env.local'));
+      if (parsed.GEMINI_API_KEY && parsed.GEMINI_API_KEY.trim()) {
+        apiKey = parsed.GEMINI_API_KEY.trim();
+      } else if (parsed.VITE_GEMINI_API_KEY && parsed.VITE_GEMINI_API_KEY.trim()) {
+        apiKey = parsed.VITE_GEMINI_API_KEY.trim();
+      }
+    }
+  } catch {
+    // fallback to process.env
+  }
+  return apiKey;
+}
+
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+  if (match) {
+    return { mimeType: match[1], data: match[2] };
+  }
+  return null;
+}
+
+function extractJsonFromText(rawText: string): any {
+  const trimmed = (rawText || '').trim();
+  if (!trimmed) {
+    throw new Error('La IA devolvió una respuesta vacía.');
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced && fenced[1]) {
+      return JSON.parse(fenced[1].trim());
+    }
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+    }
+    throw new Error('No se pudo interpretar la respuesta estructurada del agente.');
+  }
+}
+
+function buildSystemInstruction(catalog: any, currentState: any, planConfirmed: boolean): string {
+  const compactModules = (catalog?.modules || []).map(
+    (m: any) =>
+      `${m.tool} | ${m.category} | ${m.name} | ancho:${m.minWidth}-${m.maxWidth}cm (def ${m.defaultWidth}) | alt:${m.defaultHeight} | prof:${m.defaultDepth}${m.notes ? ` | ${m.notes}` : ''}`
+  );
+
+  const compactTextures = (catalog?.boardTextures || []).map(
+    (t: any) => `${t.id} | ${t.name} | ${t.material} ${t.thicknessMm}mm | ${t.finish} | cat:${t.category}`
+  );
+
+  const compactCountertops = (catalog?.countertops || []).map(
+    (c: any) => `${c.id} | ${c.name} | ${c.materialType} ${c.thicknessMm}mm | ${c.colorHex} | ${c.finish}`
+  );
+
+  const compactHandles = (catalog?.handles || []).map(
+    (h: any) => `${h.id} | ${h.name} | acabados:[${(h.finishes || []).join(',')}] | largos:[${(h.lengths || []).join(',')}]`
+  );
+
+  const compactWallColors = (catalog?.wallColors || []).map((w: any) => `${w.id} (${w.name} ${w.hex})`);
+  const compactFloors = (catalog?.floorTypes || []).map((f: any) => `${f.id} (${f.name})`);
+
+  return `
+Eres el **Arquitecto y Diseñador de Cocinas IA de Arquify**, un agente senior experto en diseño interior, ergonomía de cocinas y modulación industrial en melamina/HPL.
+Tu misión es traducir planos, croquis a mano, fotos de inspiración e instrucciones del cliente al estado REAL y ejecutable de nuestro Configurador de Cocinas 3D/2D.
+
+================================================================
+REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
+================================================================
+1. **CATÁLOGO 100% CERRADO:**
+   - JAMÁS inventes muebles, medidas fuera de rango, cubiertas, tiradores ni colores/texturas inexistentes.
+   - SOLO puedes usar los IDs exactos listados en el CATÁLOGO PERMITIDO más abajo.
+   - Si el usuario sube una foto de referencia con un color, madera, piedra o estilo que NO existe en catálogo, DEBES elegir la opción más cercana disponible en el catálogo, aplicarla y explicárselo con total honestidad en "reply" y en el arreglo "catalogAdaptations".
+
+2. **FLUJO EN DOS ETAPAS ESTRICTAS (PLANO -> VALIDACIÓN -> DISEÑO):**
+   - Estado actual de validación del plano: planConfirmed = ${planConfirmed ? 'true' : 'false'}.
+   - **ETAPA 1 (Adaptación de Plano al Configurador de Área):**
+     * Si el usuario sube un plano, croquis a mano o entrega medidas de paredes/puertas/ventanas/conexiones (o si el plano aún no está confirmado y pide cargar su plano), DEBES usar actionType = "apply_floor_plan" y stage = "awaiting_plan_confirmation".
+     * Traduce con máxima precisión: forma del recinto ("rectangular", "l_shape", "u_shape", "five_corners", "linear", "freeform"), vértices en cm en sentido horario (muro A = segmento v1->v2 arriba, muro B = v2->v3 derecha, muro C = v3->v4 abajo, muro D = v4->v1 izquierda), altura y espesor de muro, puertas ("door"), ventanas ("window"), pilares ("pillar") y conexiones MEP ("mepPoints" usando presets como "sink_combo", "cooking_combo", "refrigerator_combo" o tipos puntuales).
+     * **NO coloques muebles en esta misma acción.** Pide al usuario que revise el plano cargado en pantalla, indícale que puede ajustar medidas/muros manualmente en el botón "Configurador de Área" si lo necesita, y solicítale su confirmación ("OK") para pasar a diseñar la cocina.
+   - **ETAPA 2 (Diseño Automático bajo Reglas del Configurador):**
+     * Cuando el plano ya está validado (planConfirmed = true, o el usuario da su OK y describe el estilo o sube fotos de inspiración), diseña la cocina completa usando actionType = "apply_full_design" y stage = "iterating".
+     * Lee SIEMPRE las paredes, largos reales, puertas, ventanas, pilares y puntos MEP del ESTADO ACTUAL DEL PROYECTO (respetando cualquier corrección manual hecha por el usuario).
+   - **ETAPA 3 (Iteración sobre diseño existente):**
+     * Si ya existen muebles en currentState.cabinets y el usuario pide cambios puntuales (cambiar colores, cambiar cubierta, cambiar tiradores/gola, agregar/quitar isla, agregar/quitar/redimensionar módulos, agregar accesorios), usa actionType = "patch_design" y stage = "iterating" para conservar el resto del trabajo manual.
+     * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
+   - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
+
+3. **REGLAS TÉCNICAS Y ERGONOMÍA DE MODULACIÓN:**
+   - Módulos de 1 puerta (place_base_1_door, place_base_1_door_1_drawer, place_wall_1_door, place_tall_1_door, place_tall_split_2_doors, place_tall_inner_drawers): ancho máximo 60 cm.
+   - Especiero (place_base_spice_rack): ancho entre 15 y 30 cm.
+   - Lavaplatos: SOLO en place_base_sink_2_doors o place_base_sink_u_drawer. Ancho >= 80 cm para "alfa_onec_3018" (1 tina) y >= 90 cm para "alfa_twoc_f5858a" (2 tinas). Marca hasSink: true en ese módulo y sinkModel en finishes.
+   - Encimera: SOLO en place_base_cooktop_3_drawers. Ancho >= 60 cm para "fdv_design_60" (4 platos) y >= 90 cm para "fdv_design_90" (5 platos). Marca hasCooktop: true en ese módulo y cooktopModel en finishes. Coloca campana (place_wall_hood_new_flow o place_deco_hood) alineada sobre la encimera.
+   - Si existen puntos MEP de agua/desagüe en un muro, ubica el módulo lavaplatos en esa misma zona. Si existe gas/fuerza, ubica la zona de cocción allí.
+   - Nunca tapes puertas ni pilares. Nunca coloques muebles aéreos ni torres frente a ventanas (sí puedes poner bases/lavaplatos bajo ventanas con elevación >= 90 cm).
+   - Si el usuario usa sistema Gola ("aluminum" o "black"), deja regruesoCm en 0 (regla de compatibilidad Gola vs. regrueso) y handle.model en "none".
+   - Solo propone isla (island.enabled = true) si el recinto tiene espacio real para mantener pasillos mínimos de 90 cm alrededor.
+   - En cocinas en L o U, usa esquinero (place_base_corner_l o place_base_corner_blind y place_wall_corner_blind en aéreos) o deja margen de esquina de 62 cm en la segunda corrida para evitar superposición.
+   - La suma de anchos de módulos en cada muro NO debe exceder el largo útil del muro (largo - espesor de muros perpendiculares - aberturas).
+
+================================================================
+ESTADO ACTUAL DEL PROYECTO EN PANTALLA (FUENTE DE VERDAD)
+================================================================
+${JSON.stringify(currentState || {}, null, 2)}
+
+================================================================
+CATÁLOGO PERMITIDO (ÚNICAS OPCIONES VÁLIDAS)
+================================================================
+[MÓDULOS (tool | categoría | nombre | rangos)]
+${compactModules.join('\n')}
+
+[TEXTURAS DE MELAMINA / HPL PARA MUEBLES (id | nombre | material | acabado)]
+${compactTextures.join('\n')}
+
+[CUBIERTAS QSTONE / ABET HPL (id | nombre | tipo | hex)]
+${compactCountertops.join('\n')}
+
+[LAVAPLATOS]
+- none
+- alfa_onec_3018 (1 tina, mín. 80 cm)
+- alfa_twoc_f5858a (2 tinas, mín. 90 cm)
+
+[ENCIMERAS]
+- none
+- fdv_design_60 (4 platos, mín. 60 cm)
+- fdv_design_90 (5 platos, mín. 90 cm)
+
+[TIRADORES (HANDLE_CATALOG)]
+${compactHandles.join('\n')}
+
+[SISTEMA GOLA]: none | aluminum | black
+[COLORES DE MURO]: ${compactWallColors.join(' | ')}
+[PISOS]: ${compactFloors.join(' | ')}
+[PRESETS MEP]: sink_combo | cooking_combo | refrigerator_combo | splashback_sockets | hood_socket
+[TIPOS MEP]: water_cold | water_hot | drain | electric_socket | electric_power | gas
+
+================================================================
+FORMATO DE RESPUESTA OBLIGATORIO (JSON PURO SIN MARKDOWN)
+================================================================
+Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
+{
+  "reply": "Respuesta clara, cálida y técnica en español para el usuario.",
+  "stage": "awaiting_plan_confirmation" | "ready_to_design" | "iterating",
+  "actionType": "apply_floor_plan" | "apply_full_design" | "patch_design" | "reply_only",
+  "catalogAdaptations": ["Lista de adaptaciones realizadas respecto a la foto o pedido (vacía si no hubo)."],
+  "floorPlan": {
+    "shapeType": "rectangular" | "l_shape" | "u_shape" | "five_corners" | "linear" | "freeform",
+    "wallHeightCm": 250,
+    "wallThicknessCm": 20,
+    "widthCm": 400,
+    "depthCm": 320,
+    "vertices": [{"x": -200, "y": -160}, {"x": 200, "y": -160}, {"x": 200, "y": 160}, {"x": -200, "y": 160}],
+    "orthogonalize": true,
+    "clearExistingCabinets": true,
+    "openings": [
+      {
+        "type": "door" | "window" | "pillar",
+        "wallLabel": "A",
+        "offsetFromStartCm": 150,
+        "widthCm": 120,
+        "heightCm": 110,
+        "elevationCm": 105,
+        "hingeSide": "left",
+        "name": "Ventana Principal"
+      }
+    ],
+    "mepPoints": [
+      {
+        "wallLabel": "A",
+        "offsetFromStartCm": 150,
+        "preset": "sink_combo"
+      }
+    ]
+  },
+  "fullDesign": {
+    "replaceExistingCabinets": true,
+    "wallRuns": [
+      {
+        "wallLabel": "A",
+        "startOffsetCm": 15,
+        "baseAndTallModules": [
+          { "tool": "place_deco_fridge", "widthCm": 91 },
+          { "tool": "place_base_sink_2_doors", "widthCm": 80, "hasSink": true },
+          { "tool": "place_base_cooktop_3_drawers", "widthCm": 80, "hasCooktop": true }
+        ],
+        "wallModules": [
+          { "tool": "place_wall_2_doors", "widthCm": 80 },
+          { "tool": "place_wall_hood_new_flow", "widthCm": 60 }
+        ]
+      }
+    ],
+    "island": {
+      "enabled": false,
+      "orientation": "parallel_wall_a",
+      "depthCm": 80,
+      "overhangBackCm": 30,
+      "waterfallSides": false,
+      "modules": []
+    },
+    "finishes": {
+      "doorsTexture": "<ID exacto de boardTextures>",
+      "lowerDoorsTexture": "<ID exacto opcional>",
+      "upperDoorsTexture": "<ID exacto opcional>",
+      "islandDoorsTexture": "<ID exacto opcional>",
+      "structureTexture": "<ID exacto de boardTextures>",
+      "countertopProduct": "<ID exacto de countertops>",
+      "countertopEnabled": true,
+      "backsplashMode": "standard_5cm" | "full_height" | "none",
+      "regruesoCm": 0,
+      "sinkModel": "alfa_onec_3018" | "alfa_twoc_f5858a" | "none",
+      "cooktopModel": "fdv_design_60" | "fdv_design_90" | "none",
+      "golaSystem": "none" | "aluminum" | "black",
+      "handle": { "model": "forza", "finish": "negro", "lengthMm": 128 },
+      "showSocle": true,
+      "socleFinish": "black" | "aluminum",
+      "socleHeightCm": 10,
+      "wallColor": "<id exacto de wallColors>",
+      "floorType": "<id exacto de floorTypes>"
+    }
+  },
+  "patchDesign": {
+    "finishes": {},
+    "addModules": [],
+    "removeCabinetIds": [],
+    "removeByVariant": [],
+    "updateCabinets": [],
+    "addOpenings": [],
+    "addMepPoints": [],
+    "clearIsland": false
+  }
+}
+
+Incluye únicamente el bloque correspondiente al actionType elegido ("floorPlan", "fullDesign" o "patchDesign"). Nunca incluyas comentarios ni texto fuera del JSON.
+`.trim();
+}
+
+export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
+  const {
+    userRole,
+    message,
+    images = [],
+    history = [],
+    planConfirmed = false,
+    currentState,
+    catalog,
+  } = body || {};
+
+  // Bloqueo de seguridad en servidor equivalente a NanoBanana (solo usuarios de pago)
+  if (userRole === 'free_user') {
+    const err: any = new Error(
+      'El Diseñador IA de Cocinas es exclusivo para usuarios con plan de pago activo.'
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (!message?.trim() && (!images || images.length === 0)) {
+    throw new Error('Debes enviar un mensaje o adjuntar al menos una imagen.');
+  }
+
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error(
+      'GEMINI_API_KEY no está configurada en el servidor. Configúrala en .env.local o en Vercel Environment Variables.'
+    );
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const systemInstruction = buildSystemInstruction(catalog, currentState, planConfirmed);
+
+  // Construir contexto conversacional reciente (últimos 10 mensajes para eficiencia)
+  const recentHistory = (history || [])
+    .slice(-10)
+    .map((m) => `${m.role === 'user' ? 'CLIENTE' : 'DISEÑADOR_IA'}: ${m.text}`)
+    .join('\n');
+
+  const userParts: any[] = [];
+  for (const img of (images || []).slice(0, 4)) {
+    const parsed = parseDataUrl(img.dataUrl);
+    if (parsed) {
+      userParts.push({
+        inlineData: {
+          mimeType: parsed.mimeType,
+          data: parsed.data,
+        },
+      });
+      if (img.label) {
+        userParts.push({
+          text: `[Imagen adjunta etiquetada por el usuario como: ${img.label}]`,
+        });
+      }
+    }
+  }
+
+  const combinedPrompt = [
+    recentHistory ? `HISTORIAL RECIENTE:\n${recentHistory}\n` : '',
+    `MENSAJE ACTUAL DEL CLIENTE:\n${message || 'Analiza la(s) imagen(es) adjunta(s) y actúa según la etapa del flujo.'}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  userParts.push({ text: combinedPrompt });
+
+  const candidateModels = [
+    'gemini-4-hydrogen',
+    'gemini-3.1-pro-preview',
+    'gemini-3.5-flash-lite',
+  ];
+
+  let response: any = null;
+  let lastError: any = null;
+  let modelUsed = candidateModels[0];
+
+  for (const modelName of candidateModels) {
+    try {
+      modelUsed = modelName;
+      response = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ role: 'user', parts: userParts }],
+        config: {
+          systemInstruction,
+          temperature: 0.25,
+          responseMimeType: 'application/json',
+        },
+      });
+      if (response?.text) break;
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = String(err?.message || '');
+      // Si es error de cuota o clave inválida, no tiene sentido reintentar otros modelos si es auth
+      if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+        throw err;
+      }
+      console.warn(`[kitchen-ai-agent] Fallback desde ${modelName}:`, errMsg);
+    }
+  }
+
+  if (!response?.text) {
+    throw lastError || new Error('No se obtuvo respuesta del modelo Gemini.');
+  }
+
+  const parsed = extractJsonFromText(response.text);
+  return {
+    ...parsed,
+    modelUsed,
+  };
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const result = await handleKitchenAgentRequest(req.body);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error in /api/kitchen-ai-agent:', error);
+    const status = error?.statusCode || 500;
+    const errStr = String(error?.message || error || '');
+    let userMsg = 'Error al procesar la solicitud con el Diseñador IA.';
+
+    if (errStr.includes('429') || errStr.includes('Quota exceeded') || errStr.includes('RESOURCE_EXHAUSTED')) {
+      userMsg = 'Límite de cuota alcanzado en la API de Gemini. Intenta nuevamente en unos momentos.';
+    } else if (error?.message) {
+      userMsg = error.message;
+    }
+
+    return res.status(status).json({ error: userMsg });
+  }
+}

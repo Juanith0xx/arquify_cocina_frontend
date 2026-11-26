@@ -56,6 +56,35 @@ export default defineConfig(() => {
               }
             });
           });
+
+          server.middlewares.use('/api/kitchen-ai-agent', async (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              res.end(JSON.stringify({ error: 'Method not allowed' }));
+              return;
+            }
+
+            let bodyStr = '';
+            req.on('data', (chunk) => {
+              bodyStr += chunk.toString();
+            });
+
+            req.on('end', async () => {
+              try {
+                const body = JSON.parse(bodyStr);
+                const { handleKitchenAgentRequest } = await import('./api/kitchen-ai-agent.ts');
+                const result = await handleKitchenAgentRequest(body);
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                console.error('Error in /api/kitchen-ai-agent middleware:', err);
+                res.statusCode = err?.statusCode || 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: err?.message || 'Error in kitchen AI design agent' }));
+              }
+            });
+          });
         },
       },
     ],

@@ -21,7 +21,7 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search, MessageSquare, Lock } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
@@ -32,6 +32,7 @@ import { HANDLE_CATALOG } from '../types/handle';
 
 import { DecorationSection } from '../components/kitchen/DecorationSection';
 import { NanoBananaRenderModal } from '../components/common/NanoBananaRenderModal';
+import { KitchenAiChatPanel } from '../components/kitchen/KitchenAiChatPanel';
 import { StudioRenderModal } from '../components/common/StudioRenderModal';
 import { StudioRenderProvider } from '../components/common/StudioRenderContext';
 import { ModuleHoverPreviewPopup, HoveredModulePreview } from '../components/kitchen/ModuleHoverPreviewPopup';
@@ -290,6 +291,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const [isB2BQuoteOpen, setIsB2BQuoteOpen] = useState(false);
   const [isBimModalOpen, setIsBimModalOpen] = useState(false);
   const [isNanoBananaModalOpen, setIsNanoBananaModalOpen] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isStudioRenderModalOpen, setIsStudioRenderModalOpen] = useState(false);
   const [isExportingLabels, setIsExportingLabels] = useState(false);
   const [leftTab, setLeftTab] = useState<'modules' | 'placed'>('modules');
@@ -341,6 +343,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const supabaseUser = useSupabaseAuthStore((state) => state.user);
   const isAuthenticated = Boolean(isLocalAuth || supabaseUser);
   const effectiveRole = currentUser?.role || supabaseUser?.role || 'designer';
+  const isFreeUser = effectiveRole === 'free_user';
   const isSuperAdmin = Boolean(effectiveRole === 'superadmin');
   const canAccessIndustrialOutputs = Boolean(
     effectiveRole === 'superadmin' || effectiveRole === 'tenant_admin' || effectiveRole === 'operator'
@@ -848,6 +851,37 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
 
         {/* Zona Derecha: Exportar / Cotizar Dropdown + Guardar + Toggle Paneles + Reset */}
         <div className="hidden lg:flex items-center gap-2">
+          {/* Botón Chat Diseñador IA (Exclusivo usuarios de pago) */}
+          <button
+            onClick={() => setIsAiChatOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold tracking-wide transition-all cursor-pointer ${
+              isAiChatOpen
+                ? 'bg-orange-500 text-black border-orange-600 shadow-sm'
+                : isFreeUser
+                ? isLight
+                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300'
+                : isLight
+                ? 'bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-700'
+                : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/40 text-orange-400'
+            }`}
+            title={
+              isFreeUser
+                ? 'Diseñador IA de Cocinas (Exclusivo para usuarios de pago)'
+                : 'Abrir chat con el Diseñador de Cocinas IA'
+            }
+          >
+            {isFreeUser ? <Lock size={13} /> : <MessageSquare size={14} />}
+            <span>Diseñador IA</span>
+            <span
+              className={`text-[9px] px-1 py-0.5 rounded font-mono font-bold uppercase ${
+                isAiChatOpen ? 'bg-black/20 text-black' : 'bg-orange-500/20 text-orange-500'
+              }`}
+            >
+              PRO
+            </span>
+          </button>
+
           {/* Menú Desplegable Agrupado de Cotizaciones y Exportación */}
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -1059,6 +1093,17 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             </button>
 
             <button
+              onClick={() => { setIsMobileMenuOpen(false); setIsAiChatOpen(true); }}
+              className="flex items-center justify-between p-3 rounded-xl border border-orange-500/30 bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                {isFreeUser ? <Lock size={16} /> : <MessageSquare size={16} />}
+                <span>Diseñador IA (Chat Planos & Diseño)</span>
+              </div>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500 text-black font-mono font-extrabold">PRO</span>
+            </button>
+
+            <button
               onClick={() => { setIsMobileMenuOpen(false); setIsCountertopModalOpen(true); }}
               className="flex items-center gap-3 p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
             >
@@ -1190,6 +1235,38 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                       <span className="font-black">Render NanoBanana</span>
                     </div>
                     <span className="text-[9px] px-1.5 py-0.5 bg-black/20 text-black rounded font-mono font-bold uppercase">AI</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (activeCabinetId) setActiveCabinet(null);
+                      if (activeArchElementId) setActiveArchElement(null);
+                      setIsAiChatOpen((prev) => !prev);
+                    }}
+                    className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+                      isAiChatOpen
+                        ? 'bg-orange-500 border-orange-600 text-black shadow-xs'
+                        : isLight
+                        ? 'bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-900 shadow-xs'
+                        : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/40 text-orange-300'
+                    }`}
+                    title={
+                      isFreeUser
+                        ? 'Chat Diseñador IA (Exclusivo para usuarios de pago)'
+                        : 'Abrir chat del Diseñador de Cocinas IA'
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      {isFreeUser ? <Lock size={14} className="shrink-0" /> : <MessageSquare size={14} className="shrink-0" />}
+                      <span className="font-extrabold">Diseñador IA</span>
+                    </div>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                        isAiChatOpen ? 'bg-black/20 text-black' : 'bg-orange-500/25 text-orange-500'
+                      }`}
+                    >
+                      PRO
+                    </span>
                   </button>
                </div>
             </div>
@@ -3300,6 +3377,13 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
    <NanoBananaRenderModal
      isOpen={isNanoBananaModalOpen}
      onClose={() => setIsNanoBananaModalOpen(false)}
+     isLight={isLight}
+   />
+
+   {/* Panel Flotante de Chat Diseñador de Cocinas IA (Exclusivo Usuarios de Pago) */}
+   <KitchenAiChatPanel
+     isOpen={isAiChatOpen}
+     onClose={() => setIsAiChatOpen(false)}
      isLight={isLight}
    />
 
