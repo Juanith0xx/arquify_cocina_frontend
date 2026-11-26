@@ -42,6 +42,7 @@ import {
 } from './kitchenAiCatalog';
 import { SinkModelId, CooktopModelId, BacksplashMode } from '../types/countertop';
 import { MepPoint, MepType, MepPresetType, MEP_TYPE_CONFIGS, MEP_PRESETS } from '../types/mep';
+import { startKitchenBuildAnimation } from './kitchenBuildAnimation';
 
 export interface AiFloorPlanOpening {
   type: 'door' | 'window' | 'pillar';
@@ -1541,6 +1542,18 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
     if (islandRes.cooktopCabId) cooktopCabinetId = islandRes.cooktopCabId;
   }
 
+  const prevCabinetIds = new Set(prevState.cabinets.map((c) => c.id));
+  const animatedIds =
+    design.replaceExistingCabinets === false
+      ? placedCabinets.filter((c) => !prevCabinetIds.has(c.id)).map((c) => c.id)
+      : placedCabinets.map((c) => c.id);
+
+  if (animatedIds.length > 0) {
+    startKitchenBuildAnimation(animatedIds, {
+      animateFinishing: design.replaceExistingCabinets !== false,
+    });
+  }
+
   // Aplicar gabinetes y guardar historial
   useKitchenStore.setState({
     history: [snapshot, ...(prevState.history || []).slice(0, 29)],
@@ -1851,6 +1864,7 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
   }
 
   // Agregar nuevos módulos respetando medidas fijas + despeje frontal
+  const addedModuleIds: string[] = [];
   for (const item of patch.addModules || []) {
     const st = useKitchenStore.getState();
     const resolved = resolveApprovedModuleTool(item.tool);
@@ -1917,7 +1931,12 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
       drawersCount: specs.drawersCount,
       hingeSide: item.hingeSide,
     });
+    addedModuleIds.push(newId);
     appliedSummary.push(`Agregado ${entry.name} (${dims.width} cm)`);
+  }
+
+  if (addedModuleIds.length > 0) {
+    startKitchenBuildAnimation(addedModuleIds, { animateFinishing: false });
   }
 
   if (Array.isArray(patch.addOpenings) && patch.addOpenings.length > 0) {
