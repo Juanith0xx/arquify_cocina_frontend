@@ -27,6 +27,7 @@ import {
   constrainInsideRoomAndWalls,
   isCandidateValid,
   findSmartWallPlacement,
+  findPerpendicularCabinetForCorner,
 } from './kitchenCollision';
 import { calculateMepPositionOnWall } from './mepGeometry';
 import { detectMepClashes } from './mepClashDetection';
@@ -571,7 +572,9 @@ function buildPerpendicularCornerIntervals(
           reason: 'torre/refrigerador en esquina perpendicular',
         });
       } else if (!candidateIsCorner) {
-        const clearance = 6;
+        // Si el mueble perpendicular ya es un esquinero ciego o en L, trae su propia franja de holgura (5 cm)
+        // integrada y debe recibir la corrida perpendicular a tope (0 cm) sin dejar huecos visibles en el rincón.
+        const clearance = isCornerModuleVariant(cab.variant) ? 0 : 6;
         intervals.push({
           start: minS - clearance,
           end: maxS + clearance,
@@ -1364,7 +1367,8 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
     const uZ = (z2 - z1) / wLen;
     const [nX, nZ] = getWallInwardNormal(x1, z1, x2, z2, roomPoly);
     const wallThick = wall.thickness || prevState.roomConfig.wallThickness || 20;
-    const cornerMargin = wallThick / 2 + 2;
+    const candIsCorner = isCornerModuleVariant(specs.variant);
+    const cornerMargin = candIsCorner ? wallThick / 2 : wallThick / 2 + 2;
     const maxS = wLen - cornerMargin;
 
     const tierForRules: 'lower' | 'upper' | 'full' =
@@ -1373,8 +1377,6 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
         : isUpperTier || specs.type === 'wall' || specs.variant === 'deco_hood'
         ? 'upper'
         : 'lower';
-
-    const candIsCorner = isCornerModuleVariant(specs.variant);
 
     // Combinar aberturas arquitectónicas + ocupación real de muebles/torres en esquinas perpendiculares
     const openingBlocks = buildWallOpeningsIntervals(wall, archElements, tierForRules);
@@ -1450,8 +1452,29 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
       );
 
       if (validPhysics && validAccess) {
+        // Determinar orientación real del lado ciego según qué extremo del muro (inicio vs fin) ocupa el esquinero
+        let resolvedSpecs = specs;
+        if (
+          specs.variant?.startsWith('corner_blind') ||
+          specs.variant?.startsWith('wall_corner_blind')
+        ) {
+          const [rX, rZ] = getThreeRightVector(rotation);
+          const rightDotU = rX * uX + rZ * uZ;
+          const distToStart = freeS - wallThick / 2;
+          const distToEnd = wLen - wallThick / 2 - (freeS + width);
+          const cornerTowardEnd = distToEnd <= distToStart;
+          const blindShouldBeRight = cornerTowardEnd ? rightDotU >= 0 : rightDotU < 0;
+          const isWallBlind = specs.variant.startsWith('wall_corner_blind');
+          resolvedSpecs = {
+            ...specs,
+            variant: isWallBlind
+              ? (blindShouldBeRight ? 'wall_corner_blind_right' : 'wall_corner_blind_left')
+              : (blindShouldBeRight ? 'corner_blind_right' : 'corner_blind_left'),
+          };
+        }
+
         const cab = buildCabinetObject(
-          specs,
+          resolvedSpecs,
           width,
           height,
           depth,
@@ -1491,15 +1514,45 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
     .filter((x): x is { run: AiWallRunSpec; wall: WallType } => Boolean(x));
 
   // 1a. Módulos de piso (bases, torres, equipos) en todos los muros
-  for (const { run, wall } of resolvedRuns) {
+  // Priorizar corridas que contienen un esquinero (ciego o en L) para que reclamen el rincón exacto primero
+  // y la corrida perpendicular se acople a tope (0 cm) sin huecos.
+  const orderedLowerRuns = [...resolvedRuns].sort((a, b) => {
+    const aHasCorner = (a.run.baseAndTallModules || []).some((m) =>
+      isCornerModuleVariant(resolveApprovedModuleTool(m.tool).specs.variant)
+    );
+    const bHasCorner = (b.run.baseAndTallModules || []).some((m) =>
+      isCornerModuleVariant(resolveApprovedModuleTool(m.tool).specs.variant)
+    );
+    if (aHasCorner !== bHasCorner) return aHasCorner ? -1 : 1;
+    return 0;
+  });
+
+  for (const { run, wall } of orderedLowerRuns) {
     const wallThick = wall.thickness || prevState.roomConfig.wallThickness || 20;
-    const baseStart = Math.max(wallThick / 2 + 2, Number(run.startOffsetCm) || wallThick / 2 + 2);
+    const firstItemIsCorner =
+      (run.baseAndTallModules?.length || 0) > 0 &&
+      isCornerModuleVariant(resolveApprovedModuleTool(run.baseAndTallModules![0].tool).specs.variant);
+    const defaultStart = firstItemIsCorner ? wallThick / 2 : wallThick / 2 + 2;
+    const baseStart = Math.max(defaultStart, Number(run.startOffsetCm) || defaultStart);
     let lowerCursor = baseStart;
 
     for (const item of run.baseAndTallModules || []) {
-      const startAt = item.offsetFromStartCm !== undefined ? Math.max(lowerCursor, item.offsetFromStartCm) : lowerCursor;
+      const itemIsCorner = isCornerModuleVariant(resolveApprovedModuleTool(item.tool).specs.variant);
+      const startAt = item.offsetFromStartCm !== undefined
+        ? Math.max(lowerCursor, item.offsetFromStartCm)
+        : (itemIsCorner && lowerCursor <= wallThick / 2 + 2.5 ? wallThick / 2 : lowerCursor);
       const res = placeItemOnWall(wall, item, startAt, false);
       lowerCursor = res.nextCursor;
+    }
+  }
+
+  // Sincronizar blindWidth de esquineros ciegos con la profundidad real del mueble perpendicular acoplado
+  for (const cab of placedCabinets) {
+    if (cab.variant?.startsWith('corner_blind') || cab.variant?.startsWith('wall_corner_blind')) {
+      const perpCab = findPerpendicularCabinetForCorner(cab, placedCabinets);
+      if (perpCab && perpCab.depth > 0) {
+        cab.blindWidth = perpCab.depth;
+      }
     }
   }
 
