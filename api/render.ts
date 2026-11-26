@@ -136,6 +136,24 @@ EXACT MATERIAL & FINISH SPECIFICATIONS (MATCH INPUT IMAGE 1:1):
   const realCountertop =
     bimManifest?.countertop?.description ||
     'Preserve the exact countertop material, thickness, overhang, backsplash, and edge profile visible in the input 3D capture.';
+  const realBacksplashMode = bimManifest?.countertop?.backsplashMode || 'none';
+  const realBacksplashHeightCm = Number(bimManifest?.countertop?.backsplashHeightCm ?? 0);
+  const realBacksplashDirective = bimManifest?.countertop?.backsplashDirective || '';
+  const backsplashLockRule = !hasCountertop
+    ? ''
+    : realBacksplashMode === 'standard_5cm' || (realBacksplashHeightCm > 0 && realBacksplashHeightCm < 20 && realBacksplashMode !== 'full_height' && realBacksplashMode !== 'mixed')
+    ? `   - BACKSPLASH HEIGHT LOCK (${realBacksplashHeightCm || 5} cm / ${(realBacksplashHeightCm || 5) * 10} mm LOW UPSTAND ONLY — CRITICAL):
+     * The stone backsplash is strictly a SHORT ${realBacksplashHeightCm || 5} cm horizontal curb strip sitting along the rear edge of the countertop.
+     * Above that ${realBacksplashHeightCm || 5} cm strip, the ENTIRE vertical wall band up to the underside of the wall cabinets (~50 cm tall) MUST remain plain matte painted wall (${realWalls}).
+     * ABSOLUTELY FORBIDDEN: Do NOT extend the stone/quartz/sintered slab upward to meet the bottom of the upper cabinets, and do NOT misinterpret the dark diagonal shadow cast under the upper cabinets in the 3D capture as a full-height stone backsplash.`
+    : realBacksplashMode === 'none' || realBacksplashHeightCm === 0
+    ? `   - BACKSPLASH HEIGHT LOCK (0 cm — NO STONE BACKSPLASH):
+     * There is NO stone upstand and NO full-height stone slab on the wall. The plain painted wall (${realWalls}) meets the horizontal countertop surface directly.`
+    : realBacksplashMode === 'full_height'
+    ? `   - BACKSPLASH HEIGHT LOCK (55 cm FULL-HEIGHT SLAB):
+     * Keep the vertical stone backsplash panel at its exact 55 cm height covering the wall band between the countertop and the underside of the upper cabinets, matching the exact horizontal boundaries in the 3D capture.`
+    : `   - BACKSPLASH HEIGHT LOCK (PER-RUN EXACT SPEC):
+     * ${realBacksplashDirective}`;
   const realSocle =
     bimManifest?.socle?.directive ||
     bimManifest?.socleDirective ||
@@ -163,9 +181,9 @@ ${strictDirectivesList ? `${strictDirectivesList}\n` : ''}
    - Drawer banks preserve the exact count and horizontal division heights visible in the 3D capture.
    - Open niches, shelves, wine racks, and built-in appliance cutouts appear ONLY where modeled in the 3D capture.
 
-3. COUNTERTOPS, SINKS, COOKTOPS & WATERFALLS:
+3. COUNTERTOPS, BACKSPLASH, SINKS, COOKTOPS & WATERFALLS:
    - ${realCountertop}${realIslandBack}
-   ${hasCountertop ? '- Preserve exact countertop edge thickness, overhang length, backsplash height, and side terminations shown in the 3D capture.' : '- Keep the cabinets without any added stone countertop, matching the input 3D capture.'}
+${backsplashLockRule ? `${backsplashLockRule}\n` : ''}   ${hasCountertop ? '- Preserve exact countertop edge thickness, overhang length, exact backsplash height above, and side terminations shown in the 3D capture.' : '- Keep the cabinets without any added stone countertop, matching the input 3D capture.'}
 
 4. FLOOR PLAN & OPEN SPACE PRESERVATION:
    - ${bimManifest?.islandDirectives?.description || (hasIsland ? 'Keep the modeled island in its exact footprint and position.' : 'Keep the central and foreground floor completely open and bare exactly as shown in the input 3D capture.')}

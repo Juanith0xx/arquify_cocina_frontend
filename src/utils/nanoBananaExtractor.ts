@@ -77,6 +77,8 @@ export interface DetailedBimManifest {
     regruesoCm: number;
     backsplashMode?: string;
     backsplashHeightCm: number;
+    backsplashSummary?: string;
+    backsplashDirective?: string;
     hasWaterfallLeft: boolean;
     hasWaterfallRight: boolean;
     sink: {
@@ -755,7 +757,12 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
     ? `Zócalo continuo cerrado de ${socleHeight} cm en acabado ${socleColorName}, sellando uniformemente la base de los muebles bajos e isla contra el suelo exactamente como muestra la captura 3D.`
     : `Muebles apoyados sobre patas cilíndricas individuales de ${socleHeight} cm con espacio libre visible bajo el casco, exactamente como muestra la captura 3D.`;
 
-  // 4. Cubiertas / Countertop (leyendo propiedades reales de CountertopConfig)
+  // 4. Suelo, Muros y Decoración de Estancia reales (necesarios también para describir la pared sobre el respaldo)
+  const floorDesc = resolveFloorDescription(floorType);
+  const wallFinishDesc = resolveWallDescription(wallColor);
+  const spaceDecorationSummary = resolveSpaceDecorationSummary(spaceDecoration);
+
+  // 5. Cubiertas / Countertop (leyendo propiedades reales y overrides por tramo de CountertopConfig)
   const hasCountertop = Boolean(countertopConfig?.enabled);
   const catalogToUse = qstoneCatalog && qstoneCatalog.length > 0 ? qstoneCatalog : DEFAULT_QSTONE_CATALOG;
   const currentCountertopItem: QstoneProductItem | undefined = catalogToUse.find(
@@ -774,14 +781,17 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
   const rawRegrueso = typeof countertopConfig?.regruesoCm === 'number' ? countertopConfig.regruesoCm : 0;
   const regruesoCm = hasCountertop && !isHplAbet ? rawRegrueso : 0;
 
-  // Corrección crítica: leer backsplashMode y backsplashHeightCm reales
-  const backsplashMode = hasCountertop ? countertopConfig?.backsplashMode || 'none' : 'none';
-  const backsplashHeightCm =
-    !hasCountertop || backsplashMode === 'none'
+  // Corrección crítica: leer backsplashMode y backsplashHeightCm reales (globales y por tramo)
+  const globalBacksplashMode = hasCountertop ? countertopConfig?.backsplashMode || 'none' : 'none';
+  const globalStandardBsHeightCm =
+    typeof countertopConfig?.backsplashHeightCm === 'number' ? countertopConfig.backsplashHeightCm : 5;
+  let backsplashMode: string = globalBacksplashMode;
+  let backsplashHeightCm =
+    !hasCountertop || globalBacksplashMode === 'none'
       ? 0
-      : typeof countertopConfig?.backsplashHeightCm === 'number'
-      ? countertopConfig.backsplashHeightCm
-      : 5;
+      : globalBacksplashMode === 'full_height'
+      ? 55
+      : globalStandardBsHeightCm;
 
   const hasBaseWaterfallLeft = Boolean(countertopConfig?.baseWaterfallLeft ?? countertopConfig?.waterfallLeft);
   const hasBaseWaterfallRight = Boolean(countertopConfig?.baseWaterfallRight ?? countertopConfig?.waterfallRight);
@@ -830,7 +840,21 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
     cabinetLabel: cooktopCabLabel,
   };
 
+  const describeBacksplashByMode = (mode: string, heightCm: number, lengthCm?: number): string => {
+    const lenTxt = lengthCm && lengthCm > 0 ? ` × ${lengthCm}cm de largo` : '';
+    if (mode === 'full_height') {
+      return `RESPALDO COMPLETO DE ALTURA TOTAL (55 cm / 550 mm${lenTxt}): panel vertical continuo en ${stoneName} cubriendo toda la franja de muro desde la cubierta hasta la base de los muebles aéreos.`;
+    }
+    if (mode === 'standard_5cm' && heightCm > 0) {
+      return `RESPALDO ZÓCALO BAJO DE EXACTAMENTE ${heightCm} cm (${heightCm * 10} mm${lenTxt}) DE ALTURA: únicamente una tira baja y angosta de ${heightCm} cm en ${stoneName} pegada al borde trasero de la cubierta. TODA la franja de muro sobre esos ${heightCm} cm hasta la base de los muebles aéreos (~50 cm) es 100% MURO PINTADO LISO (${wallFinishDesc}); NO extender la piedra hasta los muebles aéreos ni confundir la sombra bajo los aéreos con un respaldo completo.`;
+    }
+    return `SIN RESPALDO DE CUBIERTA (0 cm): sin tira ni placa de respaldo en piedra sobre la cubierta; el muro pintado liso (${wallFinishDesc}) llega directamente hasta la cubierta.`;
+  };
+
   let countertopDesc = '';
+  let backsplashSummary = 'Sin cubierta';
+  let backsplashDirective = 'Sin cubierta instalada (sin respaldo).';
+
   if (!hasCountertop) {
     countertopDesc =
       'SIN CUBIERTA INSTALADA: los muebles base e isla no llevan cubierta de piedra/cuarzo; mantener su remate superior exacto tal como aparece en la captura 3D.';
@@ -843,23 +867,18 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
     }
     countertopDesc += '.';
 
-    if (backsplashMode === 'full_height') {
-      countertopDesc += ' Respaldo/salpicadero de muro en el mismo material a altura completa hasta los muebles aéreos.';
-    } else if (backsplashMode === 'standard_5cm' && backsplashHeightCm > 0) {
-      countertopDesc += ` Zócalo respaldo/salpicadero en el mismo material de ${backsplashHeightCm}cm de altura sobre la cubierta.`;
-    } else {
-      countertopDesc += ' Sin respaldo/salpicadero de piedra en muro.';
-    }
+    const baseRunBacksplashes: Array<{ name: string; mode: string; heightCm: number; lengthCm: number }> = [];
 
-    // Tramos continuos detectados para describir cascadas y voladizos exactos por tramo
+    // Tramos continuos detectados para describir respaldo, cascadas y voladizos exactos por tramo
     try {
       const runs = detectContinuousCabinetRuns(cabinets, countertopConfig, walls, architecturalElements, roomConfig);
       if (runs.length > 0) {
+        const stoneThickCm = thicknessMm / 10;
         const runSummaries = runs.map((r) => {
           const ov = countertopConfig?.runOverrides?.[r.id];
           const isIsl = r.type === 'island';
-          const wfL = ov?.waterfallLeft ?? (isIsl ? hasIslandWaterfallLeft : hasBaseWaterfallLeft);
-          const wfR = ov?.waterfallRight ?? (isIsl ? hasIslandWaterfallRight : hasBaseWaterfallRight);
+          const wfL = ov?.waterfallLeft !== undefined ? ov.waterfallLeft : (isIsl ? hasIslandWaterfallLeft : hasBaseWaterfallLeft);
+          const wfR = ov?.waterfallRight !== undefined ? ov.waterfallRight : (isIsl ? hasIslandWaterfallRight : hasBaseWaterfallRight);
           const reg = ov?.regruesoCm ?? (isIsl ? countertopConfig?.islandRegruesoCm : countertopConfig?.baseRegruesoCm) ?? regruesoCm;
           const lenCm = Math.round(r.totalLengthMm / 10);
           const depCm = Math.round(r.depthMm / 10);
@@ -868,12 +887,82 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
           if (wfL && r.canWaterfallLeft) parts.push('cascada izquierda al suelo');
           if (wfR && r.canWaterfallRight) parts.push('cascada derecha al suelo');
           if (isIsl && (r.overhangRearMm || 0) > 0) parts.push(`voladizo barra trasera ${Math.round((r.overhangRearMm || 0) / 10)}cm`);
+
+          if (!isIsl) {
+            const runBsMode = ov?.backsplashMode !== undefined ? ov.backsplashMode : globalBacksplashMode;
+            const runBsRawH = ov?.backsplashHeightCm !== undefined ? ov.backsplashHeightCm : globalStandardBsHeightCm;
+            const runBsH = runBsMode === 'none' ? 0 : runBsMode === 'full_height' ? 55 : runBsRawH;
+            const bsExtL = ((r.backsplashExtLeftMm || 0) + (r.extensionToWallLeftMm || 0) + (r.overhangLeftMm || 0)) / 10;
+            const bsExtR = ((r.backsplashExtRightMm || 0) + (r.extensionToWallRightMm || 0) + (r.overhangRightMm || 0)) / 10;
+            const wfExtL = wfL && r.canWaterfallLeft ? stoneThickCm : 0;
+            const wfExtR = wfR && r.canWaterfallRight ? stoneThickCm : 0;
+            const bsLenCm = Math.round(r.totalLengthMm / 10 + bsExtL + bsExtR + wfExtL + wfExtR);
+            baseRunBacksplashes.push({ name: r.name, mode: runBsMode, heightCm: runBsH, lengthCm: bsLenCm });
+            if (runBsMode === 'none') {
+              parts.push('sin respaldo en muro (0cm)');
+            } else if (runBsMode === 'full_height') {
+              parts.push(`respaldo completo 55cm alto × ${bsLenCm}cm largo`);
+            } else {
+              parts.push(`respaldo zócalo bajo ${runBsH}cm alto × ${bsLenCm}cm largo (muro pintado encima)`);
+            }
+          }
+
           return `${parts.join(', ')})`;
         });
-        countertopDesc += ` Tramos activos: ${runSummaries.join('; ')}.`;
+
+        // Consolidar modo y altura efectiva de respaldo desde los tramos base reales
+        if (baseRunBacksplashes.length > 0) {
+          const uniqueModes = Array.from(new Set(baseRunBacksplashes.map((b) => `${b.mode}:${b.heightCm}`)));
+          if (uniqueModes.length === 1) {
+            const first = baseRunBacksplashes[0];
+            backsplashMode = first.mode;
+            backsplashHeightCm = first.heightCm;
+            const totalBsLen = baseRunBacksplashes.reduce((acc, b) => acc + b.lengthCm, 0);
+            backsplashDirective = describeBacksplashByMode(first.mode, first.heightCm, baseRunBacksplashes.length === 1 ? first.lengthCm : totalBsLen);
+            backsplashSummary =
+              first.mode === 'none'
+                ? 'Sin respaldo (0cm)'
+                : first.mode === 'full_height'
+                ? 'Respaldo completo 55cm'
+                : `Respaldo zócalo ${first.heightCm}cm`;
+          } else {
+            backsplashMode = 'mixed';
+            backsplashHeightCm = Math.max(...baseRunBacksplashes.map((b) => b.heightCm));
+            backsplashSummary = 'Respaldo mixto por tramo';
+            backsplashDirective = baseRunBacksplashes
+              .map((b) => `Tramo ${b.name}: ${describeBacksplashByMode(b.mode, b.heightCm, b.lengthCm)}`)
+              .join(' | ');
+          }
+        } else {
+          backsplashDirective = describeBacksplashByMode(backsplashMode, backsplashHeightCm);
+          backsplashSummary =
+            backsplashMode === 'none'
+              ? 'Sin respaldo (0cm)'
+              : backsplashMode === 'full_height'
+              ? 'Respaldo completo 55cm'
+              : `Respaldo zócalo ${backsplashHeightCm}cm`;
+        }
+
+        countertopDesc += ` ${backsplashDirective} Tramos activos: ${runSummaries.join('; ')}.`;
+      } else {
+        backsplashDirective = describeBacksplashByMode(backsplashMode, backsplashHeightCm);
+        backsplashSummary =
+          backsplashMode === 'none'
+            ? 'Sin respaldo (0cm)'
+            : backsplashMode === 'full_height'
+            ? 'Respaldo completo 55cm'
+            : `Respaldo zócalo ${backsplashHeightCm}cm`;
+        countertopDesc += ` ${backsplashDirective}`;
       }
     } catch {
-      // Fallback limpio si falla cálculo de tramos
+      backsplashDirective = describeBacksplashByMode(backsplashMode, backsplashHeightCm);
+      backsplashSummary =
+        backsplashMode === 'none'
+          ? 'Sin respaldo (0cm)'
+          : backsplashMode === 'full_height'
+          ? 'Respaldo completo 55cm'
+          : `Respaldo zócalo ${backsplashHeightCm}cm`;
+      countertopDesc += ` ${backsplashDirective}`;
       if (hasWaterfallLeft && hasWaterfallRight) {
         countertopDesc += ' Caída en cascada al suelo en ambos laterales.';
       } else if (hasWaterfallLeft) {
@@ -892,11 +981,6 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
       countertopDesc += ` Incluye ${cooktopData.name} empotrada${cooktopCabLabel ? ` sobre "${cooktopCabLabel}"` : ''}.`;
     }
   }
-
-  // 5. Suelo, Muros y Decoración de Estancia reales
-  const floorDesc = resolveFloorDescription(floorType);
-  const wallFinishDesc = resolveWallDescription(wallColor);
-  const spaceDecorationSummary = resolveSpaceDecorationSummary(spaceDecoration);
 
   // 6. Ordenamiento espacial y clasificación exhaustiva pieza por pieza
   const sortedCabinets: CabinetType[] = [...cabinets].sort((a, b) => {
@@ -1112,6 +1196,7 @@ export function extractDetailedKitchenBimManifest(kitchenState: any): DetailedBi
     'FIDELIDAD DE FRENTES: Conservar exactamente el tipo de frente de cada módulo (puertas cerradas opacas, cantidad exacta de cajones horizontales, repisas abiertas solo donde existan).',
     islandDirectives.description,
     `CUBIERTA EXACTA: ${countertopDesc}`,
+    ...(hasCountertop ? [`ALTURA EXACTA DE RESPALDO: ${backsplashDirective}`] : []),
     `SOPORTE INFERIOR: ${socleDirective}`,
     `ACABADOS Y COLORES REALES: ${woodToneDetails}`,
     windowsCount === 0
@@ -1134,7 +1219,7 @@ DETALLE PIEZA POR PIEZA:
 ${detailedList.map((item) => `${item.index}. ${item.summarySentence}`).join('\n')}
 
 CUBIERTA Y MESÓN:
-- ${countertopDesc}${islandBackDesc ? `\n- Trasera/Costados de Isla: ${islandBackDesc}` : ''}
+- ${countertopDesc}${hasCountertop ? `\n- ALTURA EXACTA DE RESPALDO (BLOQUEADO): ${backsplashDirective}` : ''}${islandBackDesc ? `\n- Trasera/Costados de Isla: ${islandBackDesc}` : ''}
 
 SOPORTE DE BASE:
 - ${socleDirective}
@@ -1177,6 +1262,8 @@ MATERIALIDAD DE ESTANCIA:
       regruesoCm,
       backsplashMode,
       backsplashHeightCm,
+      backsplashSummary,
+      backsplashDirective,
       hasWaterfallLeft,
       hasWaterfallRight,
       sink: sinkData,

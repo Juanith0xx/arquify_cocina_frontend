@@ -685,7 +685,7 @@ export function NanoBananaRenderModal({ isOpen, onClose, isLight = false, projec
                       </span>
                     </div>
                     <p className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                      {auditedBim.breakdown.baseCount} bajos · {auditedBim.breakdown.wallCount} aéreos · {auditedBim.breakdown.tallCount} torres · {auditedBim.hasIsland ? `${auditedBim.breakdown.islandCount} en isla` : '0 islas (piso despejado)'} · {auditedBim.countertop.enabled ? `Cubierta: ${auditedBim.countertop.productName} (${auditedBim.countertop.regruesoCm > 0 ? `regrueso ${auditedBim.countertop.regruesoCm}cm` : `canto simple ${auditedBim.countertop.thicknessMm}mm`})` : 'Sin cubierta'}
+                      {auditedBim.breakdown.baseCount} bajos · {auditedBim.breakdown.wallCount} aéreos · {auditedBim.breakdown.tallCount} torres · {auditedBim.hasIsland ? `${auditedBim.breakdown.islandCount} en isla` : '0 islas (piso despejado)'} · {auditedBim.countertop.enabled ? `Cubierta: ${auditedBim.countertop.productName} (${auditedBim.countertop.regruesoCm > 0 ? `regrueso ${auditedBim.countertop.regruesoCm}cm` : `canto simple ${auditedBim.countertop.thicknessMm}mm`}${auditedBim.countertop.backsplashSummary ? `, ${auditedBim.countertop.backsplashSummary}` : ''})` : 'Sin cubierta'}
                     </p>
                   </div>
                 </div>
