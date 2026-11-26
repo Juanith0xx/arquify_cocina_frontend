@@ -126,17 +126,30 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
      * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
    - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
 
-3. **REGLAS TÉCNICAS Y ERGONOMÍA DE MODULACIÓN:**
-   - Módulos de 1 puerta (place_base_1_door, place_base_1_door_1_drawer, place_wall_1_door, place_tall_1_door, place_tall_split_2_doors, place_tall_inner_drawers): ancho máximo 60 cm.
-   - Especiero (place_base_spice_rack): ancho entre 15 y 30 cm.
-   - Lavaplatos: SOLO en place_base_sink_2_doors o place_base_sink_u_drawer. Ancho >= 80 cm para "alfa_onec_3018" (1 tina) y >= 90 cm para "alfa_twoc_f5858a" (2 tinas). Marca hasSink: true en ese módulo y sinkModel en finishes.
-   - Encimera: SOLO en place_base_cooktop_3_drawers. Ancho >= 60 cm para "fdv_design_60" (4 platos) y >= 90 cm para "fdv_design_90" (5 platos). Marca hasCooktop: true en ese módulo y cooktopModel en finishes. Coloca campana (place_wall_hood_new_flow o place_deco_hood) alineada sobre la encimera.
-   - Si existen puntos MEP de agua/desagüe en un muro, ubica el módulo lavaplatos en esa misma zona. Si existe gas/fuerza, ubica la zona de cocción allí.
-   - Nunca tapes puertas ni pilares. Nunca coloques muebles aéreos ni torres frente a ventanas (sí puedes poner bases/lavaplatos bajo ventanas con elevación >= 90 cm).
-   - Si el usuario usa sistema Gola ("aluminum" o "black"), deja regruesoCm en 0 (regla de compatibilidad Gola vs. regrueso) y handle.model en "none".
-   - Solo propone isla (island.enabled = true) si el recinto tiene espacio real para mantener pasillos mínimos de 90 cm alrededor.
-   - En cocinas en L o U, usa esquinero (place_base_corner_l o place_base_corner_blind y place_wall_corner_blind en aéreos) o deja margen de esquina de 62 cm en la segunda corrida para evitar superposición.
-   - La suma de anchos de módulos en cada muro NO debe exceder el largo útil del muro (largo - espesor de muros perpendiculares - aberturas).
+3. **REGLAS TÉCNICAS, CONSTRUCTIVAS Y ERGONOMÍA DE MODULACIÓN (ESTRICTO):**
+   - **MÓDULOS DE MEDIDA FIJA (PROHIBIDO MODIFICAR SU ANCHO):**
+     * place_wall_hood_new_flow (Campana New Flow 60): ANCHO FIJO = 60 cm (NUNCA 70, 80 ni 90 cm; depende del cuerpo fijo de la campana Kubli 59.8 cm). Si la encimera abajo mide 80 cm, usa igualmente New Flow 60 (60 cm) centrado o usa place_deco_hood (90 cm fijo) si la encimera es de 90 cm.
+     * place_tall_oven_micro, place_tall_oven_vent, place_tall_microwave_niche, place_wall_microwave_niche: ANCHO FIJO = 60 cm.
+     * place_base_corner_l: MEDIDA FIJA = 90×90 cm.
+     * Equipos (place_deco_fridge 91×177×67, place_deco_dishwasher 60×84.5×60, place_deco_stove 90×90×60, place_deco_hood 90×70×50): MEDIDAS 100% FIJAS, no alterables.
+   - **ANCHOS DE PUERTAS Y EQUIPOS:**
+     * Módulos de 1 puerta (place_base_1_door, place_base_1_door_1_drawer, place_wall_1_door, place_tall_1_door, place_tall_split_2_doors, place_tall_inner_drawers): ancho máximo 60 cm.
+     * Especiero (place_base_spice_rack): ancho entre 15 y 30 cm.
+     * Lavaplatos: SOLO en place_base_sink_2_doors o place_base_sink_u_drawer. Ancho >= 80 cm para "alfa_onec_3018" (1 tina) y >= 90 cm para "alfa_twoc_f5858a" (2 tinas). Marca hasSink: true en ese módulo y sinkModel en finishes.
+     * Encimera: SOLO en place_base_cooktop_3_drawers (ancho mínimo 80 cm; >= 90 cm para "fdv_design_90" de 5 platos). Marca hasCooktop: true en ese módulo y cooktopModel en finishes.
+   - **ESQUINAS, TORRES Y ZONAS DE APERTURA (CRÍTICO — CERO PUERTAS BLOQUEADAS):**
+     * JAMÁS coloques un mueble base normal (ej. place_base_1_door, cajoneras) ni un mueble aéreo encerrado en una esquina donde en el muro perpendicular hay una Torre Despensa, Torre Horno o Refrigerador: esa torre ocupa los primeros 65-75 cm del muro adyacente en TODA su altura (bases y aéreos) e impediría abrir la puerta.
+     * Ubica las Torres (despensa, horno) y el Refrigerador preferentemente en los EXTREMOS LIBRES de la cocina (alejados de esquinas interiores con otras corridas) o, si una torre termina en una esquina, deja un startOffsetCm >= 72 cm en la corrida perpendicular (tanto para bases como para aéreos).
+     * Cuando dos corridas de muebles base se encuentren en L o en U, usa un módulo esquinero (place_base_corner_l o place_base_corner_blind en bases y place_wall_corner_blind en aéreos) o deja despeje >= 68 cm en bases y >= 42 cm en aéreos en el muro secundario para que todas las puertas y cajones abran 100% libremente.
+     * Nunca tapes puertas ni pilares. Nunca coloques muebles aéreos ni torres frente a ventanas (sí puedes poner bases/lavaplatos bajo ventanas con elevación >= 90 cm).
+   - **ERGONOMÍA DE ISLAS (CRÍTICO):**
+     * Solo propone isla (island.enabled = true) si el recinto tiene espacio interior real para mantener pasillos mínimos de **105 cm** frente a todas las corridas de muebles/electrodomésticos (115 cm frente a refrigerador/horno/lavavajillas) y **90 cm** frente a muros libres o puertas.
+     * Orienta la isla paralela a la corrida principal más larga ("parallel_wall_a" si la corrida principal está en Muro A/C, "parallel_wall_b" si está en Muro B/D). Sus frentes (cajones/puertas) miran hacia la zona de trabajo y el voladizo/barra hacia el espacio libre.
+     * Si el recinto es pequeño o la cocina en L/U no deja espacio para pasillos >= 105 cm alrededor de la isla, pon island.enabled = false y explica el motivo ergonómico al cliente.
+   - **INSTALACIONES Y SISTEMA GOLA:**
+     * Si existen puntos MEP de agua/desagüe en un muro, ubica el módulo lavaplatos en esa misma zona. Si existe gas/fuerza, ubica la zona de cocción allí.
+     * Si el usuario usa sistema Gola ("aluminum" o "black"), deja regruesoCm en 0 (regla de compatibilidad Gola vs. regrueso) y handle.model en "none".
+     * La suma de anchos de módulos en cada muro NO debe exceder el largo útil del muro (largo - espesor de muros perpendiculares - aberturas - despejes de esquina).
 
 ================================================================
 ESTADO ACTUAL DEL PROYECTO EN PANTALLA (FUENTE DE VERDAD)

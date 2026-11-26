@@ -22,7 +22,13 @@ export interface AiModuleCatalogEntry {
   minWidth: number;
   maxWidth: number;
   defaultHeight: number;
+  minHeight: number;
+  maxHeight: number;
   defaultDepth: number;
+  minDepth: number;
+  maxDepth: number;
+  fixedWidth?: boolean;
+  fixedDimensions?: boolean;
   notes?: string;
 }
 
@@ -67,66 +73,80 @@ export interface AiCatalogSnapshot {
   mepPresets: Array<{ id: MepPresetType; name: string }>;
 }
 
+// Rangos 100% sincronizados con KitchenModuleContextMenu.tsx y especificaciones reales de herrajes/electrodomésticos
 export const AI_ALLOWED_MODULES: AiModuleCatalogEntry[] = [
   // Bases
-  { tool: 'place_base_1_door', category: 'base', name: 'Base 1 Puerta', variant: '1_door', defaultWidth: 60, minWidth: 30, maxWidth: 60, defaultHeight: 80, defaultDepth: 60, notes: 'Máximo 60cm por ser 1 hoja' },
-  { tool: 'place_base_2_doors', category: 'base', name: 'Base 2 Puertas', variant: '2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_1_door_1_drawer', category: 'base', name: 'Base 1 Puerta + 1 Cajón', variant: '1_door_1_drawer', defaultWidth: 60, minWidth: 35, maxWidth: 60, defaultHeight: 80, defaultDepth: 60, notes: 'Máximo 60cm' },
-  { tool: 'place_base_4_drawers', category: 'base', name: 'Base 4 Cajones', variant: '4_drawers', defaultWidth: 80, minWidth: 40, maxWidth: 100, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_3_drawers_veggie', category: 'base', name: 'Base Verdulero (3 Cajones)', variant: '3_drawers_veggie', defaultWidth: 60, minWidth: 45, maxWidth: 80, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_2_pot_drawers', category: 'base', name: 'Base 2 Olleros', variant: '2_pot_drawers', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_2_drawers_1_pot', category: 'base', name: 'Base 2 Cajones + 1 Ollero', variant: '2_drawers_1_pot', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_spice_rack', category: 'base', name: 'Base Especiero Extraíble', variant: 'spice_rack', defaultWidth: 20, minWidth: 15, maxWidth: 30, defaultHeight: 80, defaultDepth: 60, notes: 'Ancho estricto 15-30cm' },
-  { tool: 'place_base_wine_rack', category: 'base', name: 'Botellero Base', variant: 'wine_rack', defaultWidth: 20, minWidth: 15, maxWidth: 40, defaultHeight: 80, defaultDepth: 60 },
-  { tool: 'place_base_sink_2_doors', category: 'base', name: 'Base Lavaplatos (2 Puertas)', variant: 'base_sink_2_doors', defaultWidth: 80, minWidth: 80, maxWidth: 120, defaultHeight: 80, defaultDepth: 60, notes: 'Obligatorio para lavaplatos: >=80cm (1 tina) o >=90cm (2 tinas)' },
-  { tool: 'place_base_sink_u_drawer', category: 'base', name: 'Fregadero Cajón en U', variant: 'sink_u_drawer', defaultWidth: 90, minWidth: 80, maxWidth: 120, defaultHeight: 80, defaultDepth: 60, notes: 'Compatible con lavaplatos y sifón' },
-  { tool: 'place_base_cooktop_3_drawers', category: 'base', name: 'Base Encimera (3 Cajones, 1° Fijo)', variant: 'base_cooktop_3_drawers', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 60, notes: 'Obligatorio para encimera: >=60cm (4 platos) o >=90cm (5 platos)' },
-  { tool: 'place_base_corner_blind', category: 'base', name: 'Base Esquinero Ciego', variant: 'corner_blind_right', defaultWidth: 110, minWidth: 95, maxWidth: 120, defaultHeight: 80, defaultDepth: 60, notes: 'Usar en esquinas de cocinas en L o U' },
-  { tool: 'place_base_corner_l', category: 'base', name: 'Base Esquinero en L (90x90)', variant: 'corner_l', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 80, defaultDepth: 90, notes: 'Fijo 90x90cm en esquinas de cocinas en L o U' },
+  { tool: 'place_base_1_door', category: 'base', name: 'Base 1 Puerta', variant: '1_door', defaultWidth: 60, minWidth: 30, maxWidth: 60, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 35, maxDepth: 80, notes: 'Máximo 60cm por ser 1 hoja' },
+  { tool: 'place_base_2_doors', category: 'base', name: 'Base 2 Puertas', variant: '2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 35, maxDepth: 80 },
+  { tool: 'place_base_1_door_1_drawer', category: 'base', name: 'Base 1 Puerta + 1 Cajón', variant: '1_door_1_drawer', defaultWidth: 60, minWidth: 35, maxWidth: 60, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 40, maxDepth: 80, notes: 'Máximo 60cm' },
+  { tool: 'place_base_4_drawers', category: 'base', name: 'Base 4 Cajones', variant: '4_drawers', defaultWidth: 80, minWidth: 40, maxWidth: 100, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80 },
+  { tool: 'place_base_3_drawers_veggie', category: 'base', name: 'Base Verdulero (3 Cajones)', variant: '3_drawers_veggie', defaultWidth: 60, minWidth: 45, maxWidth: 80, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80 },
+  { tool: 'place_base_2_pot_drawers', category: 'base', name: 'Base 2 Olleros', variant: '2_pot_drawers', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80 },
+  { tool: 'place_base_2_drawers_1_pot', category: 'base', name: 'Base 2 Cajones + 1 Ollero', variant: '2_drawers_1_pot', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80 },
+  { tool: 'place_base_spice_rack', category: 'base', name: 'Base Especiero Extraíble', variant: 'spice_rack', defaultWidth: 20, minWidth: 15, maxWidth: 30, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80, notes: 'Ancho estricto 15-30cm' },
+  { tool: 'place_base_wine_rack', category: 'base', name: 'Botellero Base', variant: 'wine_rack', defaultWidth: 20, minWidth: 15, maxWidth: 40, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 35, maxDepth: 80 },
+  { tool: 'place_base_sink_2_doors', category: 'base', name: 'Base Lavaplatos (2 Puertas)', variant: 'base_sink_2_doors', defaultWidth: 80, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Obligatorio para lavaplatos: >=80cm (1 tina) o >=90cm (2 tinas)' },
+  { tool: 'place_base_sink_u_drawer', category: 'base', name: 'Fregadero Cajón en U', variant: 'sink_u_drawer', defaultWidth: 90, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Compatible con lavaplatos y sifón' },
+  { tool: 'place_base_cooktop_3_drawers', category: 'base', name: 'Base Encimera (3 Cajones, 1° Fijo)', variant: 'base_cooktop_3_drawers', defaultWidth: 80, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Mínimo normativo 80cm (90cm para encimera FDV 90 de 5 platos)' },
+  { tool: 'place_base_corner_blind', category: 'base', name: 'Base Esquinero Ciego', variant: 'corner_blind_right', defaultWidth: 110, minWidth: 95, maxWidth: 140, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Usar en esquinas de cocinas en L o U' },
+  { tool: 'place_base_corner_l', category: 'base', name: 'Base Esquinero en L (90x90)', variant: 'corner_l', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 90, minDepth: 90, maxDepth: 90, fixedWidth: true, notes: 'MEDIDA FIJA 90x90cm en esquinas de cocinas en L o U' },
 
   // Aéreos / Murales
-  { tool: 'place_wall_1_door', category: 'wall', name: 'Aéreo 1 Puerta', variant: 'wall_1_door', defaultWidth: 60, minWidth: 30, maxWidth: 60, defaultHeight: 70, defaultDepth: 35, notes: 'Máximo 60cm' },
-  { tool: 'place_wall_2_doors', category: 'wall', name: 'Aéreo 2 Puertas', variant: 'wall_2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 70, defaultDepth: 35 },
-  { tool: 'place_wall_lift_up', category: 'wall', name: 'Aéreo Puerta Elevable Aventos', variant: 'wall_lift_up', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 40, defaultDepth: 35 },
-  { tool: 'place_wall_lift_up_double', category: 'wall', name: 'Aéreo Doble Elevable', variant: 'wall_lift_up_double', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 70, defaultDepth: 35 },
-  { tool: 'place_wall_microwave_niche', category: 'wall', name: 'Aéreo Nicho Microondas', variant: 'wall_microwave_niche', defaultWidth: 60, minWidth: 55, maxWidth: 70, defaultHeight: 80, defaultDepth: 38 },
-  { tool: 'place_wall_open', category: 'wall', name: 'Aéreo Abierto Repisas', variant: 'wall_open', defaultWidth: 60, minWidth: 30, maxWidth: 100, defaultHeight: 70, defaultDepth: 35 },
-  { tool: 'place_wall_corner_blind', category: 'wall', name: 'Aéreo Esquinero Ciego', variant: 'wall_corner_blind_right', defaultWidth: 70, minWidth: 65, maxWidth: 90, defaultHeight: 70, defaultDepth: 35 },
-  { tool: 'place_wall_wine_rack', category: 'wall', name: 'Aéreo Botellero', variant: 'wall_wine_rack', defaultWidth: 20, minWidth: 15, maxWidth: 40, defaultHeight: 70, defaultDepth: 35 },
-  { tool: 'place_wall_hood_new_flow', category: 'wall', name: 'Aéreo Campana New Flow 60', variant: 'wall_hood_new_flow', defaultWidth: 60, minWidth: 60, maxWidth: 90, defaultHeight: 70, defaultDepth: 35, notes: 'Colocar centrado sobre base encimera' },
-  { tool: 'place_wall_door_shelf', category: 'wall', name: 'Aéreo Puerta + Repisa Inferior', variant: 'wall_door_shelf', defaultWidth: 60, minWidth: 40, maxWidth: 80, defaultHeight: 80, defaultDepth: 35 },
+  { tool: 'place_wall_1_door', category: 'wall', name: 'Aéreo 1 Puerta', variant: 'wall_1_door', defaultWidth: 60, minWidth: 30, maxWidth: 60, defaultHeight: 70, minHeight: 30, maxHeight: 120, defaultDepth: 35, minDepth: 25, maxDepth: 45, notes: 'Máximo 60cm' },
+  { tool: 'place_wall_2_doors', category: 'wall', name: 'Aéreo 2 Puertas', variant: 'wall_2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 70, minHeight: 30, maxHeight: 120, defaultDepth: 35, minDepth: 25, maxDepth: 45 },
+  { tool: 'place_wall_lift_up', category: 'wall', name: 'Aéreo Puerta Elevable Aventos', variant: 'wall_lift_up', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 40, minHeight: 30, maxHeight: 60, defaultDepth: 35, minDepth: 25, maxDepth: 45 },
+  { tool: 'place_wall_lift_up_double', category: 'wall', name: 'Aéreo Doble Elevable', variant: 'wall_lift_up_double', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 70, minHeight: 55, maxHeight: 100, defaultDepth: 35, minDepth: 25, maxDepth: 45 },
+  { tool: 'place_wall_microwave_niche', category: 'wall', name: 'Aéreo Nicho Microondas', variant: 'wall_microwave_niche', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 38, minDepth: 35, maxDepth: 45, fixedWidth: true, notes: 'ANCHO FIJO 60cm por nicho microondas' },
+  { tool: 'place_wall_open', category: 'wall', name: 'Aéreo Abierto Repisas', variant: 'wall_open', defaultWidth: 60, minWidth: 30, maxWidth: 100, defaultHeight: 70, minHeight: 30, maxHeight: 120, defaultDepth: 35, minDepth: 25, maxDepth: 45 },
+  { tool: 'place_wall_corner_blind', category: 'wall', name: 'Aéreo Esquinero Ciego', variant: 'wall_corner_blind_right', defaultWidth: 70, minWidth: 65, maxWidth: 100, defaultHeight: 70, minHeight: 40, maxHeight: 110, defaultDepth: 35, minDepth: 30, maxDepth: 45 },
+  { tool: 'place_wall_wine_rack', category: 'wall', name: 'Aéreo Botellero', variant: 'wall_wine_rack', defaultWidth: 20, minWidth: 15, maxWidth: 40, defaultHeight: 70, minHeight: 40, maxHeight: 100, defaultDepth: 35, minDepth: 25, maxDepth: 40 },
+  { tool: 'place_wall_hood_new_flow', category: 'wall', name: 'Aéreo Campana New Flow 60', variant: 'wall_hood_new_flow', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 70, minHeight: 55, maxHeight: 95, defaultDepth: 35, minDepth: 32, maxDepth: 40, fixedWidth: true, notes: 'ANCHO ESTRICTAMENTE FIJO 60cm (NO modificable, aloja campana Kubli Neu Flow 60). Fondo 32-40cm. Centrar sobre encimera.' },
+  { tool: 'place_wall_door_shelf', category: 'wall', name: 'Aéreo Puerta + Repisa Inferior', variant: 'wall_door_shelf', defaultWidth: 60, minWidth: 40, maxWidth: 80, defaultHeight: 80, minHeight: 60, maxHeight: 110, defaultDepth: 35, minDepth: 25, maxDepth: 45 },
 
   // Torres / Despensas
-  { tool: 'place_tall_1_door', category: 'tall', name: 'Torre Despensa 1 Puerta', variant: 'tall_1_door', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 215, defaultDepth: 60, notes: 'Máximo 60cm' },
-  { tool: 'place_tall_split_2_doors', category: 'tall', name: 'Torre 2 Puertas (Línea Base)', variant: 'tall_split_2_doors', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 215, defaultDepth: 60, notes: 'Máximo 60cm' },
-  { tool: 'place_tall_2_doors', category: 'tall', name: 'Torre Despensa 2 Puertas', variant: 'tall_2_doors', defaultWidth: 80, minWidth: 70, maxWidth: 100, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_oven_micro', category: 'tall', name: 'Torre Horno + Microondas', variant: 'tall_oven_micro', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_oven_vent', category: 'tall', name: 'Torre Hornos Vent. Técnica', variant: 'tall_oven_vent', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_microwave_niche', category: 'tall', name: 'Torre Nicho Microondas', variant: 'tall_microwave_niche', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_inner_drawers', category: 'tall', name: 'Torre Cajones Interiores', variant: 'tall_inner_drawers', defaultWidth: 60, minWidth: 45, maxWidth: 60, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_open', category: 'tall', name: 'Torre Repisas a la Vista', variant: 'tall_open', defaultWidth: 60, minWidth: 40, maxWidth: 80, defaultHeight: 215, defaultDepth: 60 },
-  { tool: 'place_tall_wine_rack', category: 'tall', name: 'Torre Botellero', variant: 'tall_wine_rack', defaultWidth: 30, minWidth: 20, maxWidth: 40, defaultHeight: 215, defaultDepth: 60 },
+  { tool: 'place_tall_1_door', category: 'tall', name: 'Torre Despensa 1 Puerta', variant: 'tall_1_door', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 45, maxDepth: 80, notes: 'Máximo 60cm' },
+  { tool: 'place_tall_split_2_doors', category: 'tall', name: 'Torre 2 Puertas (Línea Base)', variant: 'tall_split_2_doors', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 45, maxDepth: 80, notes: 'Máximo 60cm' },
+  { tool: 'place_tall_2_doors', category: 'tall', name: 'Torre Despensa 2 Puertas', variant: 'tall_2_doors', defaultWidth: 80, minWidth: 70, maxWidth: 100, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 45, maxDepth: 80 },
+  { tool: 'place_tall_oven_micro', category: 'tall', name: 'Torre Horno + Microondas', variant: 'tall_oven_micro', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, minHeight: 200, maxHeight: 240, defaultDepth: 60, minDepth: 58, maxDepth: 70, fixedWidth: true, notes: 'ANCHO FIJO 60cm para horno empotrado estándar' },
+  { tool: 'place_tall_oven_vent', category: 'tall', name: 'Torre Hornos Vent. Técnica', variant: 'tall_oven_vent', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, minHeight: 200, maxHeight: 240, defaultDepth: 60, minDepth: 58, maxDepth: 70, fixedWidth: true, notes: 'ANCHO FIJO 60cm para hornos empotrados' },
+  { tool: 'place_tall_microwave_niche', category: 'tall', name: 'Torre Nicho Microondas', variant: 'tall_microwave_niche', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 215, minHeight: 190, maxHeight: 240, defaultDepth: 60, minDepth: 55, maxDepth: 70, fixedWidth: true, notes: 'ANCHO FIJO 60cm' },
+  { tool: 'place_tall_inner_drawers', category: 'tall', name: 'Torre Cajones Interiores', variant: 'tall_inner_drawers', defaultWidth: 60, minWidth: 45, maxWidth: 60, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 50, maxDepth: 80, notes: 'Máximo 60cm' },
+  { tool: 'place_tall_open', category: 'tall', name: 'Torre Repisas a la Vista', variant: 'tall_open', defaultWidth: 60, minWidth: 40, maxWidth: 80, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 35, maxDepth: 70 },
+  { tool: 'place_tall_wine_rack', category: 'tall', name: 'Torre Botellero', variant: 'tall_wine_rack', defaultWidth: 30, minWidth: 20, maxWidth: 40, defaultHeight: 215, minHeight: 180, maxHeight: 240, defaultDepth: 60, minDepth: 40, maxDepth: 70 },
 
   // Islas
-  { tool: 'place_island', category: 'island', name: 'Isla 2 Olleros', variant: '2_pot_drawers', defaultWidth: 90, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 80 },
-  { tool: 'place_island_4_drawers', category: 'island', name: 'Isla 4 Cajones', variant: '4_drawers', defaultWidth: 80, minWidth: 50, maxWidth: 100, defaultHeight: 80, defaultDepth: 80 },
-  { tool: 'place_island_2_drawers_1_pot', category: 'island', name: 'Isla 2 Cajones + 1 Ollero', variant: '2_drawers_1_pot', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 80 },
-  { tool: 'place_island_1_door', category: 'island', name: 'Isla 1 Puerta', variant: '1_door', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 80, defaultDepth: 80 },
-  { tool: 'place_island_2_doors', category: 'island', name: 'Isla 2 Puertas', variant: '2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, defaultDepth: 80 },
-  { tool: 'place_island_wine_rack', category: 'island', name: 'Botellero Isla', variant: 'wine_rack', defaultWidth: 25, minWidth: 20, maxWidth: 40, defaultHeight: 80, defaultDepth: 80 },
+  { tool: 'place_island', category: 'island', name: 'Isla 2 Olleros', variant: '2_pot_drawers', defaultWidth: 90, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110 },
+  { tool: 'place_island_4_drawers', category: 'island', name: 'Isla 4 Cajones', variant: '4_drawers', defaultWidth: 80, minWidth: 50, maxWidth: 100, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110 },
+  { tool: 'place_island_2_drawers_1_pot', category: 'island', name: 'Isla 2 Cajones + 1 Ollero', variant: '2_drawers_1_pot', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110 },
+  { tool: 'place_island_1_door', category: 'island', name: 'Isla 1 Puerta', variant: '1_door', defaultWidth: 60, minWidth: 40, maxWidth: 60, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110, notes: 'Máximo 60cm' },
+  { tool: 'place_island_2_doors', category: 'island', name: 'Isla 2 Puertas', variant: '2_doors', defaultWidth: 80, minWidth: 60, maxWidth: 120, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110 },
+  { tool: 'place_island_wine_rack', category: 'island', name: 'Botellero Isla', variant: 'wine_rack', defaultWidth: 25, minWidth: 20, maxWidth: 40, defaultHeight: 80, minHeight: 75, maxHeight: 95, defaultDepth: 80, minDepth: 60, maxDepth: 110 },
 
-  // Equipamiento y Decoración
-  { tool: 'place_deco_fridge', category: 'decoration', name: 'Refrigerador SBS 513L', variant: 'deco_fridge', defaultWidth: 91, minWidth: 91, maxWidth: 91, defaultHeight: 177, defaultDepth: 67 },
-  { tool: 'place_deco_dishwasher', category: 'decoration', name: 'Lavavajillas FDV Active 12C', variant: 'deco_dishwasher', defaultWidth: 60, minWidth: 60, maxWidth: 60, defaultHeight: 84.5, defaultDepth: 60 },
-  { tool: 'place_deco_stove', category: 'decoration', name: 'Cocina Libre FDV 90', variant: 'deco_stove', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 90, defaultDepth: 60 },
-  { tool: 'place_deco_hood', category: 'decoration', name: 'Campana Mural FDV Conic 90', variant: 'deco_hood', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 70, defaultDepth: 50, notes: 'Colocar centrada sobre cocina/encimera a 145cm' },
-  { tool: 'place_deco_plant', category: 'decoration', name: 'Planta Interior Decorativa', variant: 'deco_plant', defaultWidth: 40, minWidth: 40, maxWidth: 40, defaultHeight: 95, defaultDepth: 40 },
+  // Equipamiento y Decoración (MEDIDAS 100% FIJAS DEL MODELO/ELECTRODOMÉSTICO)
+  { tool: 'place_deco_fridge', category: 'decoration', name: 'Refrigerador SBS 513L', variant: 'deco_fridge', defaultWidth: 91, minWidth: 91, maxWidth: 91, defaultHeight: 177, minHeight: 177, maxHeight: 177, defaultDepth: 67, minDepth: 67, maxDepth: 67, fixedWidth: true, fixedDimensions: true, notes: 'MEDIDAS FIJAS 91x177x67cm (requiere despeje frontal >=80cm)' },
+  { tool: 'place_deco_dishwasher', category: 'decoration', name: 'Lavavajillas FDV Active 12C', variant: 'deco_dishwasher', defaultWidth: 59.8, minWidth: 59.8, maxWidth: 59.8, defaultHeight: 84.5, minHeight: 84.5, maxHeight: 84.5, defaultDepth: 60, minDepth: 60, maxDepth: 60, fixedWidth: true, fixedDimensions: true, notes: 'MEDIDAS FIJAS 60x84.5x60cm (ubicar junto al lavaplatos)' },
+  { tool: 'place_deco_stove', category: 'decoration', name: 'Cocina Libre FDV 90', variant: 'deco_stove', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 90, minHeight: 90, maxHeight: 90, defaultDepth: 60, minDepth: 60, maxDepth: 60, fixedWidth: true, fixedDimensions: true, notes: 'MEDIDAS FIJAS 90x90x60cm' },
+  { tool: 'place_deco_hood', category: 'decoration', name: 'Campana Mural FDV Conic 90', variant: 'deco_hood', defaultWidth: 89.8, minWidth: 89.8, maxWidth: 89.8, defaultHeight: 70, minHeight: 70, maxHeight: 70, defaultDepth: 50, minDepth: 50, maxDepth: 50, fixedWidth: true, fixedDimensions: true, notes: 'MEDIDAS FIJAS 90x70x50cm (centrar sobre cocina/encimera)' },
+  { tool: 'place_deco_plant', category: 'decoration', name: 'Planta Interior Decorativa', variant: 'deco_plant', defaultWidth: 40, minWidth: 40, maxWidth: 40, defaultHeight: 95, minHeight: 95, maxHeight: 95, defaultDepth: 40, minDepth: 40, maxDepth: 40, fixedWidth: true, fixedDimensions: true },
 ];
 
 const DEFAULT_FALLBACK_TEXTURES: AiBoardTextureEntry[] = [
   { id: 'def_mas_blanco_18', name: 'Masisa Blanco', brand: 'Masisa', category: 'solidos', finish: 'Mate', thicknessMm: 18, material: 'melamina', url: '#FFFFFF', stock: 50 },
   { id: 'def_mas_negro_18', name: 'Masisa Negro', brand: 'Masisa', category: 'solidos', finish: 'Mate', thicknessMm: 18, material: 'melamina', url: '#171717', stock: 50 },
 ];
+
+export function findCatalogEntryForCabinet(cab: Pick<CabinetType, 'type' | 'variant'>): AiModuleCatalogEntry | undefined {
+  const v = (cab.variant || '').toLowerCase();
+  const byTypeAndVariant = AI_ALLOWED_MODULES.find(
+    (m) =>
+      m.category === cab.type &&
+      (m.variant.toLowerCase() === v ||
+        (v.startsWith('corner_blind') && m.variant.startsWith('corner_blind')) ||
+        (v.startsWith('wall_corner_blind') && m.variant.startsWith('wall_corner_blind')))
+  );
+  if (byTypeAndVariant) return byTypeAndVariant;
+  return AI_ALLOWED_MODULES.find((m) => m.variant.toLowerCase() === v);
+}
 
 export function getApprovedBoardTextures(): AiBoardTextureEntry[] {
   const adminTextures = useAdminStore.getState().textures || [];
@@ -362,7 +382,6 @@ export function resolveApprovedTexture(
   );
   if (partial) return { texture: partial, wasFallback: false };
 
-  // Token overlap matching
   const tokens = q.split(/[\s_-]+/).filter((w) => w.length >= 3);
   let best: AiBoardTextureEntry | null = null;
   let bestScore = 0;
@@ -402,7 +421,6 @@ export function resolveApprovedModuleTool(toolOrVariant?: string): {
     return { entry: byVariant, specs: getCabinetSpecsFromTool(byVariant.tool), wasFallback: false };
   }
 
-  // Fallback safe module by category hint
   if (normalized.includes('wall') || normalized.includes('aereo')) {
     const fb = AI_ALLOWED_MODULES.find((m) => m.tool === 'place_wall_2_doors')!;
     return { entry: fb, specs: getCabinetSpecsFromTool(fb.tool), wasFallback: true };
