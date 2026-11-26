@@ -1,7 +1,13 @@
 import { useAdminStore } from '../store/adminStore';
-import { useKitchenStore, CabinetType, GolaSystem } from '../store/kitchenStore';
+import { useKitchenStore, CabinetType, GolaSystem, getCabinetLabel } from '../store/kitchenStore';
 import { getCabinetSpecsFromTool } from './kitchenCollision';
 import { WALL_COLOR_OPTIONS, FLOOR_TYPE_OPTIONS } from './kitchenMaterials';
+import {
+  isCabinetWithDoors,
+  isCabinetWithSplitDoors,
+  getDefaultShelvesCount,
+  getSplitCabinetShelvesCounts,
+} from './kitchenManufacturing';
 import {
   DEFAULT_QSTONE_CATALOG,
   QSTONE_SINKS,
@@ -263,6 +269,166 @@ export function buildAiCatalogSnapshot(): AiCatalogSnapshot {
   };
 }
 
+export interface AiInteractiveElementInfo {
+  key: string;
+  label: string;
+  type: 'door' | 'drawer';
+}
+
+export function cabinetSupportsShelves(cab: CabinetType): boolean {
+  if (cab.type === 'decoration' || cab.variant?.startsWith('deco_')) return false;
+  if (
+    cab.variant === 'base_sink_2_doors' ||
+    cab.variant === 'sink_2_doors' ||
+    cab.variant === 'base_cooktop_3_drawers' ||
+    cab.variant === 'cooktop_3_drawers'
+  ) {
+    return false;
+  }
+  return (
+    isCabinetWithDoors(cab) ||
+    cab.variant === 'wall_open' ||
+    cab.variant === 'tall_open' ||
+    cab.variant === 'tall_terminal_shelves' ||
+    cab.variant === 'open'
+  );
+}
+
+export function getCabinetInteractiveElements(cab: CabinetType): AiInteractiveElementInfo[] {
+  if (cab.type === 'decoration' || cab.variant?.startsWith('deco_')) return [];
+  const variant = cab.variant;
+  if (
+    variant === 'wall_open' ||
+    variant === 'tall_open' ||
+    variant === 'tall_terminal_shelves' ||
+    variant === 'open' ||
+    variant?.includes('wine_rack')
+  ) {
+    return [];
+  }
+
+  const elements: AiInteractiveElementInfo[] = [];
+  const is2Doors =
+    variant === '2_doors' ||
+    variant === 'wall_2_doors' ||
+    variant === 'tall_2_doors' ||
+    variant === 'base_sink_2_doors' ||
+    variant === 'sink_2_doors' ||
+    (!variant && cab.width > 60);
+  const is1Door =
+    variant === '1_door' ||
+    variant === 'wall_1_door' ||
+    variant === 'tall_1_door' ||
+    (!variant && cab.width <= 60);
+  const isCornerBlind =
+    variant === 'corner_blind' ||
+    variant?.startsWith('corner_blind') ||
+    variant?.startsWith('wall_corner_blind');
+
+  if (variant === 'wall_hood_new_flow') {
+    elements.push({ key: 'door-0', label: 'Puerta Superior Izq.', type: 'door' });
+    elements.push({ key: 'door-1', label: 'Puerta Superior Der.', type: 'door' });
+    elements.push({ key: 'hood-visor', label: 'Visera Telescópica Campana', type: 'drawer' });
+  } else if (is2Doors) {
+    elements.push({ key: 'door-0', label: 'Puerta Izquierda', type: 'door' });
+    elements.push({ key: 'door-1', label: 'Puerta Derecha', type: 'door' });
+  } else if (is1Door || isCornerBlind) {
+    const doorLabel = variant?.startsWith('wall_corner_blind')
+      ? 'Puerta Esquinero Aéreo'
+      : isCornerBlind
+      ? 'Puerta Esquinero'
+      : 'Puerta Frontal';
+    elements.push({ key: 'door-0', label: doorLabel, type: 'door' });
+  } else if (variant === 'tall_split_2_doors') {
+    elements.push({ key: 'door-upper', label: 'Puerta Superior', type: 'door' });
+    elements.push({ key: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+  } else if (variant === 'wall_lift_up_double') {
+    elements.push({ key: 'door-upper', label: 'Pta. Elevable Sup.', type: 'door' });
+    elements.push({ key: 'door-lower', label: 'Pta. Elevable Inf.', type: 'door' });
+  } else if (variant === 'wall_microwave_niche') {
+    elements.push({ key: 'door-top', label: 'Pta. Superior Elevable', type: 'door' });
+  } else if (variant === 'wall_door_shelf') {
+    elements.push({ key: 'door-top', label: 'Puerta Superior', type: 'door' });
+  } else if (variant === 'wall_lift_up') {
+    elements.push({ key: 'door-lift', label: 'Puerta Elevable', type: 'door' });
+  } else if (variant === 'corner_l' || variant === 'base_corner_l') {
+    elements.push({ key: 'door-0', label: 'Puerta Escuadra 1', type: 'door' });
+    elements.push({ key: 'door-1', label: 'Puerta Escuadra 2', type: 'door' });
+  } else if (variant === 'sink_u_drawer') {
+    elements.push({ key: 'drawer-0', label: 'Cajón en U (Sifón)', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cacerolero Inferior', type: 'drawer' });
+  } else if (variant === 'tall_inner_drawers') {
+    elements.push({ key: 'door-0', label: 'Puerta Despensa 155°', type: 'door' });
+    elements.push({ key: 'drawer-0', label: 'Cajón Interior 1 (Sup.)', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cajón Interior 2', type: 'drawer' });
+    elements.push({ key: 'drawer-2', label: 'Cajón Interior 3', type: 'drawer' });
+    elements.push({ key: 'drawer-3', label: 'Cajón Interior 4 (Inf.)', type: 'drawer' });
+  } else if (
+    variant === 'tall_oven_micro' ||
+    variant === 'tall_oven_vent' ||
+    variant === 'tall_microwave_niche'
+  ) {
+    if (variant === 'tall_oven_micro' && cab.towerLowerType === 'drawers') {
+      elements.push({ key: 'drawer-0', label: 'Cacerolero Inferior 1', type: 'drawer' });
+      elements.push({ key: 'drawer-1', label: 'Cacerolero Inferior 2', type: 'drawer' });
+    } else {
+      elements.push({ key: 'door-lower', label: 'Puerta Inferior', type: 'door' });
+    }
+    elements.push({ key: 'door-top', label: 'Puerta Superior', type: 'door' });
+  } else if (variant === '1_door_1_drawer') {
+    elements.push({ key: 'drawer-0', label: 'Cajón Superior', type: 'drawer' });
+    elements.push({ key: 'door-0', label: 'Puerta Inferior', type: 'door' });
+  } else if (variant === '4_drawers') {
+    elements.push({ key: 'drawer-0', label: 'Cajón 1 (Superior)', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cajón 2', type: 'drawer' });
+    elements.push({ key: 'drawer-2', label: 'Cajón 3', type: 'drawer' });
+    elements.push({ key: 'drawer-3', label: 'Cajón 4 (Inferior)', type: 'drawer' });
+  } else if (variant === '2_pot_drawers') {
+    elements.push({ key: 'drawer-0', label: 'Cacerolero Superior', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cacerolero Inferior', type: 'drawer' });
+  } else if (variant === '3_drawers_veggie' || variant === 'base_3_drawers_veggie') {
+    elements.push({ key: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+    elements.push({ key: 'drawer-0', label: 'Cajón 3 (Inferior)', type: 'drawer' });
+  } else if (variant === '2_drawers_1_pot') {
+    elements.push({ key: 'drawer-2', label: 'Cajón 1 (Superior)', type: 'drawer' });
+    elements.push({ key: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+    elements.push({ key: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
+  } else if (variant === 'base_cooktop_3_drawers' || variant === 'cooktop_3_drawers') {
+    elements.push({ key: 'drawer-1', label: 'Cajón 2 (Medio)', type: 'drawer' });
+    elements.push({ key: 'drawer-0', label: 'Cacerolero Inferior', type: 'drawer' });
+  } else if (variant === 'spice_rack') {
+    elements.push({ key: 'drawer-0', label: 'Especiero Extraíble', type: 'drawer' });
+  } else if (cab.type === 'closet' || variant?.startsWith('closet_')) {
+    const isClosetDoors = Boolean(
+      cab.hasDoors || variant === 'closet_2_doors' || variant === 'closet_inner_drawers'
+    );
+    if (isClosetDoors) {
+      if (cab.width > 50) {
+        elements.push({ key: 'door-0', label: 'Puerta Izquierda', type: 'door' });
+        elements.push({ key: 'door-1', label: 'Puerta Derecha', type: 'door' });
+      } else {
+        elements.push({ key: 'door-0', label: 'Puerta Clóset', type: 'door' });
+      }
+    }
+    const effDrawersCount =
+      cab.drawersCount !== undefined
+        ? cab.drawersCount
+        : variant === 'closet_drawers'
+        ? 4
+        : variant === 'closet_mixed' || variant === 'closet_inner_drawers'
+        ? 3
+        : variant === 'closet_2_doors'
+        ? 2
+        : 0;
+    for (let i = 0; i < effDrawersCount; i++) {
+      elements.push({ key: `drawer-${i}`, label: `Cajón ${i + 1}`, type: 'drawer' });
+    }
+  }
+
+  return elements;
+}
+
 export function buildCurrentKitchenStateSummary() {
   const s = useKitchenStore.getState();
   const vertices = s.roomConfig?.vertices || [];
@@ -312,6 +478,7 @@ export function buildCurrentKitchenStateSummary() {
         depthCm: el.depth,
         elevationCm: el.elevation,
         hingeSide: el.hingeSide,
+        isOpen: Boolean(el.isOpen),
       };
     }),
     mepPoints: (s.mepPoints || []).map((p) => ({
@@ -323,19 +490,55 @@ export function buildCurrentKitchenStateSummary() {
       offsetFromStartCm: Math.round(p.wallOffset || 0),
       elevationCm: p.elevation,
     })),
-    cabinets: (s.cabinets || []).map((c: CabinetType, idx: number) => ({
-      id: c.id,
-      index: idx + 1,
-      type: c.type,
-      variant: c.variant,
-      widthCm: c.width,
-      heightCm: c.height,
-      depthCm: c.depth,
-      position: c.position.map((v) => Math.round(v)),
-      rotationDeg: Math.round(((c.rotation || 0) * 180) / Math.PI),
-      doorColor: c.doorColor || c.color,
-      structureColor: c.structureColor || c.color,
-    })),
+    cabinets: (s.cabinets || []).map((c: CabinetType, idx: number) => {
+      const bottomElevationCm = Math.round((c.position[1] - c.height / 2) * 10) / 10;
+      const topElevationCm = Math.round((c.position[1] + c.height / 2) * 10) / 10;
+      const supportsShelves = cabinetSupportsShelves(c);
+      const isSplit = isCabinetWithSplitDoors(c);
+      const splitCounts = isSplit ? getSplitCabinetShelvesCounts(c) : null;
+      const interactiveElements = getCabinetInteractiveElements(c);
+
+      return {
+        id: c.id,
+        index: idx + 1,
+        label: getCabinetLabel(c, idx),
+        type: c.type,
+        variant: c.variant,
+        widthCm: c.width,
+        heightCm: c.height,
+        depthCm: c.depth,
+        position: c.position.map((v) => Math.round(v)),
+        bottomElevationCm,
+        topElevationCm,
+        rotationDeg: Math.round(((c.rotation || 0) * 180) / Math.PI),
+        doorColor: c.doorColor || c.color,
+        structureColor: c.structureColor || c.color,
+        leftCoverPanel: c.leftCoverPanel?.enabled
+          ? {
+              enabled: true,
+              extendToFloor: Boolean(c.leftCoverPanel.extendToFloor),
+              hasCustomColor: Boolean(c.leftCoverPanel.color),
+              ...(c.leftCoverPanel.depth ? { depthCm: c.leftCoverPanel.depth } : {}),
+            }
+          : { enabled: false },
+        rightCoverPanel: c.rightCoverPanel?.enabled
+          ? {
+              enabled: true,
+              extendToFloor: Boolean(c.rightCoverPanel.extendToFloor),
+              hasCustomColor: Boolean(c.rightCoverPanel.color),
+              ...(c.rightCoverPanel.depth ? { depthCm: c.rightCoverPanel.depth } : {}),
+            }
+          : { enabled: false },
+        shelves: !supportsShelves
+          ? null
+          : isSplit && splitCounts
+          ? { split: true, lower: splitCounts.lower, upper: splitCounts.upper }
+          : { count: c.shelvesCount !== undefined ? c.shelvesCount : getDefaultShelvesCount(c) },
+        isOpen: Boolean(c.isOpen),
+        openElements: c.openElements || {},
+        interactiveElements,
+      };
+    }),
     finishes: {
       wallColorHex: s.wallColor,
       floorTypeId: s.floorType,

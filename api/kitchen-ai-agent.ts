@@ -127,8 +127,12 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
      * Cuando el plano ya está validado (planConfirmed = true, o el usuario da su OK y describe el estilo o sube fotos de inspiración), diseña la cocina completa usando actionType = "apply_full_design" y stage = "iterating".
      * Lee SIEMPRE las paredes, largos reales, puertas, ventanas, pilares y puntos MEP del ESTADO ACTUAL DEL PROYECTO (respetando cualquier corrección manual hecha por el usuario).
    - **ETAPA 3 (Iteración sobre diseño existente):**
-     * Si ya existen muebles en currentState.cabinets y el usuario pide cambios puntuales (cambiar colores, cambiar cubierta, cambiar tiradores/gola, agregar/quitar/mover isla, agregar/quitar/redimensionar/mover módulos, agregar accesorios), usa actionType = "patch_design" y stage = "iterating" para conservar el resto del trabajo manual.
-     * Para mover la isla completa en cm, usa preferentemente patchDesign.moveIsland = { deltaXCm, deltaZCm } deduciendo el signo de X y Z desde currentState.room.walls y currentState.cabinets[].position (en planta: X es eje horizontal, Z es eje vertical; nunca cambies Y). Para mover módulos individuales usa deltaXCm/deltaZCm o xCm/zCm en patchDesign.updateCabinets.
+     * Si ya existen muebles en currentState.cabinets y el usuario pide cambios puntuales —cambiar colores, cubierta, tiradores/gola, agregar/quitar/mover isla, agregar/quitar/redimensionar/mover módulos, **modificar altura/elevación o alinear muebles aéreos**, **agregar/quitar tapas laterales (leftCoverPanel / rightCoverPanel)**, **cambiar cantidad de repisas interiores (shelvesCount, shelvesCountLower, shelvesCountUpper)**, o **abrir/cerrar puertas y cajones (isOpen, openElements, setAllOpenState)**— usa actionType = "patch_design" y stage = "iterating" para conservar el resto del trabajo manual.
+     * **Posicionamiento y alturas (Y):** En planta, X es eje horizontal y Z es eje vertical. En módulos de piso (base, tall, island) NUNCA cambies Y. En **muebles aéreos (wall) y campanas (deco_hood)**, SÍ puedes modificar su alto (heightCm), su elevación desde el piso (elevationCm = cota inferior, topElevationCm = cota superior, o deltaYCm = subir/bajar en cm) y alinearlos vertical u horizontalmente usando patchDesign.alignWallCabinets (por ejemplo: alinear por arriba con las torres verticalMode = "match_tall_top", igualar borde inferior verticalMode = "bottom", igualar alto y tope verticalMode = "match_height_and_top", juntarlos sin huecos horizontalMode = "pack_contiguous", o centrar campana/aéreo sobre un módulo base horizontalMode = "align_over_cabinet"). Lee siempre bottomElevationCm y topElevationCm de currentState.cabinets.
+     * **Tapas laterales (leftCoverPanel / rightCoverPanel):** SÍ puedes agregar o quitar tapas laterales de terminación en muebles base, wall, tall e island usando leftCoverPanel y/o rightCoverPanel en patchDesign.updateCabinets (visto de frente al mueble: izquierda = costado izquierdo, derecha = costado derecho). Si el usuario pide que la tapa baje hasta el piso / cubra el zócalo, marca extendToFloor: true. Si pide un color/textura específico de catálogo, indícalo en texture; si no especifica, omite texture (quedará igual al color de puertas).
+     * **Repisas interiores (shelvesCount):** SÍ puedes modificar la cantidad de repisas en módulos con puertas o repisas abiertas usando shelvesCount (0 a 8) en patchDesign.updateCabinets, o shelvesCountLower (0 a 4) y shelvesCountUpper (0 a 6; máx. 3 en torre horno, máx. 5 en torre micro) en torres divididas (shelves.split === true en currentState.cabinets).
+     * **Abrir o cerrar puertas y cajones (isOpen / openElements / setAllOpenState):** SÍ puedes abrir o cerrar puertas y cajones en 3D. Para abrir/cerrar todo un módulo usa isOpen: true/false en updateCabinets; para abrir/cerrar una hoja o cajón puntual usa openElements con las claves exactas listadas en currentState.cabinets[].interactiveElements (ej. { "door-0": true }, { "drawer-0": true }, { "door-upper": true }, { "hood-visor": true }); para acciones masivas (ej. "abre todas las puertas", "abre todos los cajones", "cierra todo") usa patchDesign.setAllOpenState. Para abrir/cerrar puertas o ventanas del recinto usa patchDesign.updateArchitecturalElements.
+     * Para mover la isla completa en cm, usa preferentemente patchDesign.moveIsland = { deltaXCm, deltaZCm } deduciendo el signo de X y Z desde currentState.room.walls y currentState.cabinets[].position. Para mover módulos individuales en planta usa deltaXCm/deltaZCm o xCm/zCm en patchDesign.updateCabinets.
      * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
    - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
 
@@ -284,7 +288,44 @@ Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
     "removeCabinetIds": [],
     "removeByVariant": [],
     "updateCabinets": [
-      { "cabinetId": "<id>", "widthCm": 80, "deltaXCm": 0, "deltaZCm": 0 }
+      {
+        "cabinetId": "<id>",
+        "widthCm": 80,
+        "heightCm": 70,
+        "depthCm": 35,
+        "elevationCm": 140,
+        "topElevationCm": 215,
+        "deltaYCm": 0,
+        "leftCoverPanel": { "enabled": true, "extendToFloor": false, "texture": "<opcional ID catálogo>" },
+        "rightCoverPanel": { "enabled": true, "extendToFloor": false },
+        "shelvesCount": 2,
+        "shelvesCountLower": 1,
+        "shelvesCountUpper": 3,
+        "isOpen": true,
+        "openElements": { "door-0": true, "drawer-0": true },
+        "deltaXCm": 0,
+        "deltaZCm": 0
+      }
+    ],
+    "alignWallCabinets": {
+      "cabinetIds": ["<opcional: si se omite aplica a todos los aéreos>"],
+      "includeHood": true,
+      "wallLabel": "<opcional: A, B, C, D>",
+      "verticalMode": "bottom | top | match_tall_top | match_height_and_bottom | match_height_and_top",
+      "targetElevationCm": 145,
+      "targetTopCm": 215,
+      "targetHeightCm": 70,
+      "referenceCabinetId": "<opcional id mueble referencia>",
+      "horizontalMode": "pack_contiguous | align_over_cabinet",
+      "targetBaseCabinetId": "<opcional id base/encimera para centrar encima>"
+    },
+    "setAllOpenState": {
+      "target": "all | doors | drawers | base | wall | tall | island",
+      "cabinetIds": ["<opcional>"],
+      "isOpen": true
+    },
+    "updateArchitecturalElements": [
+      { "elementId": "<id>", "isOpen": true }
     ],
     "addOpenings": [],
     "addMepPoints": [],

@@ -1,11 +1,13 @@
 import {
   useKitchenStore,
   CabinetType,
+  CoverPanelConfig,
   ArchitecturalElement,
   WallType,
   GolaSystem,
   getCabinetLabel,
 } from '../store/kitchenStore';
+import { isCabinetWithSplitDoors } from './kitchenManufacturing';
 import { useStore } from '../store';
 import {
   RoomConfig,
@@ -33,7 +35,9 @@ import { calculateMepPositionOnWall } from './mepGeometry';
 import { detectMepClashes } from './mepClashDetection';
 import {
   AiModuleCatalogEntry,
+  cabinetSupportsShelves,
   findCatalogEntryForCabinet,
+  getCabinetInteractiveElements,
   resolveApprovedTexture,
   resolveApprovedModuleTool,
   resolveApprovedCountertop,
@@ -79,15 +83,42 @@ export interface AiFloorPlanAction {
   clearExistingCabinets?: boolean;
 }
 
+export interface AiCoverPanelInput {
+  enabled: boolean;
+  extendToFloor?: boolean;
+  texture?: string;
+  depthCm?: number;
+}
+
+export interface AiAlignWallCabinetsSpec {
+  cabinetIds?: string[];
+  includeHood?: boolean;
+  wallLabel?: string;
+  verticalMode?: 'bottom' | 'top' | 'match_tall_top' | 'match_height_and_bottom' | 'match_height_and_top';
+  targetElevationCm?: number;
+  targetTopCm?: number;
+  targetHeightCm?: number;
+  referenceCabinetId?: string;
+  horizontalMode?: 'pack_contiguous' | 'align_over_cabinet';
+  targetBaseCabinetId?: string;
+}
+
 export interface AiDesignModuleItem {
   tool: string;
   widthCm?: number;
   heightCm?: number;
   depthCm?: number;
+  elevationCm?: number;
+  topElevationCm?: number;
   offsetFromStartCm?: number;
   hingeSide?: 'left' | 'right';
   hasSink?: boolean;
   hasCooktop?: boolean;
+  shelvesCount?: number;
+  shelvesCountLower?: number;
+  shelvesCountUpper?: number;
+  leftCoverPanel?: AiCoverPanelInput;
+  rightCoverPanel?: AiCoverPanelInput;
 }
 
 export interface AiWallRunSpec {
@@ -152,13 +183,33 @@ export interface AiPatchDesignAction {
     widthCm?: number;
     heightCm?: number;
     depthCm?: number;
+    elevationCm?: number;
+    topElevationCm?: number;
+    deltaYCm?: number;
     hingeSide?: 'left' | 'right';
     doorTexture?: string;
+    leftCoverPanel?: AiCoverPanelInput;
+    rightCoverPanel?: AiCoverPanelInput;
+    shelvesCount?: number;
+    shelvesCountLower?: number;
+    shelvesCountUpper?: number;
+    isOpen?: boolean;
+    openElements?: Record<string, boolean>;
     deltaXCm?: number;
     deltaZCm?: number;
     xCm?: number;
     zCm?: number;
     position?: [number, number, number];
+  }>;
+  alignWallCabinets?: AiAlignWallCabinetsSpec | AiAlignWallCabinetsSpec[];
+  setAllOpenState?: {
+    target?: 'all' | 'doors' | 'drawers' | 'base' | 'wall' | 'tall' | 'island';
+    cabinetIds?: string[];
+    isOpen: boolean;
+  };
+  updateArchitecturalElements?: Array<{
+    elementId: string;
+    isOpen?: boolean;
   }>;
   addOpenings?: AiFloorPlanOpening[];
   addMepPoints?: AiFloorPlanMep[];
@@ -194,6 +245,376 @@ const VALID_SHAPES: RoomShapeType[] = [
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
+}
+
+function clampWallBottomElevation(bottomCm: number, heightCm: number, wallHeight: number): number {
+  const maxBottom = Math.max(95, wallHeight - heightCm);
+  const minBottom = Math.min(105, maxBottom);
+  return Math.round(clamp(bottomCm, minBottom, maxBottom) * 10) / 10;
+}
+
+function buildCoverPanelFromInput(
+  input: AiCoverPanelInput,
+  existing: CoverPanelConfig | undefined,
+  cab: Pick<CabinetType, 'type' | 'depth'>,
+  adaptations: string[]
+): CoverPanelConfig {
+  if (!input.enabled) {
+    return { enabled: false };
+  }
+
+  let color = existing?.color;
+  let material = existing?.material;
+  if (input.texture !== undefined) {
+    const t = input.texture.trim().toLowerCase();
+    if (!t || t === 'doors' || t === 'puertas' || t === 'same' || t === 'default') {
+      color = undefined;
+      material = undefined;
+    } else {
+      const resolved = resolveApprovedTexture(input.texture);
+      color = resolved.texture.url;
+      material = resolved.texture.material;
+      if (resolved.wasFallback) {
+        adaptations.push(`Acabado de tapa lateral "${input.texture}" adaptado a ${resolved.texture.name}`);
+      }
+    }
+  }
+
+  const nextPanel: CoverPanelConfig = {
+    enabled: true,
+    extendToFloor:
+      input.extendToFloor !== undefined
+        ? Boolean(input.extendToFloor)
+        : existing?.extendToFloor ?? false,
+    color,
+    material,
+    thickness: existing?.thickness,
+  };
+
+  if (cab.type === 'island' && input.depthCm !== undefined && Number.isFinite(Number(input.depthCm))) {
+    nextPanel.depth = Math.round(clamp(Number(input.depthCm), cab.depth, cab.depth + 45) * 10) / 10;
+  } else if (existing?.depth !== undefined) {
+    nextPanel.depth = existing.depth;
+  }
+
+  return nextPanel;
+}
+
+function findWallForCabinetByNormal(
+  cab: CabinetType,
+  walls: WallType[],
+  roomPoly: [number, number][]
+): { wall: WallType; index: number; uX: number; uZ: number; nX: number; nZ: number; wLen: number; s: number } | null {
+  if (!walls || walls.length === 0) return null;
+  const [fX, fZ] = getThreeFrontVector(cab.rotation || 0);
+  let best: {
+    wall: WallType;
+    index: number;
+    uX: number;
+    uZ: number;
+    nX: number;
+    nZ: number;
+    wLen: number;
+    s: number;
+    score: number;
+  } | null = null;
+
+  for (let i = 0; i < walls.length; i++) {
+    const w = walls[i];
+    const [x1, z1] = w.start;
+    const [x2, z2] = w.end;
+    const wLen = Math.hypot(x2 - x1, z2 - z1);
+    if (wLen < 1) continue;
+    const uX = (x2 - x1) / wLen;
+    const uZ = (z2 - z1) / wLen;
+    const [nX, nZ] = getWallInwardNormal(x1, z1, x2, z2, roomPoly);
+
+    const s = (cab.position[0] - x1) * uX + (cab.position[2] - z1) * uZ;
+    const sClamped = clamp(s, 0, wLen);
+    const projX = x1 + sClamped * uX;
+    const projZ = z1 + sClamped * uZ;
+    const dist = Math.hypot(cab.position[0] - projX, cab.position[2] - projZ);
+    const dot = nX * fX + nZ * fZ;
+    const score = dist + (dot > 0.5 ? 0 : 120);
+
+    if (!best || score < best.score) {
+      best = { wall: w, index: i, uX, uZ, nX, nZ, wLen, s, score };
+    }
+  }
+
+  return best && best.score < 140 ? best : null;
+}
+
+function executeAlignWallCabinets(
+  spec: AiAlignWallCabinetsSpec,
+  appliedSummary: string[],
+  warnings: string[]
+) {
+  const st = useKitchenStore.getState();
+  const walls = st.walls && st.walls.length > 0 ? st.walls : generateWallsFromRoom(st.roomConfig);
+  const roomPoly: [number, number][] = (st.roomConfig?.vertices || []).map((v) => [v.x, v.y]);
+  const wallHeight = st.roomConfig.wallHeight || 250;
+
+  const isWallCandidate = (c: CabinetType) =>
+    c.type === 'wall' || (spec.includeHood !== false && c.variant === 'deco_hood');
+
+  let targets = st.cabinets.filter(isWallCandidate);
+  if (Array.isArray(spec.cabinetIds) && spec.cabinetIds.length > 0) {
+    const idSet = new Set(spec.cabinetIds);
+    targets = targets.filter((c) => idSet.has(c.id));
+  }
+
+  if (spec.wallLabel && walls.length > 0) {
+    const foundWall = findWallByLabel(walls, spec.wallLabel);
+    if (foundWall) {
+      targets = targets.filter((c) => {
+        const wInfo = findWallForCabinetByNormal(c, walls, roomPoly);
+        return wInfo?.wall.id === foundWall.wall.id;
+      });
+    }
+  }
+
+  if (targets.length === 0) {
+    warnings.push('No se encontraron muebles aéreos para alinear con el criterio indicado.');
+    return;
+  }
+
+  // 1. Alineación vertical (cota inferior, cota superior, al ras de torres y/o alto uniforme)
+  if (spec.verticalMode) {
+    const refCab = spec.referenceCabinetId
+      ? st.cabinets.find((c) => c.id === spec.referenceCabinetId)
+      : undefined;
+
+    let uniformHeight: number | undefined =
+      spec.targetHeightCm !== undefined && Number.isFinite(Number(spec.targetHeightCm))
+        ? Number(spec.targetHeightCm)
+        : undefined;
+
+    let refBottom: number | undefined =
+      spec.targetElevationCm !== undefined && Number.isFinite(Number(spec.targetElevationCm))
+        ? Number(spec.targetElevationCm)
+        : undefined;
+
+    let refTop: number | undefined =
+      spec.targetTopCm !== undefined && Number.isFinite(Number(spec.targetTopCm))
+        ? Number(spec.targetTopCm)
+        : undefined;
+
+    if (spec.verticalMode === 'match_tall_top') {
+      if (refTop === undefined) {
+        if (refCab) {
+          refTop = refCab.position[1] + refCab.height / 2;
+        } else {
+          const tallCabs = st.cabinets.filter((c) => c.type === 'tall');
+          if (tallCabs.length > 0) {
+            refTop = Math.max(...tallCabs.map((c) => c.position[1] + c.height / 2));
+          } else {
+            const fridge = st.cabinets.find((c) => c.variant === 'deco_fridge');
+            refTop = fridge ? fridge.position[1] + fridge.height / 2 : 215;
+          }
+        }
+      }
+    } else if (spec.verticalMode === 'top' || spec.verticalMode === 'match_height_and_top') {
+      if (refTop === undefined) {
+        refTop = refCab
+          ? refCab.position[1] + refCab.height / 2
+          : Math.max(...targets.map((c) => c.position[1] + c.height / 2));
+      }
+    } else if (spec.verticalMode === 'bottom' || spec.verticalMode === 'match_height_and_bottom') {
+      if (refBottom === undefined) {
+        refBottom = refCab
+          ? refCab.position[1] - refCab.height / 2
+          : targets[0].position[1] - targets[0].height / 2;
+      }
+    }
+
+    if (
+      (spec.verticalMode === 'match_height_and_bottom' ||
+        spec.verticalMode === 'match_height_and_top') &&
+      uniformHeight === undefined
+    ) {
+      uniformHeight = refCab ? refCab.height : Math.max(...targets.map((c) => c.height));
+    }
+
+    let alignedCount = 0;
+    for (const target of targets) {
+      const fresh = useKitchenStore.getState().cabinets.find((c) => c.id === target.id);
+      if (!fresh) continue;
+      const catEntry = findCatalogEntryForCabinet(fresh);
+      const changes: Partial<CabinetType> = {};
+
+      let effHeight = fresh.height;
+      if (uniformHeight !== undefined && !catEntry?.fixedDimensions) {
+        effHeight = clamp(
+          uniformHeight,
+          catEntry?.minHeight ?? 30,
+          Math.min(catEntry?.maxHeight ?? 120, Math.max(30, wallHeight - 105))
+        );
+        changes.height = effHeight;
+      }
+
+      let nextBottom = fresh.position[1] - fresh.height / 2;
+      if (
+        spec.verticalMode === 'top' ||
+        spec.verticalMode === 'match_tall_top' ||
+        spec.verticalMode === 'match_height_and_top'
+      ) {
+        if (refTop !== undefined) {
+          nextBottom = refTop - effHeight;
+        }
+      } else if (
+        spec.verticalMode === 'bottom' ||
+        spec.verticalMode === 'match_height_and_bottom'
+      ) {
+        if (refBottom !== undefined) {
+          nextBottom = refBottom;
+        }
+      }
+
+      const clampedBottom = clampWallBottomElevation(nextBottom, effHeight, wallHeight);
+      const nextY = Math.round((clampedBottom + effHeight / 2) * 10) / 10;
+      changes.position = [fresh.position[0], nextY, fresh.position[2]];
+
+      useKitchenStore.getState().updateCabinet(fresh.id, changes);
+      alignedCount += 1;
+    }
+
+    if (alignedCount > 0) {
+      const desc =
+        spec.verticalMode === 'match_tall_top'
+          ? `Alineados ${alignedCount} mueble(s) aéreo(s) por borde superior (${Math.round(refTop ?? 215)} cm)`
+          : spec.verticalMode === 'top' || spec.verticalMode === 'match_height_and_top'
+          ? `Alineados ${alignedCount} mueble(s) aéreo(s) por borde superior (${Math.round(refTop ?? 210)} cm)`
+          : `Alineados ${alignedCount} mueble(s) aéreo(s) por borde inferior (${Math.round(refBottom ?? 140)} cm)`;
+      appliedSummary.push(desc);
+    }
+  }
+
+  // 2. Alineación horizontal en muro (centrar sobre un módulo base o compactar corrida sin huecos)
+  if (spec.horizontalMode === 'align_over_cabinet' && spec.targetBaseCabinetId) {
+    const freshState = useKitchenStore.getState();
+    const baseCab = freshState.cabinets.find((c) => c.id === spec.targetBaseCabinetId);
+    if (!baseCab) {
+      warnings.push('No se encontró el módulo base de referencia para alinear horizontalmente.');
+    } else {
+      const baseWall = findWallForCabinetByNormal(baseCab, walls, roomPoly);
+      if (baseWall) {
+        const wallThick = baseWall.wall.thickness || freshState.roomConfig.wallThickness || 20;
+        const totalTargetWidth = targets.reduce((sum, t) => sum + t.width, 0);
+        let cursor = baseWall.s - totalTargetWidth / 2;
+        const proposedPos = new Map<string, [number, number, number]>();
+
+        for (const t of targets) {
+          const fresh = freshState.cabinets.find((c) => c.id === t.id);
+          if (!fresh) continue;
+          const centerS = clamp(
+            cursor + fresh.width / 2,
+            wallThick / 2 + fresh.width / 2,
+            baseWall.wLen - wallThick / 2 - fresh.width / 2
+          );
+          const flushDist = wallThick / 2 + fresh.depth / 2;
+          const nx = Math.round((baseWall.wall.start[0] + centerS * baseWall.uX + flushDist * baseWall.nX) * 10) / 10;
+          const nz = Math.round((baseWall.wall.start[1] + centerS * baseWall.uZ + flushDist * baseWall.nZ) * 10) / 10;
+          proposedPos.set(fresh.id, [nx, fresh.position[1], nz]);
+          cursor += fresh.width;
+        }
+
+        const proposedCabinets = freshState.cabinets.map((c) => {
+          const p = proposedPos.get(c.id);
+          return p ? { ...c, position: p } : c;
+        });
+
+        let moved = 0;
+        for (const [id, pos] of proposedPos.entries()) {
+          const movedCab = proposedCabinets.find((c) => c.id === id);
+          if (!movedCab) continue;
+          const others = proposedCabinets.filter((c) => c.id !== id);
+          if (isCandidateValid(movedCab as any, others, walls, id, roomPoly, freshState.architecturalElements)) {
+            useKitchenStore.getState().updateCabinet(id, { position: pos });
+            moved += 1;
+          } else {
+            warnings.push(`No se pudo alinear ${getCabinetLabel(movedCab, 0)} sobre ${getCabinetLabel(baseCab, 0)} por colisión con otro módulo o abertura.`);
+          }
+        }
+        if (moved > 0) {
+          appliedSummary.push(`Alineado(s) ${moved} mueble(s) aéreo(s) sobre ${getCabinetLabel(baseCab, 0)}`);
+        }
+      }
+    }
+  } else if (spec.horizontalMode === 'pack_contiguous') {
+    const freshState = useKitchenStore.getState();
+    const groupsByWall = new Map<string, Array<{ cab: CabinetType; info: NonNullable<ReturnType<typeof findWallForCabinetByNormal>> }>>();
+
+    for (const t of targets) {
+      const fresh = freshState.cabinets.find((c) => c.id === t.id);
+      if (!fresh) continue;
+      const info = findWallForCabinetByNormal(fresh, walls, roomPoly);
+      if (!info) continue;
+      const arr = groupsByWall.get(info.wall.id) || [];
+      arr.push({ cab: fresh, info });
+      groupsByWall.set(info.wall.id, arr);
+    }
+
+    let packedCount = 0;
+    for (const items of groupsByWall.values()) {
+      if (items.length < 2) continue;
+      items.sort((a, b) => a.info.s - b.info.s);
+      const wall = items[0].info.wall;
+      const wallThick = wall.thickness || freshState.roomConfig.wallThickness || 20;
+      const { uX, uZ, nX, nZ, wLen } = items[0].info;
+      const blocked = buildWallOpeningsIntervals(wall, freshState.architecturalElements, 'upper');
+
+      let prevEndS = items[0].info.s + items[0].cab.width / 2;
+      for (let i = 1; i < items.length; i++) {
+        const curr = items[i];
+        const currStartS = curr.info.s - curr.cab.width / 2;
+        // Si hay una ventana/pilar/puerta entre ambos módulos, no cruzar el obstáculo
+        const hasObstacleBetween = blocked.some((b) => b.end > prevEndS && b.start < currStartS);
+        if (hasObstacleBetween) {
+          prevEndS = curr.info.s + curr.cab.width / 2;
+          continue;
+        }
+
+        const desiredCenterS = prevEndS + curr.cab.width / 2;
+        if (desiredCenterS + curr.cab.width / 2 > wLen - wallThick / 2 + 0.5) {
+          prevEndS = curr.info.s + curr.cab.width / 2;
+          continue;
+        }
+
+        if (Math.abs(desiredCenterS - curr.info.s) > 0.3) {
+          const flushDist = wallThick / 2 + curr.cab.depth / 2;
+          const nx = Math.round((wall.start[0] + desiredCenterS * uX + flushDist * nX) * 10) / 10;
+          const nz = Math.round((wall.start[1] + desiredCenterS * uZ + flushDist * nZ) * 10) / 10;
+          const nextPos: [number, number, number] = [nx, curr.cab.position[1], nz];
+
+          const latestCabs = useKitchenStore.getState().cabinets;
+          const others = latestCabs.filter((c) => c.id !== curr.cab.id);
+          if (
+            isCandidateValid(
+              { ...curr.cab, position: nextPos } as any,
+              others,
+              walls,
+              curr.cab.id,
+              roomPoly,
+              freshState.architecturalElements
+            )
+          ) {
+            useKitchenStore.getState().updateCabinet(curr.cab.id, { position: nextPos });
+            packedCount += 1;
+            prevEndS = desiredCenterS + curr.cab.width / 2;
+          } else {
+            prevEndS = curr.info.s + curr.cab.width / 2;
+          }
+        } else {
+          prevEndS = curr.info.s + curr.cab.width / 2;
+        }
+      }
+    }
+
+    if (packedCount > 0) {
+      appliedSummary.push(`Alineados y juntados ${packedCount} mueble(s) aéreo(s) en corrida continua`);
+    }
+  }
 }
 
 /**
@@ -1390,7 +1811,8 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
     const allBlocked = [...openingBlocks, ...perpCornerBlocks].sort((a, b) => a.start - b.start);
 
     const flushDist = wallThick / 2 + depth / 2;
-    const centerY =
+    const wallH = wall.height || prevState.roomConfig.wallHeight || 250;
+    let centerY =
       specs.variant === 'wall_hood_new_flow'
         ? 145 + height / 2
         : specs.type === 'wall'
@@ -1398,6 +1820,13 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
         : specs.variant === 'deco_hood'
         ? 145 + height / 2
         : height / 2;
+    if (specs.type === 'wall' || specs.variant === 'deco_hood') {
+      if (item.elevationCm !== undefined && Number.isFinite(Number(item.elevationCm))) {
+        centerY = clampWallBottomElevation(Number(item.elevationCm), height, wallH) + height / 2;
+      } else if (item.topElevationCm !== undefined && Number.isFinite(Number(item.topElevationCm))) {
+        centerY = clampWallBottomElevation(Number(item.topElevationCm) - height, height, wallH) + height / 2;
+      }
+    }
     const rotation = Math.atan2(nX, nZ);
 
     // Buscar primer tramo libre que además pase colisión física + despeje de apertura frontal (puertas/cajones)
@@ -1817,6 +2246,120 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
       changes.drawerFrontMaterial = tex.texture.material;
     }
 
+    const wallHeight = useKitchenStore.getState().roomConfig.wallHeight || 250;
+    const isUpperHeightEditable = cab.type === 'wall' || cab.variant === 'deco_hood';
+    const hasVerticalUpdate =
+      upd.elevationCm !== undefined ||
+      upd.topElevationCm !== undefined ||
+      upd.deltaYCm !== undefined;
+
+    if (hasVerticalUpdate) {
+      if (!isUpperHeightEditable) {
+        warnings.push(`${getCabinetLabel(cab, 0)} es un módulo de piso y no puede cambiar su elevación vertical.`);
+      } else {
+        const effHeight = changes.height ?? cab.height;
+        const currentBottom = cab.position[1] - cab.height / 2;
+        let desiredBottom = currentBottom;
+
+        if (upd.elevationCm !== undefined && Number.isFinite(Number(upd.elevationCm))) {
+          desiredBottom = Number(upd.elevationCm);
+        } else if (upd.topElevationCm !== undefined && Number.isFinite(Number(upd.topElevationCm))) {
+          desiredBottom = Number(upd.topElevationCm) - effHeight;
+        } else if (upd.deltaYCm !== undefined && Number.isFinite(Number(upd.deltaYCm))) {
+          desiredBottom = currentBottom + Number(upd.deltaYCm);
+        }
+
+        const clampedBottom = clampWallBottomElevation(desiredBottom, effHeight, wallHeight);
+        const nextY = Math.round((clampedBottom + effHeight / 2) * 10) / 10;
+        changes.position = [cab.position[0], nextY, cab.position[2]];
+      }
+    }
+
+    if (upd.leftCoverPanel !== undefined || upd.rightCoverPanel !== undefined) {
+      if (cab.type === 'decoration') {
+        warnings.push(`${getCabinetLabel(cab, 0)} es equipamiento decorativo/electrodoméstico y no admite tapas laterales.`);
+      } else {
+        if (upd.leftCoverPanel !== undefined) {
+          changes.leftCoverPanel = buildCoverPanelFromInput(
+            upd.leftCoverPanel,
+            cab.leftCoverPanel,
+            cab,
+            adaptations
+          );
+        }
+        if (upd.rightCoverPanel !== undefined) {
+          changes.rightCoverPanel = buildCoverPanelFromInput(
+            upd.rightCoverPanel,
+            cab.rightCoverPanel,
+            cab,
+            adaptations
+          );
+        }
+      }
+    }
+
+    const hasShelfUpdate =
+      upd.shelvesCount !== undefined ||
+      upd.shelvesCountLower !== undefined ||
+      upd.shelvesCountUpper !== undefined;
+
+    if (hasShelfUpdate) {
+      if (!cabinetSupportsShelves(cab)) {
+        warnings.push(`${getCabinetLabel(cab, 0)} no admite configuración de repisas interiores.`);
+      } else if (isCabinetWithSplitDoors(cab)) {
+        const maxUpper =
+          cab.variant === 'tall_oven_vent' || cab.variant === 'tall_oven_micro'
+            ? 3
+            : cab.variant === 'tall_microwave_niche'
+            ? 5
+            : 6;
+        if (upd.shelvesCountLower !== undefined && Number.isFinite(Number(upd.shelvesCountLower))) {
+          changes.shelvesCountLower = clamp(Math.round(Number(upd.shelvesCountLower)), 0, 4);
+        }
+        if (upd.shelvesCountUpper !== undefined && Number.isFinite(Number(upd.shelvesCountUpper))) {
+          changes.shelvesCountUpper = clamp(Math.round(Number(upd.shelvesCountUpper)), 0, maxUpper);
+        }
+        if (
+          upd.shelvesCount !== undefined &&
+          upd.shelvesCountLower === undefined &&
+          upd.shelvesCountUpper === undefined &&
+          Number.isFinite(Number(upd.shelvesCount))
+        ) {
+          const total = clamp(Math.round(Number(upd.shelvesCount)), 0, 4 + maxUpper);
+          const lower = Math.min(total, 1);
+          const upper = clamp(total - lower, 0, maxUpper);
+          changes.shelvesCountLower = lower;
+          changes.shelvesCountUpper = upper;
+        }
+      } else if (upd.shelvesCount !== undefined && Number.isFinite(Number(upd.shelvesCount))) {
+        changes.shelvesCount = clamp(Math.round(Number(upd.shelvesCount)), 0, 8);
+      }
+    }
+
+    if (upd.isOpen !== undefined || upd.openElements !== undefined) {
+      const interactive = getCabinetInteractiveElements(cab);
+      if (interactive.length === 0) {
+        warnings.push(`${getCabinetLabel(cab, 0)} no tiene puertas ni cajones abatibles/extraíbles.`);
+      } else {
+        const nextOpenElements: Record<string, boolean> = { ...(cab.openElements || {}) };
+        if (upd.isOpen !== undefined) {
+          const flag = Boolean(upd.isOpen);
+          interactive.forEach((el) => {
+            nextOpenElements[el.key] = flag;
+          });
+          changes.isOpen = flag;
+        }
+        if (upd.openElements && typeof upd.openElements === 'object') {
+          for (const [k, v] of Object.entries(upd.openElements)) {
+            if (typeof v === 'boolean') {
+              nextOpenElements[k] = v;
+            }
+          }
+        }
+        changes.openElements = nextOpenElements;
+      }
+    }
+
     if (Object.keys(changes).length > 0) {
       useKitchenStore.getState().updateCabinet(cab.id, changes);
       appliedSummary.push(`Actualizado ${getCabinetLabel(cab, 0)}`);
@@ -1825,6 +2368,7 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     // Recopilar cambios de posición XZ para validarlos en lote atómico (evita auto-colisión entre módulos contiguos)
     const skipRedundantIslandMove = islandMovedByBlock && cab.type === 'island';
     if (!skipRedundantIslandMove) {
+      const freshCab = useKitchenStore.getState().cabinets.find((c) => c.id === cab.id) || cab;
       const hasPosUpdate =
         upd.deltaXCm !== undefined ||
         upd.deltaZCm !== undefined ||
@@ -1833,8 +2377,8 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
         (Array.isArray(upd.position) && upd.position.length >= 3);
 
       if (hasPosUpdate) {
-        let nextX = cab.position[0];
-        let nextZ = cab.position[2];
+        let nextX = freshCab.position[0];
+        let nextZ = freshCab.position[2];
         if (Array.isArray(upd.position) && upd.position.length >= 3) {
           if (Number.isFinite(Number(upd.position[0]))) nextX = Number(upd.position[0]);
           if (Number.isFinite(Number(upd.position[2]))) nextZ = Number(upd.position[2]);
@@ -1847,10 +2391,10 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
         nextX = Math.round(nextX * 10) / 10;
         nextZ = Math.round(nextZ * 10) / 10;
 
-        if (Math.abs(nextX - cab.position[0]) > 0.05 || Math.abs(nextZ - cab.position[2]) > 0.05) {
+        if (Math.abs(nextX - freshCab.position[0]) > 0.05 || Math.abs(nextZ - freshCab.position[2]) > 0.05) {
           pendingMoves.push({
             cabinetId: cab.id,
-            newPosition: [nextX, cab.position[1], nextZ],
+            newPosition: [nextX, freshCab.position[1], nextZ],
             label: getCabinetLabel(cab, 0),
           });
         }
@@ -1916,6 +2460,84 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     }
   }
 
+  // Alinear muebles aéreos (vertical y/u horizontalmente)
+  if (patch.alignWallCabinets) {
+    const specs = Array.isArray(patch.alignWallCabinets)
+      ? patch.alignWallCabinets
+      : [patch.alignWallCabinets];
+    for (const alignSpec of specs) {
+      executeAlignWallCabinets(alignSpec, appliedSummary, warnings);
+    }
+  }
+
+  // Abrir o cerrar puertas y cajones en bloque
+  if (patch.setAllOpenState && typeof patch.setAllOpenState.isOpen === 'boolean') {
+    const { target = 'all', cabinetIds, isOpen: nextOpen } = patch.setAllOpenState;
+    const idFilter = Array.isArray(cabinetIds) && cabinetIds.length > 0 ? new Set(cabinetIds) : null;
+    const st = useKitchenStore.getState();
+    let affected = 0;
+
+    for (const cab of st.cabinets) {
+      if (idFilter && !idFilter.has(cab.id)) continue;
+      if (
+        (target === 'base' || target === 'wall' || target === 'tall' || target === 'island') &&
+        cab.type !== target
+      ) {
+        continue;
+      }
+
+      const interactive = getCabinetInteractiveElements(cab);
+      if (interactive.length === 0) continue;
+
+      const matchingEls =
+        target === 'doors'
+          ? interactive.filter((el) => el.type === 'door')
+          : target === 'drawers'
+          ? interactive.filter((el) => el.type === 'drawer')
+          : interactive;
+
+      if (matchingEls.length === 0) continue;
+
+      const nextOpenElements: Record<string, boolean> = { ...(cab.openElements || {}) };
+      for (const el of matchingEls) {
+        nextOpenElements[el.key] = nextOpen;
+      }
+
+      const updates: Partial<CabinetType> = { openElements: nextOpenElements };
+      if (target !== 'doors' && target !== 'drawers') {
+        updates.isOpen = nextOpen;
+      }
+      useKitchenStore.getState().updateCabinet(cab.id, updates);
+      affected += 1;
+    }
+
+    if (affected > 0) {
+      const verb = nextOpen ? 'Abiertos' : 'Cerrados';
+      const scopeLabel =
+        target === 'doors'
+          ? 'puertas'
+          : target === 'drawers'
+          ? 'cajones'
+          : 'puertas y cajones';
+      appliedSummary.push(`${verb} ${scopeLabel} en ${affected} módulo(s)`);
+    } else {
+      warnings.push('No se encontraron puertas o cajones que coincidan con el criterio para abrir/cerrar.');
+    }
+  }
+
+  // Abrir o cerrar puertas/ventanas arquitectónicas del recinto
+  if (Array.isArray(patch.updateArchitecturalElements) && patch.updateArchitecturalElements.length > 0) {
+    const st = useKitchenStore.getState();
+    for (const u of patch.updateArchitecturalElements) {
+      const el = st.architecturalElements.find((a) => a.id === u.elementId);
+      if (!el) continue;
+      if (u.isOpen !== undefined) {
+        st.updateArchitecturalElement(el.id, { isOpen: Boolean(u.isOpen) });
+        appliedSummary.push(`${u.isOpen ? 'Abierta' : 'Cerrada'} ${el.name}`);
+      }
+    }
+  }
+
   // Agregar nuevos módulos respetando medidas fijas + despeje frontal
   const addedModuleIds: string[] = [];
   for (const item of patch.addModules || []) {
@@ -1964,6 +2586,15 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
 
     const refCab = st.cabinets.find((c) => c.type !== 'decoration');
     const newId = `cab_ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const wallHeight = st.roomConfig.wallHeight || 250;
+    const finalPosition: [number, number, number] = [...placement.position];
+    if (specs.type === 'wall' || specs.variant === 'deco_hood') {
+      if (item.elevationCm !== undefined && Number.isFinite(Number(item.elevationCm))) {
+        finalPosition[1] = clampWallBottomElevation(Number(item.elevationCm), dims.height, wallHeight) + dims.height / 2;
+      } else if (item.topElevationCm !== undefined && Number.isFinite(Number(item.topElevationCm))) {
+        finalPosition[1] = clampWallBottomElevation(Number(item.topElevationCm) - dims.height, dims.height, wallHeight) + dims.height / 2;
+      }
+    }
     st.addCabinet({
       id: newId,
       type: specs.type,
@@ -1971,7 +2602,7 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
       width: dims.width,
       height: dims.height,
       depth: dims.depth,
-      position: placement.position,
+      position: finalPosition,
       rotation: placement.rotation,
       color: refCab?.color || '#FFFFFF',
       structureColor: refCab?.structureColor || '#FFFFFF',
@@ -1980,7 +2611,24 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
       structureMaterial: refCab?.structureMaterial || 'melamina',
       doorMaterial: refCab?.doorMaterial || 'melamina',
       drawerFrontMaterial: refCab?.drawerFrontMaterial || 'melamina',
-      shelvesCount: specs.shelvesCount !== undefined ? specs.shelvesCount : (specs.type === 'wall' ? 2 : specs.type === 'tall' ? 4 : 1),
+      shelvesCount:
+        item.shelvesCount !== undefined && Number.isFinite(Number(item.shelvesCount))
+          ? clamp(Math.round(Number(item.shelvesCount)), 0, 8)
+          : specs.shelvesCount !== undefined
+          ? specs.shelvesCount
+          : specs.type === 'wall'
+          ? 2
+          : specs.type === 'tall'
+          ? 4
+          : 1,
+      ...(item.shelvesCountLower !== undefined ? { shelvesCountLower: clamp(Math.round(Number(item.shelvesCountLower)), 0, 4) } : {}),
+      ...(item.shelvesCountUpper !== undefined ? { shelvesCountUpper: clamp(Math.round(Number(item.shelvesCountUpper)), 0, 6) } : {}),
+      ...(item.leftCoverPanel && specs.type !== 'decoration'
+        ? { leftCoverPanel: buildCoverPanelFromInput(item.leftCoverPanel, undefined, { type: specs.type, depth: dims.depth }, adaptations) }
+        : {}),
+      ...(item.rightCoverPanel && specs.type !== 'decoration'
+        ? { rightCoverPanel: buildCoverPanelFromInput(item.rightCoverPanel, undefined, { type: specs.type, depth: dims.depth }, adaptations) }
+        : {}),
       drawersCount: specs.drawersCount,
       hingeSide: item.hingeSide,
     });
@@ -2060,13 +2708,23 @@ function buildCabinetObject(
     shelfColor: structTex.url,
     shelfMaterial: structTex.material,
     shelvesCount:
-      specs.shelvesCount !== undefined
+      item.shelvesCount !== undefined && Number.isFinite(Number(item.shelvesCount))
+        ? clamp(Math.round(Number(item.shelvesCount)), 0, 8)
+        : specs.shelvesCount !== undefined
         ? specs.shelvesCount
         : specs.type === 'wall'
         ? 2
         : specs.type === 'tall'
         ? 4
         : 1,
+    ...(item.shelvesCountLower !== undefined ? { shelvesCountLower: clamp(Math.round(Number(item.shelvesCountLower)), 0, 4) } : {}),
+    ...(item.shelvesCountUpper !== undefined ? { shelvesCountUpper: clamp(Math.round(Number(item.shelvesCountUpper)), 0, 6) } : {}),
+    ...(item.leftCoverPanel && specs.type !== 'decoration'
+      ? { leftCoverPanel: buildCoverPanelFromInput(item.leftCoverPanel, undefined, { type: specs.type, depth }, []) }
+      : {}),
+    ...(item.rightCoverPanel && specs.type !== 'decoration'
+      ? { rightCoverPanel: buildCoverPanelFromInput(item.rightCoverPanel, undefined, { type: specs.type, depth }, []) }
+      : {}),
     drawersCount: specs.drawersCount,
     hasHanger: specs.hasHanger,
     hasDoors: specs.hasDoors,
