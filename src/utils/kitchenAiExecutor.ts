@@ -50,10 +50,11 @@ import { MepPoint, MepType, MepPresetType, MEP_TYPE_CONFIGS, MEP_PRESETS } from 
 import { startKitchenBuildAnimation } from './kitchenBuildAnimation';
 
 export interface AiFloorPlanOpening {
-  type: 'door' | 'window' | 'pillar';
+  type: 'door' | 'window' | 'pillar' | 'ventanal';
   wallLabel: string; // 'A', 'B', 'C', 'D'...
-  offsetFromStartCm: number; // distancia desde el inicio del muro en cm
-  widthCm: number;
+  offsetFromStartCm?: number; // distancia desde el inicio del muro en cm
+  offsetFromCenterCm?: number; // desplazamiento desde el centro del muro en cm (0 = centrado)
+  widthCm?: number;
   heightCm?: number;
   depthCm?: number;
   elevationCm?: number;
@@ -209,8 +210,19 @@ export interface AiPatchDesignAction {
   };
   updateArchitecturalElements?: Array<{
     elementId: string;
+    wallLabel?: string;
+    widthCm?: number;
+    heightCm?: number;
+    depthCm?: number;
+    elevationCm?: number;
+    offsetFromStartCm?: number;
+    offsetFromCenterCm?: number;
+    deltaOffsetCm?: number;
+    hingeSide?: 'left' | 'right';
+    name?: string;
     isOpen?: boolean;
   }>;
+  removeArchitecturalElementIds?: string[];
   addOpenings?: AiFloorPlanOpening[];
   addMepPoints?: AiFloorPlanMep[];
   clearIsland?: boolean;
@@ -1032,48 +1044,83 @@ function createArchitecturalElementOnWall(
   const [x1, z1] = wall.start;
   const [x2, z2] = wall.end;
   const wLen = Math.hypot(x2 - x1, z2 - z1);
-  if (wLen < 40) return null;
+  if (wLen < 30) return null;
 
   const uX = (x2 - x1) / wLen;
   const uZ = (z2 - z1) / wLen;
 
-  let width = clamp(
-    Number(spec.widthCm) || (spec.type === 'door' ? 90 : spec.type === 'window' ? 120 : 35),
-    15,
-    Math.max(20, wLen - 16)
-  );
+  const rawType = String(spec.type || 'window').toLowerCase();
+  const normalizedType: 'door' | 'window' | 'pillar' =
+    rawType === 'door' ? 'door' : rawType === 'pillar' ? 'pillar' : 'window';
+  const isVentanal =
+    rawType === 'ventanal' ||
+    (spec.name || '').toLowerCase().includes('ventanal') ||
+    (normalizedType === 'window' &&
+      spec.elevationCm !== undefined &&
+      Number.isFinite(Number(spec.elevationCm)) &&
+      Number(spec.elevationCm) <= 15);
+
+  const hasWidth = spec.widthCm !== undefined && Number.isFinite(Number(spec.widthCm));
+  const hasHeight = spec.heightCm !== undefined && Number.isFinite(Number(spec.heightCm));
+  const hasElevation = spec.elevationCm !== undefined && Number.isFinite(Number(spec.elevationCm));
+  const hasDepth = spec.depthCm !== undefined && Number.isFinite(Number(spec.depthCm));
+
+  const maxOpeningWidth = Math.max(25, wLen - 8);
+  let width = hasWidth
+    ? Number(spec.widthCm)
+    : normalizedType === 'door'
+    ? 90
+    : normalizedType === 'window'
+    ? isVentanal
+      ? 200
+      : 120
+    : 35;
   let elevation = 0;
   let height = wallHeight;
   let depth = wall.thickness || 20;
 
-  if (spec.type === 'door') {
+  if (normalizedType === 'door') {
     elevation = 0;
-    height = clamp(Number(spec.heightCm) || 210, 180, Math.max(185, wallHeight - 10));
-    width = clamp(width, 60, Math.max(65, wLen - 14));
-  } else if (spec.type === 'window') {
-    elevation = clamp(Number(spec.elevationCm) || 105, 45, Math.max(60, wallHeight - 60));
-    height = clamp(Number(spec.heightCm) || 110, 40, Math.max(45, wallHeight - elevation - 10));
-    width = clamp(width, 40, Math.max(45, wLen - 14));
+    height = clamp(hasHeight ? Number(spec.heightCm) : 210, 180, wallHeight);
+    width = clamp(width, 50, Math.min(180, Math.max(55, maxOpeningWidth)));
+  } else if (normalizedType === 'window') {
+    const defaultElev = isVentanal ? 0 : 105;
+    elevation = clamp(hasElevation ? Number(spec.elevationCm) : defaultElev, 0, Math.max(0, wallHeight - 20));
+    const maxWindowH = Math.max(20, wallHeight - elevation);
+    const defaultH = isVentanal ? Math.min(220, Math.max(180, wallHeight - elevation - 10)) : 110;
+    height = clamp(hasHeight ? Number(spec.heightCm) : defaultH, 20, maxWindowH);
+    width = clamp(width, 20, maxOpeningWidth);
   } else {
     elevation = 0;
-    height = wallHeight;
-    width = clamp(Number(spec.widthCm) || 35, 15, 120);
-    depth = clamp(Number(spec.depthCm) || 35, 15, 80);
+    height = clamp(hasHeight ? Number(spec.heightCm) : wallHeight, 50, wallHeight);
+    width = clamp(hasWidth ? Number(spec.widthCm) : 35, 10, 150);
+    depth = clamp(hasDepth ? Number(spec.depthCm) : 35, 10, 150);
   }
 
-  const rawS = Number.isFinite(spec.offsetFromStartCm) ? spec.offsetFromStartCm : wLen / 2;
-  const sClamped = clamp(rawS, width / 2 + 5, wLen - width / 2 - 5);
+  let rawS = wLen / 2;
+  if (spec.offsetFromCenterCm !== undefined && Number.isFinite(Number(spec.offsetFromCenterCm))) {
+    rawS = wLen / 2 + Number(spec.offsetFromCenterCm);
+  } else if (spec.offsetFromStartCm !== undefined && Number.isFinite(Number(spec.offsetFromStartCm))) {
+    rawS = Number(spec.offsetFromStartCm);
+  }
+  const sClamped = clamp(rawS, width / 2 + 2, wLen - width / 2 - 2);
   const pX = x1 + sClamped * uX;
   const pZ = z1 + sClamped * uZ;
 
   return {
-    id: `arch_ai_${spec.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: `arch_ai_${normalizedType}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     wallId: wall.id,
     offset: Math.round((sClamped - wLen / 2) * 10) / 10,
-    type: spec.type,
+    type: normalizedType,
     name:
       spec.name ||
-      (spec.type === 'door' ? 'Puerta de Acceso' : spec.type === 'window' ? 'Ventana' : 'Pilar Estructural'),
+      (normalizedType === 'door'
+        ? 'Puerta de Acceso'
+        : normalizedType === 'window'
+        ? isVentanal
+          ? 'Ventanal'
+          : 'Ventana'
+        : 'Pilar Estructural'),
     width: Math.round(width),
     height: Math.round(height),
     depth: Math.round(depth),
@@ -2525,15 +2572,149 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
     }
   }
 
-  // Abrir o cerrar puertas/ventanas arquitectónicas del recinto
+  // Eliminar aberturas arquitectónicas (puertas, ventanas, ventanales, pilares)
+  if (Array.isArray(patch.removeArchitecturalElementIds) && patch.removeArchitecturalElementIds.length > 0) {
+    const st = useKitchenStore.getState();
+    let removedArch = 0;
+    for (const id of patch.removeArchitecturalElementIds) {
+      if (st.architecturalElements.some((a) => a.id === id)) {
+        st.removeArchitecturalElement(id);
+        removedArch += 1;
+      }
+    }
+    if (removedArch > 0) {
+      appliedSummary.push(`Eliminada(s) ${removedArch} abertura(s) arquitectónica(s)`);
+    }
+  }
+
+  // Editar medidas, elevación, posición en muro, muro asignado, bisagra o apertura de puertas/ventanas/ventanales/pilares
   if (Array.isArray(patch.updateArchitecturalElements) && patch.updateArchitecturalElements.length > 0) {
     const st = useKitchenStore.getState();
+    const effectiveWalls =
+      st.walls && st.walls.length > 0 ? st.walls : generateWallsFromRoom(st.roomConfig);
+
     for (const u of patch.updateArchitecturalElements) {
-      const el = st.architecturalElements.find((a) => a.id === u.elementId);
+      const el = useKitchenStore.getState().architecturalElements.find((a) => a.id === u.elementId);
       if (!el) continue;
+
+      const targetWallFound = u.wallLabel ? findWallByLabel(effectiveWalls, u.wallLabel) : null;
+      const targetWall =
+        targetWallFound?.wall ||
+        effectiveWalls.find((w) => w.id === el.wallId) ||
+        effectiveWalls[0];
+      const movedToNewWall = Boolean(targetWall && targetWall.id !== el.wallId);
+      const wallMaxH = targetWall?.height || st.roomConfig.wallHeight || 250;
+      const wLen = targetWall
+        ? Math.hypot(targetWall.end[0] - targetWall.start[0], targetWall.end[1] - targetWall.start[1])
+        : 400;
+
+      const archUpdates: Partial<ArchitecturalElement> = {};
+      const detailParts: string[] = [];
+
+      if (movedToNewWall && targetWall) {
+        archUpdates.wallId = targetWall.id;
+        detailParts.push(`muro ${u.wallLabel?.toUpperCase()}`);
+      }
+
+      if (u.name && u.name.trim()) {
+        archUpdates.name = u.name.trim();
+      }
+
+      if (u.widthCm !== undefined && Number.isFinite(Number(u.widthCm))) {
+        const maxW = Math.max(25, wLen - 4);
+        const nextW =
+          el.type === 'door'
+            ? clamp(Math.round(Number(u.widthCm)), 50, Math.min(180, Math.max(55, maxW)))
+            : el.type === 'window'
+            ? clamp(Math.round(Number(u.widthCm)), 20, maxW)
+            : clamp(Math.round(Number(u.widthCm)), 10, 150);
+        archUpdates.width = nextW;
+        detailParts.push(`ancho ${nextW} cm`);
+      }
+
+      const hasElevUpdate = u.elevationCm !== undefined && Number.isFinite(Number(u.elevationCm));
+      const hasHeightUpdate = u.heightCm !== undefined && Number.isFinite(Number(u.heightCm));
+
+      let nextElev = el.elevation;
+      let nextHeight = el.height;
+
+      if (hasElevUpdate) {
+        if (el.type === 'window') {
+          nextElev = clamp(Math.round(Number(u.elevationCm)), 0, Math.max(0, wallMaxH - 20));
+          archUpdates.elevation = nextElev;
+          detailParts.push(`antepecho ${nextElev} cm`);
+        } else {
+          nextElev = 0;
+        }
+      }
+
+      if (hasHeightUpdate) {
+        nextHeight =
+          el.type === 'door'
+            ? clamp(Math.round(Number(u.heightCm)), 180, wallMaxH)
+            : el.type === 'window'
+            ? clamp(Math.round(Number(u.heightCm)), 20, wallMaxH)
+            : clamp(Math.round(Number(u.heightCm)), 50, wallMaxH);
+        archUpdates.height = nextHeight;
+        detailParts.push(`alto ${nextHeight} cm`);
+      }
+
+      if (el.type === 'window' && nextElev + nextHeight > wallMaxH) {
+        if (hasElevUpdate && hasHeightUpdate) {
+          nextHeight = Math.max(20, wallMaxH - nextElev);
+          archUpdates.height = nextHeight;
+        } else {
+          nextElev = Math.max(0, wallMaxH - nextHeight);
+          archUpdates.elevation = nextElev;
+        }
+      }
+
+      if (u.depthCm !== undefined && Number.isFinite(Number(u.depthCm)) && el.type === 'pillar') {
+        const nextD = clamp(Math.round(Number(u.depthCm)), 10, 150);
+        archUpdates.depth = nextD;
+        detailParts.push(`prof. ${nextD} cm`);
+      }
+
+      if (u.hingeSide === 'left' || u.hingeSide === 'right') {
+        archUpdates.hingeSide = u.hingeSide;
+      }
+
       if (u.isOpen !== undefined) {
-        st.updateArchitecturalElement(el.id, { isOpen: Boolean(u.isOpen) });
-        appliedSummary.push(`${u.isOpen ? 'Abierta' : 'Cerrada'} ${el.name}`);
+        archUpdates.isOpen = Boolean(u.isOpen);
+        detailParts.push(u.isOpen ? 'abierta' : 'cerrada');
+      }
+
+      const hasOffsetFromStart =
+        u.offsetFromStartCm !== undefined && Number.isFinite(Number(u.offsetFromStartCm));
+      const hasOffsetFromCenter =
+        u.offsetFromCenterCm !== undefined && Number.isFinite(Number(u.offsetFromCenterCm));
+      const hasDeltaOffset =
+        u.deltaOffsetCm !== undefined && Number.isFinite(Number(u.deltaOffsetCm));
+
+      if (hasOffsetFromStart || hasOffsetFromCenter || hasDeltaOffset || movedToNewWall || archUpdates.width !== undefined) {
+        const baseOffset = movedToNewWall ? 0 : el.offset || 0;
+        let nextOffset = baseOffset;
+        if (hasOffsetFromStart) {
+          nextOffset = Number(u.offsetFromStartCm) - wLen / 2;
+          detailParts.push(`posición ${Math.round(Number(u.offsetFromStartCm))} cm`);
+        } else if (hasOffsetFromCenter) {
+          nextOffset = Number(u.offsetFromCenterCm);
+          detailParts.push(`desplazamiento ${Math.round(nextOffset)} cm`);
+        } else if (hasDeltaOffset) {
+          nextOffset = baseOffset + Number(u.deltaOffsetCm);
+          detailParts.push(`movida ${Number(u.deltaOffsetCm) > 0 ? '+' : ''}${Math.round(Number(u.deltaOffsetCm))} cm`);
+        }
+        archUpdates.offset = Math.round(nextOffset * 10) / 10;
+      }
+
+      if (Object.keys(archUpdates).length > 0) {
+        useKitchenStore.getState().updateArchitecturalElement(el.id, archUpdates);
+        const displayName = archUpdates.name || el.name;
+        appliedSummary.push(
+          detailParts.length > 0
+            ? `Actualizada ${displayName} (${detailParts.join(', ')})`
+            : `Actualizada ${displayName}`
+        );
       }
     }
   }
@@ -2638,13 +2819,19 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
 
   if (Array.isArray(patch.addOpenings) && patch.addOpenings.length > 0) {
     const st = useKitchenStore.getState();
+    const effectiveWalls =
+      st.walls && st.walls.length > 0 ? st.walls : generateWallsFromRoom(st.roomConfig);
     for (const op of patch.addOpenings) {
-      const found = findWallByLabel(st.walls, op.wallLabel);
+      const found = findWallByLabel(effectiveWalls, op.wallLabel);
       if (!found) continue;
-      const el = createArchitecturalElementOnWall(found.wall, op, st.roomConfig.wallHeight || 250);
+      const el = createArchitecturalElementOnWall(
+        found.wall,
+        op,
+        found.wall.height || st.roomConfig.wallHeight || 250
+      );
       if (el) {
         st.addArchitecturalElement(el);
-        appliedSummary.push(`Agregada abertura: ${el.name}`);
+        appliedSummary.push(`Agregada abertura: ${el.name} (${el.width}×${el.height} cm)`);
       }
     }
   }

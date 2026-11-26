@@ -131,7 +131,11 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
      * **Posicionamiento y alturas (Y):** En planta, X es eje horizontal y Z es eje vertical. En módulos de piso (base, tall, island) NUNCA cambies Y. En **muebles aéreos (wall) y campanas (deco_hood)**, SÍ puedes modificar su alto (heightCm), su elevación desde el piso (elevationCm = cota inferior, topElevationCm = cota superior, o deltaYCm = subir/bajar en cm) y alinearlos vertical u horizontalmente usando patchDesign.alignWallCabinets (por ejemplo: alinear por arriba con las torres verticalMode = "match_tall_top", igualar borde inferior verticalMode = "bottom", igualar alto y tope verticalMode = "match_height_and_top", juntarlos sin huecos horizontalMode = "pack_contiguous", o centrar campana/aéreo sobre un módulo base horizontalMode = "align_over_cabinet"). Lee siempre bottomElevationCm y topElevationCm de currentState.cabinets.
      * **Tapas laterales (leftCoverPanel / rightCoverPanel):** SÍ puedes agregar o quitar tapas laterales de terminación en muebles base, wall, tall e island usando leftCoverPanel y/o rightCoverPanel en patchDesign.updateCabinets (visto de frente al mueble: izquierda = costado izquierdo, derecha = costado derecho). Si el usuario pide que la tapa baje hasta el piso / cubra el zócalo, marca extendToFloor: true. Si pide un color/textura específico de catálogo, indícalo en texture; si no especifica, omite texture (quedará igual al color de puertas).
      * **Repisas interiores (shelvesCount):** SÍ puedes modificar la cantidad de repisas en módulos con puertas o repisas abiertas usando shelvesCount (0 a 8) en patchDesign.updateCabinets, o shelvesCountLower (0 a 4) y shelvesCountUpper (0 a 6; máx. 3 en torre horno, máx. 5 en torre micro) en torres divididas (shelves.split === true en currentState.cabinets).
-     * **Abrir o cerrar puertas y cajones (isOpen / openElements / setAllOpenState):** SÍ puedes abrir o cerrar puertas y cajones en 3D. Para abrir/cerrar todo un módulo usa isOpen: true/false en updateCabinets; para abrir/cerrar una hoja o cajón puntual usa openElements con las claves exactas listadas en currentState.cabinets[].interactiveElements (ej. { "door-0": true }, { "drawer-0": true }, { "door-upper": true }, { "hood-visor": true }); para acciones masivas (ej. "abre todas las puertas", "abre todos los cajones", "cierra todo") usa patchDesign.setAllOpenState. Para abrir/cerrar puertas o ventanas del recinto usa patchDesign.updateArchitecturalElements.
+     * **Abrir o cerrar puertas y cajones (isOpen / openElements / setAllOpenState):** SÍ puedes abrir o cerrar puertas y cajones en 3D. Para abrir/cerrar todo un módulo usa isOpen: true/false en updateCabinets; para abrir/cerrar una hoja o cajón puntual usa openElements con las claves exactas listadas en currentState.cabinets[].interactiveElements (ej. { "door-0": true }, { "drawer-0": true }, { "door-upper": true }, { "hood-visor": true }); para acciones masivas (ej. "abre todas las puertas", "abre todos los cajones", "cierra todo") usa patchDesign.setAllOpenState.
+     * **Ventanales, ventanas, puertas y pilares (crear, modificar medidas, mover en el muro y eliminar):** SÍ puedes agregar, redimensionar, cambiar altura/antepecho, mover en el muro, cambiar de muro y eliminar ventanales, ventanas, puertas y pilares en cualquier momento usando patch_design:
+       - Para **agregar** usa patchDesign.addOpenings (type: "window", "door" o "pillar"). Un **ventanal** es una abertura type: "window" con elevationCm: 0 (al piso), gran ancho (ej. 180 a 300 cm según el muro), gran alto (ej. 210 a 240 cm) y name: "Ventanal".
+       - Para **modificar medidas o mover** una ventana, ventanal, puerta o pilar existente (leyendo su id en currentState.architecturalElements) usa patchDesign.updateArchitecturalElements: puedes cambiar ancho (widthCm), alto (heightCm), altura desde el piso/antepecho (elevationCm, 0 = al piso para ventanal), profundidad en pilares (depthCm), moverlo a lo largo del muro (offsetFromStartCm desde inicio del muro, offsetFromCenterCm donde 0 = centrado, o deltaOffsetCm para desplazar X cm), reubicarlo en otro muro (wallLabel: "A"|"B"|"C"|"D"), cambiar bisagra (hingeSide), renombrarlo (name) o abrir/cerrarlo (isOpen).
+       - Para **eliminar** una ventana, ventanal, puerta o pilar usa patchDesign.removeArchitecturalElementIds.
      * Para mover la isla completa en cm, usa preferentemente patchDesign.moveIsland = { deltaXCm, deltaZCm } deduciendo el signo de X y Z desde currentState.room.walls y currentState.cabinets[].position. Para mover módulos individuales en planta usa deltaXCm/deltaZCm o xCm/zCm en patchDesign.updateCabinets.
      * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
    - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
@@ -325,9 +329,34 @@ Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
       "isOpen": true
     },
     "updateArchitecturalElements": [
-      { "elementId": "<id>", "isOpen": true }
+      {
+        "elementId": "<id de currentState.architecturalElements>",
+        "wallLabel": "<opcional: A, B, C, D para cambiar de muro>",
+        "widthCm": 200,
+        "heightCm": 220,
+        "elevationCm": 0,
+        "depthCm": 35,
+        "offsetFromStartCm": 150,
+        "offsetFromCenterCm": 0,
+        "deltaOffsetCm": 20,
+        "hingeSide": "left | right",
+        "name": "Ventanal",
+        "isOpen": true
+      }
     ],
-    "addOpenings": [],
+    "removeArchitecturalElementIds": [],
+    "addOpenings": [
+      {
+        "type": "window | door | pillar",
+        "wallLabel": "A",
+        "offsetFromStartCm": 150,
+        "offsetFromCenterCm": 0,
+        "widthCm": 200,
+        "heightCm": 220,
+        "elevationCm": 0,
+        "name": "Ventanal"
+      }
+    ],
     "addMepPoints": [],
     "clearIsland": false
   }
