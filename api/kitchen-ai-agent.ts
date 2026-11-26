@@ -25,6 +25,7 @@ interface KitchenAgentRequestBody {
   userRole?: string;
   message: string;
   images?: IncomingImage[];
+  audioDataUrl?: string;
   history?: IncomingChatMessage[];
   planConfirmed?: boolean;
   currentState: any;
@@ -50,7 +51,7 @@ function getGeminiApiKey(): string | undefined {
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
   if (!dataUrl || typeof dataUrl !== 'string') return null;
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:((?:image|audio)\/[a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,(.+)$/);
   if (match) {
     return { mimeType: match[1], data: match[2] };
   }
@@ -292,6 +293,7 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
     userRole,
     message,
     images = [],
+    audioDataUrl,
     history = [],
     planConfirmed = false,
     currentState,
@@ -307,8 +309,8 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
     throw err;
   }
 
-  if (!message?.trim() && (!images || images.length === 0)) {
-    throw new Error('Debes enviar un mensaje o adjuntar al menos una imagen.');
+  if (!message?.trim() && (!images || images.length === 0) && !audioDataUrl) {
+    throw new Error('Debes enviar un mensaje, un audio o adjuntar al menos una imagen.');
   }
 
   const apiKey = getGeminiApiKey();
@@ -345,9 +347,22 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
     }
   }
 
+  const parsedAudio = audioDataUrl ? parseDataUrl(audioDataUrl) : null;
+  if (parsedAudio) {
+    userParts.push({
+      inlineData: {
+        mimeType: parsedAudio.mimeType,
+        data: parsedAudio.data,
+      },
+    });
+    userParts.push({
+      text: '[Instrucción de voz adjunta del cliente en español: escucha cuidadosamente la solicitud de diseño o modificación y aplícala según las reglas del configurador.]',
+    });
+  }
+
   const combinedPrompt = [
     recentHistory ? `HISTORIAL RECIENTE:\n${recentHistory}\n` : '',
-    `MENSAJE ACTUAL DEL CLIENTE:\n${message || 'Analiza la(s) imagen(es) adjunta(s) y actúa según la etapa del flujo.'}`,
+    `MENSAJE ACTUAL DEL CLIENTE:\n${message || (parsedAudio ? 'Atiende la instrucción de voz adjunta.' : 'Analiza la(s) imagen(es) adjunta(s) y actúa según la etapa del flujo.')}`,
   ]
     .filter(Boolean)
     .join('\n');

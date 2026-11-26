@@ -16,6 +16,8 @@ import {
   RotateCcw,
   Check,
   Wand2,
+  Mic,
+  Square,
 } from 'lucide-react';
 import { useKitchenStore } from '../../store/kitchenStore';
 import { useAdminStore } from '../../store/adminStore';
@@ -122,8 +124,56 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
+  // Estado de dictado / voz por micrófono
+  const [isListening, setIsListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<'speech' | 'recorder' | null>(null);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [pendingAudioDataUrl, setPendingAudioDataUrl] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const baseTextBeforeSpeechRef = useRef<string>('');
+
+  const stopVoiceCapture = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsListening(false);
+    setVoiceMode(null);
+    setInterimTranscript('');
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopVoiceCapture();
+    }
+    return () => {
+      stopVoiceCapture();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -132,6 +182,141 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   }, [messages, isOpen, isSending]);
 
   if (!isOpen) return null;
+
+  const handleToggleMicrophone = async () => {
+    if (isFreeUser || isSending) return;
+    setErrorBanner(null);
+
+    // Si ya está escuchando/grabando, detener
+    if (isListening) {
+      if (voiceMode === 'recorder' && mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+        return;
+      }
+      stopVoiceCapture();
+      return;
+    }
+
+    const win = window as any;
+    const SpeechRecognitionCtor = win.SpeechRecognition || win.webkitSpeechRecognition;
+
+    // 1. Modo preferido: Web Speech API (transcripción en vivo en español)
+    if (SpeechRecognitionCtor) {
+      try {
+        const recognition = new SpeechRecognitionCtor();
+        recognition.lang = 'es-CL';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        baseTextBeforeSpeechRef.current = inputText.trim();
+        let accumulatedFinal = '';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setVoiceMode('speech');
+          setInterimTranscript('');
+        };
+
+        recognition.onresult = (event: any) => {
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const chunk = event.results[i][0]?.transcript || '';
+            if (event.results[i].isFinal) {
+              accumulatedFinal += (accumulatedFinal ? ' ' : '') + chunk.trim();
+            } else {
+              interim += chunk;
+            }
+          }
+          const combinedFinal = [baseTextBeforeSpeechRef.current, accumulatedFinal].filter(Boolean).join(' ').trim();
+          setInputText(combinedFinal);
+          setInterimTranscript(interim.trim());
+        };
+
+        recognition.onerror = (event: any) => {
+          const code = event?.error;
+          if (code === 'not-allowed' || code === 'service-not-allowed') {
+            setErrorBanner('Permiso de micrófono denegado. Habilita el micrófono en tu navegador para dictar instrucciones.');
+          } else if (code === 'no-speech') {
+            setErrorBanner('No se detectó voz. Intenta hablar más cerca del micrófono.');
+          } else if (code === 'audio-capture') {
+            setErrorBanner('No se encontró ningún micrófono disponible en tu equipo.');
+          } else if (code !== 'aborted') {
+            setErrorBanner('No se pudo completar el reconocimiento de voz. Intenta nuevamente.');
+          }
+          stopVoiceCapture();
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          setVoiceMode(null);
+          setInterimTranscript('');
+          recognitionRef.current = null;
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        return;
+      } catch {
+        stopVoiceCapture();
+      }
+    }
+
+    // 2. Respaldo universal (ej. Firefox): grabar nota de voz con MediaRecorder para envío multimodal a Gemini
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        audioChunksRef.current = [];
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : '';
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+
+        recorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) {
+            audioChunksRef.current.push(ev.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+            mediaStreamRef.current = null;
+          }
+          setIsListening(false);
+          setVoiceMode(null);
+          mediaRecorderRef.current = null;
+
+          if (blob.size > 0) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                setPendingAudioDataUrl(reader.result);
+              }
+            };
+            reader.readAsDataURL(blob);
+          }
+        };
+
+        recorder.start();
+        setIsListening(true);
+        setVoiceMode('recorder');
+        return;
+      } catch {
+        stopVoiceCapture();
+        setErrorBanner('No se pudo acceder al micrófono. Verifica los permisos del navegador.');
+        return;
+      }
+    }
+
+    setErrorBanner('Tu navegador no soporta entrada de voz por micrófono.');
+  };
 
   const currentStage: 1 | 2 | 3 = planConfirmed ? 3 : planLoadedFromChat ? 2 : 1;
 
@@ -201,9 +386,11 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   };
 
   const handleResetChat = () => {
+    stopVoiceCapture();
     setMessages([INITIAL_WELCOME_MESSAGE]);
     setAttachments([]);
     setInputText('');
+    setPendingAudioDataUrl(null);
     setPlanLoadedFromChat(false);
     setPlanConfirmed(false);
     setErrorBanner(null);
@@ -212,16 +399,23 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   const sendMessage = async (overrideText?: string) => {
     if (isFreeUser || isSending) return;
 
-    const textToSend = (overrideText !== undefined ? overrideText : inputText).trim();
-    const imagesToSend = [...attachments];
+    if (isListening) {
+      stopVoiceCapture();
+    }
 
-    if (!textToSend && imagesToSend.length === 0) return;
+    const combinedDictated = [inputText.trim(), interimTranscript.trim()].filter(Boolean).join(' ').trim();
+    const textToSend = (overrideText !== undefined ? overrideText : combinedDictated).trim();
+    const imagesToSend = [...attachments];
+    const audioToSend = overrideText !== undefined ? null : pendingAudioDataUrl;
+
+    if (!textToSend && imagesToSend.length === 0 && !audioToSend) return;
 
     // Detectar confirmación explícita del usuario por texto cuando está en etapa 2
     const lowerText = textToSend.toLowerCase();
     const looksLikeSimpleOk =
       !planConfirmed &&
       imagesToSend.length === 0 &&
+      !audioToSend &&
       /^(ok|listo|aprobado|confirmado|confirmo|dale|esta bien|está bien|perfecto|si|sí)[.! ]*$/i.test(lowerText);
 
     if (looksLikeSimpleOk) {
@@ -233,14 +427,18 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
     setErrorBanner(null);
     setIsSending(true);
     setInputText('');
+    setInterimTranscript('');
     setAttachments([]);
+    setPendingAudioDataUrl(null);
 
     const userMsg: ChatMessageItem = {
       id: `usr_${Date.now()}`,
       role: 'user',
       text:
         textToSend ||
-        (imagesToSend[0]?.label === 'plano'
+        (audioToSend
+          ? '🎤 Instrucción enviada por voz'
+          : imagesToSend[0]?.label === 'plano'
           ? 'Te adjunto el plano de mi cocina para cargarlo al configurador.'
           : 'Te adjunto imagen de inspiración para diseñar mi cocina.'),
       images: imagesToSend.length > 0 ? imagesToSend : undefined,
@@ -259,8 +457,9 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userRole: effectiveRole,
-          message: userMsg.text,
+          message: textToSend || (audioToSend ? '' : userMsg.text),
           images: imagesToSend.map((img) => ({ dataUrl: img.dataUrl, label: img.label })),
+          ...(audioToSend ? { audioDataUrl: audioToSend } : {}),
           history: messages.map((m) => ({ role: m.role, text: m.text })),
           planConfirmed,
           currentState,
@@ -795,6 +994,52 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
             </div>
           )}
 
+          {/* Indicador de escucha activa / nota de voz lista */}
+          {isListening && (
+            <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 text-[11px] flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <span className="font-semibold truncate">
+                  {voiceMode === 'recorder'
+                    ? 'Grabando nota de voz... pulsa detener al terminar'
+                    : interimTranscript
+                    ? `Escuchando: "${interimTranscript}"`
+                    : 'Escuchando... dicta tu cambio o diseño en español'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleMicrophone}
+                className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-bold uppercase cursor-pointer shrink-0 hover:bg-rose-600"
+              >
+                Detener
+              </button>
+            </div>
+          )}
+
+          {!isListening && pendingAudioDataUrl && (
+            <div
+              className={`mx-3 mb-2 px-3 py-1.5 rounded-xl border text-[11px] flex items-center justify-between gap-2 shrink-0 ${
+                isLight
+                  ? 'bg-orange-50 border-orange-200 text-orange-900'
+                  : 'bg-orange-500/10 border-orange-500/30 text-orange-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Mic size={13} className="text-orange-500" />
+                <span>Instrucción de voz grabada y lista para enviar</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingAudioDataUrl(null)}
+                className="p-0.5 rounded hover:bg-black/10 cursor-pointer"
+                title="Descartar nota de voz"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )}
+
           {/* Barra de Entrada */}
           <div
             className={`p-3 border-t shrink-0 ${
@@ -815,7 +1060,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
               }}
             />
 
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-1.5">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -834,10 +1079,34 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
                 <ImagePlus size={17} />
               </button>
 
+              <button
+                type="button"
+                onClick={handleToggleMicrophone}
+                disabled={isSending}
+                title={
+                  isListening
+                    ? 'Detener dictado por voz'
+                    : 'Dictar instrucciones de diseño o modificaciones con el micrófono'
+                }
+                aria-label={isListening ? 'Detener micrófono' : 'Usar micrófono'}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer shrink-0 ${
+                  isListening
+                    ? 'bg-rose-500 hover:bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-500/30 animate-pulse'
+                    : isLight
+                    ? 'bg-slate-100 hover:bg-orange-50 border-slate-300 text-slate-700 hover:text-orange-600'
+                    : 'bg-white/5 hover:bg-orange-500/15 border-white/10 text-slate-300 hover:text-orange-400'
+                }`}
+              >
+                {isListening ? <Square size={16} className="fill-current" /> : <Mic size={17} />}
+              </button>
+
               <textarea
                 rows={2}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                value={interimTranscript ? `${inputText}${inputText ? ' ' : ''}${interimTranscript}` : inputText}
+                onChange={(e) => {
+                  setInterimTranscript('');
+                  setInputText(e.target.value);
+                }}
                 onPaste={handlePaste}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -846,9 +1115,11 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
                   }
                 }}
                 placeholder={
-                  !planConfirmed
-                    ? 'Sube tu plano o describe medidas, puertas y conexiones...'
-                    : 'Sube una foto de inspiración o pide cambios (colores, isla, cubierta)...'
+                  isListening
+                    ? 'Habla ahora para dictar tu instrucción...'
+                    : !planConfirmed
+                    ? 'Sube tu plano, escribe o dicta medidas y conexiones...'
+                    : 'Escribe, dicta con el micrófono o sube inspiración...'
                 }
                 className={`flex-1 resize-none rounded-xl border px-3 py-2 text-xs focus:outline-none focus:border-orange-500 transition-colors ${
                   isLight
@@ -860,9 +1131,9 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
               <button
                 type="button"
                 onClick={() => sendMessage()}
-                disabled={isSending || (!inputText.trim() && attachments.length === 0)}
+                disabled={isSending || (!inputText.trim() && !interimTranscript.trim() && attachments.length === 0 && !pendingAudioDataUrl)}
                 className={`p-2.5 rounded-xl font-bold transition-all shrink-0 ${
-                  isSending || (!inputText.trim() && attachments.length === 0)
+                  isSending || (!inputText.trim() && !interimTranscript.trim() && attachments.length === 0 && !pendingAudioDataUrl)
                     ? 'bg-orange-500/30 text-black/40 cursor-not-allowed'
                     : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow-md cursor-pointer active:scale-95'
                 }`}
