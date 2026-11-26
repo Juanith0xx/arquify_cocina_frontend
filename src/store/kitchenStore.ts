@@ -1623,7 +1623,6 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
     const isSinkCompatible =
       cab.variant === 'base_sink_2_doors' ||
       cab.variant === 'sink_2_doors' ||
-      cab.variant === 'sink_u_drawer' ||
       cab.variant === '2_doors';
 
     if (!isSinkCompatible) {
@@ -1930,7 +1929,7 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
     if (clash.autoFixAction === 'convert_to_u_drawer' && clash.cabinetId) {
       return {
         cabinets: s.cabinets.map((c) =>
-          c.id === clash.cabinetId ? { ...c, variant: 'sink_u_drawer' } : c
+          c.id === clash.cabinetId ? { ...c, variant: 'base_sink_2_doors', shelvesCount: 0 } : c
         ),
       };
     }

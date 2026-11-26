@@ -982,7 +982,6 @@ export function KitchenCountertop3D() {
     const accessoryCabinets = cabinets.filter((c) =>
       c.variant === 'base_sink_2_doors' ||
       c.variant === 'sink_2_doors' ||
-      c.variant === 'sink_u_drawer' ||
       c.id === countertopConfig.sinkCabinetId ||
       c.variant === 'base_cooktop_3_drawers' ||
       c.variant === 'cooktop_3_drawers' ||
@@ -997,7 +996,6 @@ export function KitchenCountertop3D() {
           const isSink =
             cab.variant === 'base_sink_2_doors' ||
             cab.variant === 'sink_2_doors' ||
-            cab.variant === 'sink_u_drawer' ||
             cab.id === countertopConfig.sinkCabinetId;
 
           const isCooktop =
@@ -1141,8 +1139,7 @@ export function KitchenCountertop3D() {
         const sinkCabinet = run.cabinets.find(
           (c) => c.id === countertopConfig.sinkCabinetId ||
                  c.variant === 'base_sink_2_doors' ||
-                 c.variant === 'sink_2_doors' ||
-                 c.variant === 'sink_u_drawer'
+                 c.variant === 'sink_2_doors'
         );
         const cooktopCabinet = run.cabinets.find(
           (c) => c.id === countertopConfig.cooktopCabinetId ||

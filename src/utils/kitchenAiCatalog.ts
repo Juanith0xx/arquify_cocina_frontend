@@ -86,7 +86,6 @@ export const AI_ALLOWED_MODULES: AiModuleCatalogEntry[] = [
   { tool: 'place_base_spice_rack', category: 'base', name: 'Base Especiero Extraíble', variant: 'spice_rack', defaultWidth: 20, minWidth: 15, maxWidth: 30, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 45, maxDepth: 80, notes: 'Ancho estricto 15-30cm' },
   { tool: 'place_base_wine_rack', category: 'base', name: 'Botellero Base', variant: 'wine_rack', defaultWidth: 20, minWidth: 15, maxWidth: 40, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 35, maxDepth: 80 },
   { tool: 'place_base_sink_2_doors', category: 'base', name: 'Base Lavaplatos (2 Puertas)', variant: 'base_sink_2_doors', defaultWidth: 80, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Obligatorio para lavaplatos: >=80cm (1 tina) o >=90cm (2 tinas)' },
-  { tool: 'place_base_sink_u_drawer', category: 'base', name: 'Fregadero Cajón en U', variant: 'sink_u_drawer', defaultWidth: 90, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Compatible con lavaplatos y sifón' },
   { tool: 'place_base_cooktop_3_drawers', category: 'base', name: 'Base Encimera (3 Cajones, 1° Fijo)', variant: 'base_cooktop_3_drawers', defaultWidth: 80, minWidth: 80, maxWidth: 120, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Mínimo normativo 80cm (90cm para encimera FDV 90 de 5 platos)' },
   { tool: 'place_base_corner_blind', category: 'base', name: 'Base Esquinero Ciego', variant: 'corner_blind_right', defaultWidth: 110, minWidth: 95, maxWidth: 140, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 60, minDepth: 55, maxDepth: 80, notes: 'Usar en esquinas de cocinas en L o U' },
   { tool: 'place_base_corner_l', category: 'base', name: 'Base Esquinero en L (90x90)', variant: 'corner_l', defaultWidth: 90, minWidth: 90, maxWidth: 90, defaultHeight: 80, minHeight: 70, maxHeight: 100, defaultDepth: 90, minDepth: 90, maxDepth: 90, fixedWidth: true, notes: 'MEDIDA FIJA 90x90cm en esquinas de cocinas en L o U' },
@@ -409,6 +408,10 @@ export function resolveApprovedModuleTool(toolOrVariant?: string): {
   wasFallback: boolean;
 } {
   const normalized = (toolOrVariant || '').trim().toLowerCase();
+  if (normalized === 'place_base_sink_u_drawer' || normalized === 'sink_u_drawer' || normalized === 'base_sink_u_drawer') {
+    const sink2Doors = AI_ALLOWED_MODULES.find((m) => m.tool === 'place_base_sink_2_doors')!;
+    return { entry: sink2Doors, specs: getCabinetSpecsFromTool(sink2Doors.tool), wasFallback: false };
+  }
   const exactTool = AI_ALLOWED_MODULES.find((m) => m.tool.toLowerCase() === normalized);
   if (exactTool) {
     return { entry: exactTool, specs: getCabinetSpecsFromTool(exactTool.tool), wasFallback: false };

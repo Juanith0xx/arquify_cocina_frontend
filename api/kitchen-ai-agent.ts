@@ -141,7 +141,7 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
    - **ANCHOS DE PUERTAS Y EQUIPOS:**
      * Módulos de 1 puerta (place_base_1_door, place_base_1_door_1_drawer, place_wall_1_door, place_tall_1_door, place_tall_split_2_doors, place_tall_inner_drawers): ancho máximo 60 cm.
      * Especiero (place_base_spice_rack): ancho entre 15 y 30 cm.
-     * Lavaplatos: SOLO en place_base_sink_2_doors o place_base_sink_u_drawer. Ancho >= 80 cm para "alfa_onec_3018" (1 tina) y >= 90 cm para "alfa_twoc_f5858a" (2 tinas). Marca hasSink: true en ese módulo y sinkModel en finishes.
+     * Lavaplatos: SOLO en place_base_sink_2_doors (Base Lavaplatos 2 Puertas). Ancho >= 80 cm para "alfa_onec_3018" (1 tina) y >= 90 cm para "alfa_twoc_f5858a" (2 tinas). Marca hasSink: true en ese módulo y sinkModel en finishes.
      * Encimera: SOLO en place_base_cooktop_3_drawers (ancho mínimo 80 cm; >= 90 cm para "fdv_design_90" de 5 platos). Marca hasCooktop: true en ese módulo y cooktopModel en finishes.
    - **ESQUINAS, TORRES Y ZONAS DE APERTURA (CRÍTICO — CERO PUERTAS BLOQUEADAS):**
      * JAMÁS coloques un mueble base normal (ej. place_base_1_door, cajoneras) ni un mueble aéreo encerrado en una esquina donde en el muro perpendicular hay una Torre Despensa, Torre Horno o Refrigerador: esa torre ocupa los primeros 65-75 cm del muro adyacente en TODA su altura (bases y aéreos) e impediría abrir la puerta.

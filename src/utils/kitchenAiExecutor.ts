@@ -1350,7 +1350,7 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
 
     // Validar ancho mínimo si trae lavaplatos o encimera asignados (solo si el módulo NO es de ancho fijo)
     if (!entry.fixedWidth) {
-      if (item.hasSink || entry.variant === 'base_sink_2_doors' || entry.variant === 'sink_u_drawer') {
+      if (item.hasSink || entry.variant === 'base_sink_2_doors') {
         const minSinkW = design.finishes?.sinkModel === 'alfa_twoc_f5858a' ? 90 : 80;
         if (width < minSinkW) width = clamp(minSinkW, entry.minWidth, entry.maxWidth);
       }
@@ -1486,7 +1486,7 @@ export function executeFullDesignAction(design: AiFullDesignAction): AiExecution
           structTexture
         );
         placedCabinets.push(cab);
-        if (item.hasSink || cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_u_drawer') {
+        if (item.hasSink || cab.variant === 'base_sink_2_doors') {
           sinkCabinetId = cab.id;
         }
         if (item.hasCooktop || cab.variant === 'base_cooktop_3_drawers') {

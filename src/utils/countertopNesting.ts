@@ -571,8 +571,7 @@ function computeSafeSegmentLengthsMm(
     const isSink =
       cab.id === config?.sinkCabinetId ||
       cab.variant === 'base_sink_2_doors' ||
-      cab.variant === 'sink_2_doors' ||
-      cab.variant === 'sink_u_drawer';
+      cab.variant === 'sink_2_doors';
 
     const isCooktop =
       cab.id === config?.cooktopCabinetId ||
@@ -1298,7 +1297,7 @@ export function generateCountertopPieces(
           : (config.baseWaterfallRight ?? config.waterfallRight));
 
     // Chequear si esta corrida contiene encastre de lavaplatos o encimera
-    const sinkCab = run.cabinets.find((c) => c.id === config.sinkCabinetId || c.variant === 'base_sink_2_doors' || c.variant === 'sink_2_doors' || c.variant === 'sink_u_drawer');
+    const sinkCab = run.cabinets.find((c) => c.id === config.sinkCabinetId || c.variant === 'base_sink_2_doors' || c.variant === 'sink_2_doors');
     const cooktopCab = run.cabinets.find((c) => c.id === config.cooktopCabinetId || c.variant === 'base_cooktop_3_drawers' || c.variant === 'cooktop_3_drawers');
 
     let sinkDistFromRunLeftMm: number | null = null;

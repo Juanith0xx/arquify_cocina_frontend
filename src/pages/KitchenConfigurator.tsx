@@ -1378,7 +1378,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                    {(() => {
                      const searchQ = moduleSearchQuery.trim().toLowerCase();
                      const matchesQ = (label: string) => !searchQ || label.toLowerCase().includes(searchQ);
-                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 cajones + 1 ollero', '2 caj. + 1 ollero', '2 olleros', 'fregadero', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
+                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 cajones + 1 ollero', '2 caj. + 1 ollero', '2 olleros', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
                      const torresHasMatch = !searchQ || ['1 pta larga', '2 ptas', 'torre horno', 'torre hornos', 'despensa cajones', 'nicho micro', 'repisas a la vista', 'torre repisas', 'botellero despensa', 'despensa 2 puertas', 'torres'].some(s => s.includes(searchQ));
                      const muralesHasMatch = !searchQ || ['aéreo 1 puerta', 'aéreo 2 puertas', 'pta elevable', 'doble pta', 'nicho micro', 'repisas', 'esquinero', 'botellero', 'new flow 60', 'murales'].some(s => s.includes(searchQ));
                      const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
@@ -1400,11 +1400,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="bases"
                              title="1. Bases"
-                             count={14}
+                             count={13}
                              icon={<Box size={14} />}
                              isOpen={Boolean(moduleAccordions.bases || searchQ)}
                              onToggle={() => toggleModuleAccordion('bases')}
-                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_sink_2_doors', 'place_base_cooktop_3_drawers', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_2_drawers_1_pot', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
+                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_sink_2_doors', 'place_base_cooktop_3_drawers', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_2_drawers_1_pot', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
                              isLight={isLight}
                            >
                              {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} previewToolId="place_base_1_door" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="1 Puerta" />}
@@ -1416,7 +1416,6 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              {matchesQ('Verdulero 3 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_3_drawers_veggie'} onClick={() => handleInsertModule('place_base_3_drawers_veggie')} previewToolId="place_base_3_drawers_veggie" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Verdulero 3 Cajones" />}
                              {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} previewToolId="place_base_2_pot_drawers" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="2 Olleros" />}
                              {(matchesQ('2 Cajones + 1 Ollero') || matchesQ('2 Caj. + 1 Ollero')) && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_drawers_1_pot'} onClick={() => handleInsertModule('place_base_2_drawers_1_pot')} previewToolId="place_base_2_drawers_1_pot" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="2 Caj. + 1 Ollero" />}
-                             {matchesQ('Fregadero Cajón en U') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_u_drawer'} onClick={() => handleInsertModule('place_base_sink_u_drawer')} previewToolId="place_base_sink_u_drawer" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Fregadero Cajón en U" />}
                              {matchesQ('Especiero') && <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} previewToolId="place_base_spice_rack" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Especiero" />}
                              {matchesQ('Botellero Base') && <ToolButton isLight={isLight} active={toolMode === 'place_base_wine_rack'} onClick={() => handleInsertModule('place_base_wine_rack')} previewToolId="place_base_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="Botellero Base" />}
                              {matchesQ('Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_blind'} onClick={() => handleInsertModule('place_base_corner_blind')} previewToolId="place_base_corner_blind" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Esquinero Ciego" />}
