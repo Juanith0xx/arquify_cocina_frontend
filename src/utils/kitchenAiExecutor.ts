@@ -148,6 +148,13 @@ export interface AiFinishesSpec {
   countertopEnabled?: boolean;
   backsplashMode?: BacksplashMode;
   regruesoCm?: number;
+  islandWaterfallLeft?: boolean;
+  islandWaterfallRight?: boolean;
+  islandWaterfallSides?: boolean;
+  baseWaterfallLeft?: boolean;
+  baseWaterfallRight?: boolean;
+  waterfallLeft?: boolean;
+  waterfallRight?: boolean;
   sinkModel?: SinkModelId;
   cooktopModel?: CooktopModelId;
   golaSystem?: GolaSystem;
@@ -1382,18 +1389,63 @@ function applyFinishesToStore(
       ? finishes.golaSystem
       : undefined;
 
-  if (finishes.countertopProduct || finishes.countertopEnabled !== undefined || finishes.backsplashMode || finishes.regruesoCm !== undefined) {
+  const reqIslandWaterLeft =
+    finishes.islandWaterfallLeft !== undefined
+      ? Boolean(finishes.islandWaterfallLeft)
+      : finishes.islandWaterfallSides !== undefined
+      ? Boolean(finishes.islandWaterfallSides)
+      : undefined;
+  const reqIslandWaterRight =
+    finishes.islandWaterfallRight !== undefined
+      ? Boolean(finishes.islandWaterfallRight)
+      : finishes.islandWaterfallSides !== undefined
+      ? Boolean(finishes.islandWaterfallSides)
+      : undefined;
+  const reqBaseWaterLeft =
+    finishes.baseWaterfallLeft !== undefined ? Boolean(finishes.baseWaterfallLeft) : undefined;
+  const reqBaseWaterRight =
+    finishes.baseWaterfallRight !== undefined ? Boolean(finishes.baseWaterfallRight) : undefined;
+  const reqGlobalWaterLeft =
+    finishes.waterfallLeft !== undefined ? Boolean(finishes.waterfallLeft) : undefined;
+  const reqGlobalWaterRight =
+    finishes.waterfallRight !== undefined ? Boolean(finishes.waterfallRight) : undefined;
+
+  const effIslandWaterLeft = reqIslandWaterLeft !== undefined ? reqIslandWaterLeft : reqGlobalWaterLeft;
+  const effIslandWaterRight = reqIslandWaterRight !== undefined ? reqIslandWaterRight : reqGlobalWaterRight;
+  const effBaseWaterLeft = reqBaseWaterLeft !== undefined ? reqBaseWaterLeft : reqGlobalWaterLeft;
+  const effBaseWaterRight = reqBaseWaterRight !== undefined ? reqBaseWaterRight : reqGlobalWaterRight;
+
+  const hasWaterfallUpdate =
+    effIslandWaterLeft !== undefined ||
+    effIslandWaterRight !== undefined ||
+    effBaseWaterLeft !== undefined ||
+    effBaseWaterRight !== undefined;
+
+  if (
+    finishes.countertopProduct ||
+    finishes.countertopEnabled !== undefined ||
+    finishes.backsplashMode ||
+    finishes.regruesoCm !== undefined ||
+    hasWaterfallUpdate
+  ) {
+    const currentStore = useKitchenStore.getState();
     const resolvedStone = finishes.countertopProduct
       ? resolveApprovedCountertop(finishes.countertopProduct)
       : null;
 
-    const stoneThicknessCm = (resolvedStone?.thicknessMm || 20) / 10;
-    let safeRegrueso = finishes.regruesoCm !== undefined ? clamp(Number(finishes.regruesoCm), 0, 6) : 0;
+    const currentProd =
+      currentStore.qstoneCatalog.find((p) => p.id === currentStore.countertopConfig.selectedProductId) ||
+      currentStore.qstoneCatalog[0];
+    const stoneThicknessCm = (resolvedStone?.thicknessMm || currentProd?.thicknessMm || 20) / 10;
 
-    const activeGola = desiredGola ?? useKitchenStore.getState().golaSystem;
-    if (activeGola !== 'none' && safeRegrueso > stoneThicknessCm + 2.0) {
-      safeRegrueso = 0;
-      warnings.push('Se ajustó el regrueso de cubierta a 0 cm para mantener compatibilidad con sistema Gola.');
+    let safeRegrueso: number | undefined;
+    if (finishes.regruesoCm !== undefined) {
+      safeRegrueso = clamp(Number(finishes.regruesoCm), 0, 6);
+      const activeGola = desiredGola ?? currentStore.golaSystem;
+      if (activeGola !== 'none' && safeRegrueso > stoneThicknessCm + 2.0) {
+        safeRegrueso = 0;
+        warnings.push('Se ajustó el regrueso de cubierta a 0 cm para mantener compatibilidad con sistema Gola.');
+      }
     }
 
     const backsplash: BacksplashMode | undefined =
@@ -1401,12 +1453,127 @@ function applyFinishesToStore(
         ? finishes.backsplashMode
         : undefined;
 
-    useKitchenStore.getState().setCountertopConfig({
-      enabled: finishes.countertopEnabled !== false,
+    const hasIslandCabs = currentStore.cabinets.some((c) => c.type === 'island');
+    const hasBaseCabs = currentStore.cabinets.some((c) => c.type === 'base');
+
+    if ((reqIslandWaterLeft !== undefined || reqIslandWaterRight !== undefined) && !hasIslandCabs) {
+      warnings.push('No existen muebles de isla en el diseño actual para aplicar cascada lateral.');
+    }
+    if ((reqBaseWaterLeft !== undefined || reqBaseWaterRight !== undefined) && !hasBaseCabs) {
+      warnings.push('No existen muebles base en el diseño actual para aplicar cascada lateral.');
+    }
+
+    const applyIslandLeft = hasIslandCabs ? effIslandWaterLeft : undefined;
+    const applyIslandRight = hasIslandCabs ? effIslandWaterRight : undefined;
+    const applyBaseLeft = hasBaseCabs ? effBaseWaterLeft : undefined;
+    const applyBaseRight = hasBaseCabs ? effBaseWaterRight : undefined;
+
+    const anyWaterfallActivated =
+      applyIslandLeft === true ||
+      applyIslandRight === true ||
+      applyBaseLeft === true ||
+      applyBaseRight === true;
+
+    // Sincronizar overrides independientes de corridas si el usuario los había configurado antes en el modal de Cubiertas
+    let nextRunOverrides: typeof currentStore.countertopConfig.runOverrides | undefined;
+    if (currentStore.countertopConfig.runOverrides) {
+      let overridesChanged = false;
+      const clonedOverrides = { ...currentStore.countertopConfig.runOverrides };
+      for (const runId of Object.keys(clonedOverrides)) {
+        const ov = clonedOverrides[runId];
+        if (!ov) continue;
+        const nextOv = { ...ov };
+        let runChanged = false;
+
+        if (runId.startsWith('ISL-')) {
+          if (applyIslandLeft !== undefined && nextOv.waterfallLeft !== undefined) {
+            nextOv.waterfallLeft = applyIslandLeft;
+            if (applyIslandLeft) nextOv.overhangLeftCm = 0;
+            runChanged = true;
+          }
+          if (applyIslandRight !== undefined && nextOv.waterfallRight !== undefined) {
+            nextOv.waterfallRight = applyIslandRight;
+            if (applyIslandRight) nextOv.overhangRightCm = 0;
+            runChanged = true;
+          }
+        } else if (runId.startsWith('BASE-')) {
+          if (applyBaseLeft !== undefined && nextOv.waterfallLeft !== undefined) {
+            nextOv.waterfallLeft = applyBaseLeft;
+            if (applyBaseLeft) nextOv.overhangLeftCm = 0;
+            runChanged = true;
+          }
+          if (applyBaseRight !== undefined && nextOv.waterfallRight !== undefined) {
+            nextOv.waterfallRight = applyBaseRight;
+            if (applyBaseRight) nextOv.overhangRightCm = 0;
+            runChanged = true;
+          }
+        }
+
+        if (runChanged) {
+          clonedOverrides[runId] = nextOv;
+          overridesChanged = true;
+        }
+      }
+      if (overridesChanged) {
+        nextRunOverrides = clonedOverrides;
+      }
+    }
+
+    const shouldEnableCountertop =
+      finishes.countertopEnabled !== undefined
+        ? Boolean(finishes.countertopEnabled)
+        : Boolean(resolvedStone || backsplash || safeRegrueso !== undefined || anyWaterfallActivated)
+        ? true
+        : undefined;
+
+    const countertopUpdates: Parameters<typeof currentStore.setCountertopConfig>[0] = {
+      ...(shouldEnableCountertop !== undefined ? { enabled: shouldEnableCountertop } : {}),
       ...(resolvedStone ? { selectedProductId: resolvedStone.id } : {}),
       ...(backsplash ? { backsplashMode: backsplash } : {}),
-      regruesoCm: safeRegrueso,
-    });
+      ...(safeRegrueso !== undefined ? { regruesoCm: safeRegrueso } : {}),
+      ...(applyIslandLeft !== undefined ? { islandWaterfallLeft: applyIslandLeft } : {}),
+      ...(applyIslandRight !== undefined ? { islandWaterfallRight: applyIslandRight } : {}),
+      ...(applyBaseLeft !== undefined ? { baseWaterfallLeft: applyBaseLeft } : {}),
+      ...(applyBaseRight !== undefined ? { baseWaterfallRight: applyBaseRight } : {}),
+      ...(nextRunOverrides ? { runOverrides: nextRunOverrides } : {}),
+    };
+
+    if (Object.keys(countertopUpdates).length > 0) {
+      useKitchenStore.getState().setCountertopConfig(countertopUpdates);
+    }
+
+    // Desactivar tapas laterales en melamina o costados decorativos en los flancos donde se activa cascada de cubierta
+    if (anyWaterfallActivated) {
+      const latestSt = useKitchenStore.getState();
+      for (const cab of latestSt.cabinets) {
+        const disableLeft =
+          (cab.type === 'island' && applyIslandLeft === true && cab.leftCoverPanel?.enabled) ||
+          (cab.type === 'base' && applyBaseLeft === true && cab.leftCoverPanel?.enabled);
+        const disableRight =
+          (cab.type === 'island' && applyIslandRight === true && cab.rightCoverPanel?.enabled) ||
+          (cab.type === 'base' && applyBaseRight === true && cab.rightCoverPanel?.enabled);
+
+        if (disableLeft || disableRight) {
+          latestSt.updateCabinet(cab.id, {
+            ...(disableLeft ? { leftCoverPanel: { ...cab.leftCoverPanel, enabled: false } } : {}),
+            ...(disableRight ? { rightCoverPanel: { ...cab.rightCoverPanel, enabled: false } } : {}),
+          });
+        }
+      }
+
+      if (latestSt.islandBackConfig?.sidesEnabled) {
+        const islandBackUpdates: Partial<typeof latestSt.islandBackConfig> = {};
+        if (applyIslandLeft === true && latestSt.islandBackConfig.sideLeftEnabled !== false) {
+          islandBackUpdates.sideLeftEnabled = false;
+        }
+        if (applyIslandRight === true && latestSt.islandBackConfig.sideRightEnabled !== false) {
+          islandBackUpdates.sideRightEnabled = false;
+        }
+        if (Object.keys(islandBackUpdates).length > 0) {
+          latestSt.setIslandBackConfig(islandBackUpdates);
+        }
+      }
+    }
 
     if (resolvedStone) {
       appliedSummary.push(`Cubierta: ${resolvedStone.name}`);
@@ -1414,6 +1581,23 @@ function applyFinishesToStore(
         adaptations.push(`Cubierta "${finishes.countertopProduct}" adaptada a ${resolvedStone.name}`);
       }
     }
+
+    const pushWaterfallSummary = (label: string, leftVal?: boolean, rightVal?: boolean) => {
+      if (leftVal === undefined && rightVal === undefined) return;
+      if (leftVal === true && rightVal === true) {
+        appliedSummary.push(`Cascada lateral en ${label} (ambos lados) con material de cubierta`);
+      } else if (leftVal === false && rightVal === false) {
+        appliedSummary.push(`Cascada lateral retirada en ${label} (ambos lados)`);
+      } else {
+        const parts: string[] = [];
+        if (leftVal !== undefined) parts.push(`izquierda ${leftVal ? 'activada' : 'retirada'}`);
+        if (rightVal !== undefined) parts.push(`derecha ${rightVal ? 'activada' : 'retirada'}`);
+        appliedSummary.push(`Cascada lateral en ${label} (${parts.join(', ')}) con material de cubierta`);
+      }
+    };
+
+    pushWaterfallSummary('isla', applyIslandLeft, applyIslandRight);
+    pushWaterfallSummary('muebles base', applyBaseLeft, applyBaseRight);
   }
 
   if (desiredGola) {

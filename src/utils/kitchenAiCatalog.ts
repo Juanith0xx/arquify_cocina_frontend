@@ -558,6 +558,10 @@ export function buildCurrentKitchenStateSummary() {
         regruesoCm: s.countertopConfig.regruesoCm,
         waterfallLeft: s.countertopConfig.waterfallLeft,
         waterfallRight: s.countertopConfig.waterfallRight,
+        baseWaterfallLeft: s.countertopConfig.baseWaterfallLeft ?? s.countertopConfig.waterfallLeft,
+        baseWaterfallRight: s.countertopConfig.baseWaterfallRight ?? s.countertopConfig.waterfallRight,
+        islandWaterfallLeft: s.countertopConfig.islandWaterfallLeft ?? s.countertopConfig.waterfallLeft,
+        islandWaterfallRight: s.countertopConfig.islandWaterfallRight ?? s.countertopConfig.waterfallRight,
       },
     },
   };
