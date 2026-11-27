@@ -138,6 +138,19 @@ export interface AiIslandSpec {
   waterfallSides?: boolean;
 }
 
+export interface AiIslandBackSpec {
+  enabled?: boolean;
+  materialType?: 'decorative' | 'countertop';
+  decorativeTexture?: string;
+  heightMode?: 'to_floor' | 'with_socle';
+  grainDirection?: 'vertical' | 'horizontal';
+  sidesEnabled?: boolean;
+  sideLeftEnabled?: boolean;
+  sideRightEnabled?: boolean;
+  sideDepthCm?: number;
+  sideHeightMode?: 'to_floor' | 'with_socle';
+}
+
 export interface AiFinishesSpec {
   doorsTexture?: string;
   lowerDoorsTexture?: string;
@@ -155,6 +168,7 @@ export interface AiFinishesSpec {
   baseWaterfallRight?: boolean;
   waterfallLeft?: boolean;
   waterfallRight?: boolean;
+  islandBack?: AiIslandBackSpec;
   sinkModel?: SinkModelId;
   cooktopModel?: CooktopModelId;
   golaSystem?: GolaSystem;
@@ -1598,6 +1612,180 @@ function applyFinishesToStore(
 
     pushWaterfallSummary('isla', applyIslandLeft, applyIslandRight);
     pushWaterfallSummary('muebles base', applyBaseLeft, applyBaseRight);
+  }
+
+  if (finishes.islandBack && typeof finishes.islandBack === 'object') {
+    const ib = finishes.islandBack;
+    const latestSt = useKitchenStore.getState();
+    const hasIslandCabs = latestSt.cabinets.some((c) => c.type === 'island');
+
+    if (ib.enabled === false) {
+      latestSt.setIslandBackConfig({ enabled: false });
+      appliedSummary.push('Placa trasera exterior de isla desactivada');
+    } else if (!hasIslandCabs) {
+      warnings.push('No existen muebles de isla en el diseño actual para configurar la placa trasera exterior.');
+    } else {
+      const updates: Partial<typeof latestSt.islandBackConfig> = {};
+      const hasAnySubField =
+        ib.materialType !== undefined ||
+        ib.decorativeTexture !== undefined ||
+        ib.heightMode !== undefined ||
+        ib.grainDirection !== undefined ||
+        ib.sidesEnabled !== undefined ||
+        ib.sideLeftEnabled !== undefined ||
+        ib.sideRightEnabled !== undefined ||
+        ib.sideDepthCm !== undefined ||
+        ib.sideHeightMode !== undefined;
+
+      if (ib.enabled !== undefined) {
+        updates.enabled = Boolean(ib.enabled);
+      } else if (hasAnySubField) {
+        updates.enabled = true;
+      }
+
+      const hasDecorativeOnlyOption =
+        ib.decorativeTexture !== undefined ||
+        ib.grainDirection !== undefined ||
+        ib.sidesEnabled !== undefined ||
+        ib.sideLeftEnabled !== undefined ||
+        ib.sideRightEnabled !== undefined ||
+        ib.sideDepthCm !== undefined ||
+        ib.sideHeightMode !== undefined;
+
+      if (ib.materialType === 'decorative' || ib.materialType === 'countertop') {
+        updates.materialType = ib.materialType;
+      } else if (hasDecorativeOnlyOption && latestSt.islandBackConfig.materialType === 'countertop') {
+        updates.materialType = 'decorative';
+      }
+
+      const effectiveMaterialType = updates.materialType ?? latestSt.islandBackConfig.materialType;
+      let resolvedTexName: string | null = null;
+
+      if (effectiveMaterialType === 'countertop') {
+        updates.heightMode = 'to_floor';
+        if (ib.heightMode === 'with_socle') {
+          warnings.push(
+            'Por regla técnica, la placa trasera de isla en material de cubierta (piedra/cuarzo) llega obligatoriamente hasta el piso sin zócalo.'
+          );
+        }
+        if (ib.sidesEnabled === true) {
+          warnings.push(
+            'Los costados laterales decorativos de la placa trasera aplican solo en modo Decorativo (melamina/HPL); para costados en piedra usa cascadas laterales de cubierta.'
+          );
+        }
+        if (!latestSt.countertopConfig.enabled) {
+          latestSt.setCountertopConfig({ enabled: true });
+        }
+      } else {
+        if (ib.decorativeTexture !== undefined && ib.decorativeTexture.trim()) {
+          const q = ib.decorativeTexture.trim().toLowerCase();
+          if (q === 'doors' || q === 'puertas' || q === 'same' || q === 'island' || q === 'isla') {
+            const refIsland = latestSt.cabinets.find((c) => c.type === 'island');
+            if (refIsland?.doorColor) {
+              updates.decorativeColor = refIsland.doorColor;
+              updates.decorativeMaterial = refIsland.doorMaterial === 'hpl' ? 'hpl' : 'melamina';
+              resolvedTexName = 'igual a frentes de isla';
+            }
+          } else {
+            const resolvedTex = resolveApprovedTexture(ib.decorativeTexture);
+            updates.decorativeColor = resolvedTex.texture.url;
+            updates.decorativeMaterial = resolvedTex.texture.material;
+            resolvedTexName = resolvedTex.texture.name;
+            if (resolvedTex.wasFallback) {
+              adaptations.push(
+                `Terminación de placa trasera de isla "${ib.decorativeTexture}" adaptada a ${resolvedTex.texture.name}`
+              );
+            }
+          }
+        }
+
+        if (ib.heightMode === 'to_floor' || ib.heightMode === 'with_socle') {
+          updates.heightMode = ib.heightMode;
+          if (ib.heightMode === 'with_socle') {
+            latestSt.setShowSocle(true);
+          }
+        }
+
+        if (ib.grainDirection === 'vertical' || ib.grainDirection === 'horizontal') {
+          updates.grainDirection = ib.grainDirection;
+        }
+
+        if (ib.sidesEnabled !== undefined) {
+          updates.sidesEnabled = Boolean(ib.sidesEnabled);
+        } else if (
+          ib.sideLeftEnabled === true ||
+          ib.sideRightEnabled === true ||
+          ib.sideDepthCm !== undefined ||
+          ib.sideHeightMode !== undefined
+        ) {
+          updates.sidesEnabled = true;
+        }
+
+        if (ib.sideLeftEnabled !== undefined) {
+          updates.sideLeftEnabled = Boolean(ib.sideLeftEnabled);
+        }
+        if (ib.sideRightEnabled !== undefined) {
+          updates.sideRightEnabled = Boolean(ib.sideRightEnabled);
+        }
+
+        if (ib.sideDepthCm !== undefined && Number.isFinite(Number(ib.sideDepthCm))) {
+          const islandCab = latestSt.cabinets.find((c) => c.type === 'island');
+          const minDepth = islandCab?.depth || 60;
+          const overhang =
+            latestSt.countertopConfig.islandOverhangBackCm ?? latestSt.countertopConfig.islandOverhangCm ?? 30;
+          const maxDepth = minDepth + overhang;
+          updates.sideDepthCm = Math.round(clamp(Number(ib.sideDepthCm), minDepth, maxDepth));
+        }
+
+        if (ib.sideHeightMode === 'to_floor' || ib.sideHeightMode === 'with_socle') {
+          updates.sideHeightMode = ib.sideHeightMode;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        useKitchenStore.getState().setIslandBackConfig(updates);
+        const finalIb = useKitchenStore.getState().islandBackConfig;
+        const details: string[] = [];
+
+        if (finalIb.materialType === 'countertop') {
+          const stNow = useKitchenStore.getState();
+          const prod =
+            stNow.qstoneCatalog.find((p) => p.id === stNow.countertopConfig.selectedProductId) ||
+            stNow.qstoneCatalog[0];
+          details.push(`Piedra Cubierta (${prod?.name || 'sincronizada'})`);
+          details.push('hasta el piso');
+        } else {
+          details.push(
+            resolvedTexName
+              ? `Decorativo ${resolvedTexName} (${finalIb.decorativeMaterial.toUpperCase()})`
+              : `Decorativo (${finalIb.decorativeMaterial.toUpperCase()})`
+          );
+          details.push(finalIb.heightMode === 'with_socle' ? 'con zócalo' : 'hasta el piso');
+          if (ib.grainDirection) {
+            details.push(`veta ${finalIb.grainDirection === 'horizontal' ? 'horizontal' : 'vertical'}`);
+          }
+          if (
+            ib.sidesEnabled !== undefined ||
+            ib.sideLeftEnabled !== undefined ||
+            ib.sideRightEnabled !== undefined ||
+            ib.sideDepthCm !== undefined ||
+            ib.sideHeightMode !== undefined
+          ) {
+            if (finalIb.sidesEnabled) {
+              const sidesList: string[] = [];
+              if (finalIb.sideLeftEnabled !== false) sidesList.push('izquierdo');
+              if (finalIb.sideRightEnabled !== false) sidesList.push('derecho');
+              const sidesDesc = sidesList.length > 0 ? sidesList.join(' y ') : 'ninguno';
+              details.push(`costados laterales (${sidesDesc}, prof. ${finalIb.sideDepthCm ?? 60} cm)`);
+            } else {
+              details.push('sin costados laterales');
+            }
+          }
+        }
+
+        appliedSummary.push(`Placa trasera exterior de isla: ${details.join(' · ')}`);
+      }
+    }
   }
 
   if (desiredGola) {

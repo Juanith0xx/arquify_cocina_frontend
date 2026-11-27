@@ -454,6 +454,16 @@ export function buildCurrentKitchenStateSummary() {
   const wallLabelById = new Map<string, string>();
   walls.forEach((w) => wallLabelById.set(w.id, w.label));
 
+  const islandCab = (s.cabinets || []).find((c) => c.type === 'island');
+  const islandMinDepthCm = islandCab?.depth || 60;
+  const islandOverhangCm =
+    s.countertopConfig.islandOverhangBackCm ?? s.countertopConfig.islandOverhangCm ?? 30;
+  const islandMaxSideDepthCm = islandMinDepthCm + islandOverhangCm;
+  const approvedBoardTextures = getApprovedBoardTextures();
+  const islandBackTexMatch = approvedBoardTextures.find(
+    (t) => t.url.toLowerCase() === (s.islandBackConfig.decorativeColor || '').toLowerCase()
+  );
+
   return {
     room: {
       type: s.roomConfig.type,
@@ -562,6 +572,22 @@ export function buildCurrentKitchenStateSummary() {
         baseWaterfallRight: s.countertopConfig.baseWaterfallRight ?? s.countertopConfig.waterfallRight,
         islandWaterfallLeft: s.countertopConfig.islandWaterfallLeft ?? s.countertopConfig.waterfallLeft,
         islandWaterfallRight: s.countertopConfig.islandWaterfallRight ?? s.countertopConfig.waterfallRight,
+      },
+      islandBack: {
+        enabled: Boolean(s.islandBackConfig.enabled),
+        materialType: s.islandBackConfig.materialType,
+        decorativeColor: s.islandBackConfig.decorativeColor,
+        decorativeTextureId: islandBackTexMatch?.id || null,
+        decorativeTextureName: islandBackTexMatch?.name || s.islandBackConfig.decorativeColor,
+        decorativeMaterial: s.islandBackConfig.decorativeMaterial,
+        heightMode: s.islandBackConfig.heightMode,
+        grainDirection: s.islandBackConfig.grainDirection || 'vertical',
+        sidesEnabled: Boolean(s.islandBackConfig.sidesEnabled),
+        sideLeftEnabled: s.islandBackConfig.sideLeftEnabled !== false,
+        sideRightEnabled: s.islandBackConfig.sideRightEnabled !== false,
+        sideDepthCm: s.islandBackConfig.sideDepthCm ?? islandMinDepthCm,
+        sideDepthRangeCm: [islandMinDepthCm, islandMaxSideDepthCm],
+        sideHeightMode: s.islandBackConfig.sideHeightMode || s.islandBackConfig.heightMode,
       },
     },
   };
