@@ -2,9 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useKitchenStore, CabinetType, getCabinetLabel } from '../store/kitchenStore';
 import { useStore } from '../store';
 import { TexturesSection } from '../components/TexturesSection';
-import { KitchenBlueprint } from '../components/KitchenBlueprint';
+import { KitchenBlueprint, KitchenBlueprintExternalCommand } from '../components/KitchenBlueprint';
 import { exportKitchenToExcel } from '../utils/kitchenExcelGenerator';
+import { exportKitchenPDF } from '../utils/kitchenPdfGenerator';
 import { exportKitchenLabelsPDF } from '../utils/kitchenLabelsPdfGenerator';
+import { exportClientQuotePdf, exportB2BQuoteExcel, QuoteExportMetadata } from '../utils/kitchenQuoteExporter';
+import {
+  downloadKitchenBimZip,
+  downloadKitchenIfcFile,
+  downloadKitchenObjFile,
+  downloadKitchen3dDxfFile,
+  BimExportOptions,
+} from '../utils/cadBimExport';
+import {
+  AiBackofficeTab,
+  AiUiAction,
+  AiUiContext,
+  AiUiModalId,
+} from '../utils/kitchenAiExecutor';
 import { FileSpreadsheet, FileText, RotateCcw, QrCode, Loader2 } from 'lucide-react';
 import { KitchenScene } from '../components/kitchen/KitchenScene';
 import { RoomPlannerModal } from '../components/kitchen/RoomPlannerModal';
@@ -113,6 +128,8 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const { viewMode, setViewMode, toolMode, setToolMode, cabinets, addCabinet, activeCabinetId, updateCabinet, removeCabinet, setActiveCabinet, applyGlobalTexture, showSocle, setShowSocle, socleFinish, setSocleFinish, socleHeight, setSocleHeight, roomConfig, setRoomPlannerOpen, walls, architecturalElements, activeArchElementId, addArchitecturalElement, updateArchitecturalElement, removeArchitecturalElement, setActiveArchElement, activeWallId, updateWall, removeWall, setActiveWall, golaSystem, setGolaSystem, countertopConfig, setCountertopConfig, qstoneCatalog, islandBackConfig, setIslandBackConfig, mepPoints, handleConfig, undo, redo, canUndo, canRedo } = useKitchenStore();
 
   const [isBackofficeOpen, setIsBackofficeOpen] = useState(false);
+  const [backofficeInitialTab, setBackofficeInitialTab] = useState<AiBackofficeTab | undefined>(undefined);
+  const [blueprintCommand, setBlueprintCommand] = useState<KitchenBlueprintExternalCommand | null>(null);
   const livePriceDisplayMode = useAdminStore((state) => state.livePriceDisplayMode);
   const liveSaleMarginPercent = useAdminStore((state) => state.liveSaleMarginPercent);
   const liveSaleMarginFurniturePercent = useAdminStore((state) => state.liveSaleMarginFurniturePercent);
@@ -427,6 +444,441 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
     useStore.setState({ showDimensions: false });
   }, []);
 
+  const isRoomPlannerOpen = useKitchenStore((s) => s.isRoomPlannerOpen);
+
+  const aiUiContext = useMemo<AiUiContext>(() => {
+    const openModals: AiUiModalId[] = [];
+    if (isRoomPlannerOpen) openModals.push('room_planner');
+    if (isCountertopModalOpen) openModals.push('countertop');
+    if (isB2BQuoteOpen) openModals.push('b2b_quote');
+    if (isBimModalOpen) openModals.push('bim_export');
+    if (isNanoBananaModalOpen) openModals.push('nano_banana');
+    if (isStudioRenderModalOpen) openModals.push('studio_render');
+    if (isSaveModalOpen) openModals.push('save_project');
+    if (isBackofficeOpen) openModals.push('backoffice');
+    if (isResetModalOpen) openModals.push('reset_confirm');
+
+    return {
+      viewMode,
+      theme,
+      isBlueprintsOpen: globalState.isPrinting,
+      canAccessIndustrialOutputs,
+      leftTab,
+      rightTab,
+      showDimensions: globalState.showDimensions,
+      dimensionLevel: globalState.dimensionLevel,
+      openModals,
+    };
+  }, [
+    viewMode,
+    theme,
+    globalState.isPrinting,
+    globalState.showDimensions,
+    globalState.dimensionLevel,
+    canAccessIndustrialOutputs,
+    leftTab,
+    rightTab,
+    isRoomPlannerOpen,
+    isCountertopModalOpen,
+    isB2BQuoteOpen,
+    isBimModalOpen,
+    isNanoBananaModalOpen,
+    isStudioRenderModalOpen,
+    isSaveModalOpen,
+    isBackofficeOpen,
+    isResetModalOpen,
+  ]);
+
+  const handleAiUiActions = async (
+    actions: AiUiAction[]
+  ): Promise<{ applied: string[]; warnings: string[] }> => {
+    const applied: string[] = [];
+    const warnings: string[] = [];
+
+    const closeAllModals = () => {
+      setRoomPlannerOpen(false);
+      setIsCountertopModalOpen(false);
+      setIsB2BQuoteOpen(false);
+      setIsBimModalOpen(false);
+      setIsNanoBananaModalOpen(false);
+      setIsStudioRenderModalOpen(false);
+      setIsSaveModalOpen(false);
+      setIsBackofficeOpen(false);
+      setIsResetModalOpen(false);
+    };
+
+    for (const action of actions) {
+      if (!action || typeof action !== 'object') continue;
+
+      switch (action.type) {
+        case 'set_view_mode': {
+          useStore.getState().setIsPrinting(false);
+          setViewMode(action.mode === '2d' ? '2d' : '3d');
+          applied.push(`Vista cambiada a modo ${action.mode === '2d' ? '2D' : '3D'}`);
+          break;
+        }
+
+        case 'set_theme': {
+          const nextTheme: 'dark' | 'light' =
+            action.theme === 'toggle'
+              ? theme === 'dark'
+                ? 'light'
+                : 'dark'
+              : action.theme === 'light'
+              ? 'light'
+              : 'dark';
+          setTheme(nextTheme);
+          try {
+            localStorage.setItem('arquify_kitchen_theme', nextTheme);
+          } catch {
+            // ignore
+          }
+          applied.push(`Tema cambiado a modo ${nextTheme === 'light' ? 'claro' : 'oscuro'}`);
+          break;
+        }
+
+        case 'open_blueprints': {
+          if (!canAccessIndustrialOutputs) {
+            warnings.push(
+              'Los Planos y Despiece (CAD/CAM) están reservados para cuentas Fábrica/Empresa. Puedes solicitar la Cotización PDF Comercial.'
+            );
+            break;
+          }
+          setIsExportMenuOpen(false);
+          useStore.getState().setIsPrinting(true);
+          applied.push('Abierta vista de Planos y Despiece (CAD/CAM)');
+          break;
+        }
+
+        case 'close_blueprints': {
+          useStore.getState().setIsPrinting(false);
+          applied.push('Cerrada vista de Planos y Despiece');
+          break;
+        }
+
+        case 'open_modal': {
+          if ((action.modal === 'b2b_quote' || action.modal === 'bim_export') && !canAccessIndustrialOutputs) {
+            warnings.push(
+              'Esta herramienta industrial está reservada para cuentas Fábrica/Empresa.'
+            );
+            break;
+          }
+          setIsExportMenuOpen(false);
+          switch (action.modal) {
+            case 'room_planner':
+              if (activeCabinetId) setActiveCabinet(null);
+              if (activeArchElementId) setActiveArchElement(null);
+              useStore.getState().setIsPrinting(false);
+              setRoomPlannerOpen(true);
+              applied.push('Abierto Configurador de Área y Muros');
+              break;
+            case 'countertop':
+              useStore.getState().setIsPrinting(false);
+              setIsCountertopModalOpen(true);
+              applied.push('Abierto Configurador de Cubiertas Qstone');
+              break;
+            case 'b2b_quote':
+              setIsB2BQuoteOpen(true);
+              applied.push('Abierta Cotización Comercial B2B / Retail');
+              break;
+            case 'bim_export':
+              setIsBimModalOpen(true);
+              applied.push('Abierta ventana de Exportación 3D / OpenBIM');
+              break;
+            case 'nano_banana':
+              useStore.getState().setIsPrinting(false);
+              setIsNanoBananaModalOpen(true);
+              applied.push('Abierto Render Fotográfico NanoBanana AI');
+              break;
+            case 'studio_render':
+              useStore.getState().setIsPrinting(false);
+              setIsStudioRenderModalOpen(true);
+              applied.push('Abierto Render de Estudio 3D');
+              break;
+            case 'save_project':
+              setIsSaveModalOpen(true);
+              applied.push('Abierta ventana Guardar Proyecto');
+              break;
+            case 'backoffice':
+              setBackofficeInitialTab(action.backofficeTab);
+              setIsBackofficeOpen(true);
+              applied.push(
+                action.backofficeTab
+                  ? `Abierto Backoffice (${action.backofficeTab})`
+                  : 'Abierto Backoffice & Modo Cliente'
+              );
+              break;
+            case 'reset_confirm':
+              setIsResetModalOpen(true);
+              applied.push('Abierta confirmación para Partir de Cero');
+              break;
+          }
+          break;
+        }
+
+        case 'close_modal': {
+          const target = action.modal || 'all';
+          if (target === 'all') {
+            closeAllModals();
+            useStore.getState().setIsPrinting(false);
+            applied.push('Cerradas ventanas y planos abiertos');
+          } else if (target === 'room_planner') {
+            setRoomPlannerOpen(false);
+            applied.push('Cerrado Configurador de Área');
+          } else if (target === 'countertop') {
+            setIsCountertopModalOpen(false);
+            applied.push('Cerrado Configurador de Cubiertas');
+          } else if (target === 'b2b_quote') {
+            setIsB2BQuoteOpen(false);
+            applied.push('Cerrada Cotización B2B');
+          } else if (target === 'bim_export') {
+            setIsBimModalOpen(false);
+            applied.push('Cerrada Exportación 3D / BIM');
+          } else if (target === 'nano_banana') {
+            setIsNanoBananaModalOpen(false);
+            applied.push('Cerrado Render NanoBanana AI');
+          } else if (target === 'studio_render') {
+            setIsStudioRenderModalOpen(false);
+            applied.push('Cerrado Render de Estudio');
+          } else if (target === 'save_project') {
+            setIsSaveModalOpen(false);
+            applied.push('Cerrada ventana Guardar Proyecto');
+          } else if (target === 'backoffice') {
+            setIsBackofficeOpen(false);
+            setBackofficeInitialTab(undefined);
+            applied.push('Cerrado Backoffice');
+          } else if (target === 'reset_confirm') {
+            setIsResetModalOpen(false);
+            applied.push('Cerrada ventana Partir de Cero');
+          }
+          break;
+        }
+
+        case 'set_right_tab': {
+          useStore.getState().setIsPrinting(false);
+          setIsRightSidebarCollapsed(false);
+          setRightTab(action.tab);
+          setActiveMobileTab(action.tab);
+          if (action.tab === 'engineering' && action.accordion) {
+            setOpenAccordions({
+              gola: false,
+              socle: false,
+              handles: false,
+              tapacantos: false,
+              assembly: false,
+              view: false,
+              [action.accordion]: true,
+            });
+          }
+          const tabLabels: Record<typeof action.tab, string> = {
+            module: 'Módulo / Propiedades',
+            materials: 'Acabados',
+            engineering: 'Herrajes e Ingeniería',
+            mep: 'Instalaciones MEP',
+            decoration: 'Decoración',
+          };
+          applied.push(`Abierta pestaña derecha: ${tabLabels[action.tab]}`);
+          break;
+        }
+
+        case 'set_left_tab': {
+          useStore.getState().setIsPrinting(false);
+          setIsLeftSidebarCollapsed(false);
+          setLeftTab(action.tab);
+          setActiveMobileTab(action.tab === 'modules' ? 'catalog' : 'scene');
+          if (action.tab === 'modules' && action.category) {
+            setModuleAccordions({
+              bases: false,
+              torres: false,
+              murales: false,
+              isla: false,
+              closets: false,
+              arch: false,
+              deco: false,
+              [action.category]: true,
+            });
+          }
+          applied.push(
+            action.tab === 'modules'
+              ? `Abierto catálogo de Módulos${action.category ? ` (${action.category})` : ''}`
+              : 'Abierta lista de módulos en Escena'
+          );
+          break;
+        }
+
+        case 'toggle_sidebar': {
+          if (action.side === 'left' || action.side === 'both') {
+            setIsLeftSidebarCollapsed(Boolean(action.collapsed));
+          }
+          if (action.side === 'right' || action.side === 'both') {
+            setIsRightSidebarCollapsed(Boolean(action.collapsed));
+          }
+          applied.push(
+            action.collapsed
+              ? `Panel(es) oculto(s) para ampliar el visor`
+              : `Panel(es) lateral(es) restaurado(s)`
+          );
+          break;
+        }
+
+        case 'set_dimensions': {
+          const nextLevel =
+            action.level !== undefined
+              ? Math.max(1, Math.min(6, Math.round(action.level)))
+              : useStore.getState().dimensionLevel;
+          useStore.setState({
+            showDimensions: Boolean(action.show),
+            dimensionLevel: nextLevel,
+          });
+          applied.push(
+            action.show
+              ? `Cotas 3D activadas (Nivel ${nextLevel}: ${DIMENSION_LEVEL_DATA[nextLevel]?.title || nextLevel})`
+              : 'Cotas 3D desactivadas'
+          );
+          break;
+        }
+
+        case 'download_report': {
+          const kState = useKitchenStore.getState();
+          const st = useStore.getState();
+          const industrialReports = new Set([
+            'blueprints_a3_pdf',
+            'bom_pdf',
+            'excel_cad_cam',
+            'labels_qr_pdf',
+            'b2b_quote_pdf',
+            'b2b_quote_excel',
+            'dxf_cnc_zip',
+            'bim_zip',
+            'bim_ifc',
+            'bim_obj',
+            'bim_dxf_3d',
+          ]);
+
+          if (industrialReports.has(action.report) && !canAccessIndustrialOutputs) {
+            warnings.push(
+              'Este informe industrial está reservado para cuentas Fábrica/Empresa. Puedes descargar la Cotización PDF Comercial.'
+            );
+            break;
+          }
+
+          if (action.report === 'commercial_pdf') {
+            handleDirectCommercialPdfDownload();
+            applied.push('Descarga iniciada: Cotización PDF Comercial');
+          } else if (action.report === 'blueprints_a3_pdf') {
+            st.setIsPrinting(true);
+            setBlueprintCommand({ id: Date.now(), type: 'export_a3_pdf' });
+            applied.push('Generando y descargando Planos de Fabricación PDF (A3)');
+          } else if (action.report === 'bom_pdf') {
+            exportKitchenPDF(kState.cabinets, st);
+            applied.push('Descarga iniciada: Ficha Técnica PDF (Despiece / BOM)');
+          } else if (action.report === 'excel_cad_cam') {
+            exportKitchenToExcel();
+            applied.push('Descarga iniciada: Planilla Excel CAD/CAM de Corte y Materiales');
+          } else if (action.report === 'labels_qr_pdf') {
+            await handleExportLabels();
+            applied.push('Descarga iniciada: Etiquetas de Producción con QR (PDF)');
+          } else if (action.report === 'b2b_quote_pdf' || action.report === 'b2b_quote_excel') {
+            const adminState = useAdminStore.getState();
+            const margin = adminState.manufacturingRates?.defaultDesignerMarginPercent || 35;
+            const quote = calculateKitchenDualQuote(margin, 0, kState.cabinets);
+            const metadata: QuoteExportMetadata = {
+              clientName: localStorage.getItem('arquify_client_name') || currentUser?.full_name || 'Cliente Particular',
+              projectName: localStorage.getItem('arquify_project_name') || 'Cocina Integral de Autor',
+              projectAddress: currentUser?.address || currentUser?.commune || 'Región Metropolitana, Chile',
+              designerName: currentUser?.full_name || 'Estudio de Arquitectura',
+              designerEmail: currentUser?.email || adminState.adminEmail || 'contacto@estudio.cl',
+              designerPhone: currentUser?.phone || '+56 9 1234 5678',
+              validityDays: 15,
+            };
+            if (action.report === 'b2b_quote_pdf') {
+              exportClientQuotePdf(quote, metadata);
+              applied.push('Descarga iniciada: Cotización Cliente PDF (B2B / PVP)');
+            } else {
+              exportB2BQuoteExcel(quote, metadata);
+              applied.push('Descarga iniciada: Planilla Excel Cotización B2B Completa');
+            }
+          } else if (action.report === 'dxf_cnc_zip') {
+            st.setIsPrinting(true);
+            setBlueprintCommand({ id: Date.now(), type: 'export_dxf_zip' });
+            applied.push('Generando y descargando Paquete DXF CNC (.ZIP)');
+          } else if (
+            action.report === 'bim_zip' ||
+            action.report === 'bim_ifc' ||
+            action.report === 'bim_obj' ||
+            action.report === 'bim_dxf_3d'
+          ) {
+            const exportOptions: BimExportOptions = {
+              projectName: localStorage.getItem('arquify_project_name') || 'PROYECTO COCINA ARQUIFY',
+              clientName: localStorage.getItem('arquify_client_name') || 'CLIENTE PARTICULAR',
+              includeWalls: true,
+              includeCountertop: true,
+              includeSocle: true,
+              includeHandles: true,
+              unit: 'mm',
+            };
+            if (action.report === 'bim_zip') {
+              await downloadKitchenBimZip(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Paquete Completo 3D / OpenBIM (.ZIP)');
+            } else if (action.report === 'bim_ifc') {
+              downloadKitchenIfcFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo OpenBIM (.IFC)');
+            } else if (action.report === 'bim_obj') {
+              downloadKitchenObjFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo 3D (.OBJ)');
+            } else {
+              downloadKitchen3dDxfFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo CAD 3D (.DXF)');
+            }
+          }
+          break;
+        }
+
+        case 'print_blueprints': {
+          if (!canAccessIndustrialOutputs) {
+            warnings.push('La impresión de planos de fabricación está reservada para cuentas Fábrica/Empresa.');
+            break;
+          }
+          useStore.getState().setIsPrinting(true);
+          setBlueprintCommand({ id: Date.now(), type: 'print' });
+          applied.push('Abierto diálogo de impresión de Planos');
+          break;
+        }
+
+        case 'history_action': {
+          if (action.action === 'undo') {
+            if (canUndo()) {
+              undo();
+              applied.push('Acción anterior deshecha (Undo)');
+            } else {
+              warnings.push('No hay acciones anteriores para deshacer.');
+            }
+          } else if (action.action === 'redo') {
+            if (canRedo()) {
+              redo();
+              applied.push('Acción rehecha (Redo)');
+            } else {
+              warnings.push('No hay acciones para rehacer.');
+            }
+          }
+          break;
+        }
+
+        case 'navigate_home': {
+          closeAllModals();
+          useStore.getState().setIsPrinting(false);
+          applied.push('Navegando a la página de Inicio');
+          window.setTimeout(() => {
+            onNavigate();
+          }, 250);
+          break;
+        }
+      }
+    }
+
+    return { applied, warnings };
+  };
+
   // Auto-switch right tab to 'module' and mobile tab when an item is selected
   useEffect(() => {
     if (activeCabinetId || activeArchElementId || activeWallId) {
@@ -616,7 +1068,10 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
     <StudioRenderProvider>
       <div className={`flex flex-col h-screen w-screen font-sans overflow-hidden transition-colors ${isLight ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0A0A0A] text-slate-200'}`}>
       {/* Planos de Fabricación y Despiece CAD/CAM */}
-      <KitchenBlueprint />
+      <KitchenBlueprint
+        externalCommand={blueprintCommand}
+        onExternalCommandHandled={() => setBlueprintCommand(null)}
+      />
 
       {/* Modal de Configuración y Dibujo de Estancia */}
       <RoomPlannerModal />
@@ -3408,6 +3863,8 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
      isOpen={isAiChatOpen}
      onClose={() => setIsAiChatOpen(false)}
      isLight={isLight}
+     uiContext={aiUiContext}
+     onExecuteUiActions={handleAiUiActions}
    />
 
     {/* Modal Renders Fotorrealistas de Estudio Three.js (Sin IA) */}
@@ -3420,8 +3877,12 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
    {/* Modal Backoffice & Modo Cliente */}
    <AdminBackofficeModal
      isOpen={isBackofficeOpen}
-     onClose={() => setIsBackofficeOpen(false)}
+     onClose={() => {
+       setIsBackofficeOpen(false);
+       setBackofficeInitialTab(undefined);
+     }}
      onNavigateToModule={() => setIsBackofficeOpen(false)}
+     initialTab={backofficeInitialTab}
    />
    <ModuleHoverPreviewPopup
      preview={!isLeftSidebarCollapsed && leftTab === 'modules' ? hoveredModulePreview : null}

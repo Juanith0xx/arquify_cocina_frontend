@@ -17,6 +17,7 @@ import {
   Wand2,
   Mic,
   Square,
+  Minimize2,
 } from 'lucide-react';
 import { useKitchenStore } from '../../store/kitchenStore';
 import { useAdminStore } from '../../store/adminStore';
@@ -28,6 +29,8 @@ import {
 import {
   AiAgentStructuredResponse,
   AiExecutionReport,
+  AiUiAction,
+  AiUiContext,
   executeFloorPlanAction,
   executeFullDesignAction,
   executePatchDesignAction,
@@ -54,6 +57,8 @@ interface KitchenAiChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
   isLight?: boolean;
+  uiContext?: AiUiContext;
+  onExecuteUiActions?: (actions: AiUiAction[]) => Promise<{ applied: string[]; warnings: string[] }>;
 }
 
 async function compressImageToDataUrl(file: File, maxDim = 1280): Promise<string> {
@@ -103,7 +108,13 @@ const INITIAL_WELCOME_MESSAGE: ChatMessageItem = {
   timestamp: Date.now(),
 };
 
-export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: KitchenAiChatPanelProps) {
+export function KitchenAiChatPanel({
+  isOpen,
+  onClose,
+  isLight = false,
+  uiContext,
+  onExecuteUiActions,
+}: KitchenAiChatPanelProps) {
   const { currentUser } = useAdminStore();
   const supabaseUser = useSupabaseAuthStore((state) => state.user);
 
@@ -124,6 +135,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   const [planConfirmed, setPlanConfirmed] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   // Estado de dictado / voz por micrófono
   const [isListening, setIsListening] = useState(false);
@@ -170,6 +182,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
   useEffect(() => {
     if (!isOpen) {
       stopVoiceCapture();
+      setIsMinimized(false);
     }
     return () => {
       stopVoiceCapture();
@@ -465,6 +478,7 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
           planConfirmed,
           currentState,
           catalog,
+          ...(uiContext ? { uiContext } : {}),
         }),
       });
 
@@ -488,6 +502,25 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
       } else if (structured.actionType === 'patch_design' && structured.patchDesign) {
         report = executePatchDesignAction(structured.patchDesign);
         setPlanConfirmed(true);
+      }
+
+      if (Array.isArray(structured.uiActions) && structured.uiActions.length > 0 && onExecuteUiActions) {
+        const uiResult = await onExecuteUiActions(structured.uiActions);
+        if (report) {
+          report = {
+            ...report,
+            appliedSummary: [...report.appliedSummary, ...uiResult.applied],
+            warnings: [...report.warnings, ...uiResult.warnings],
+          };
+        } else if (uiResult.applied.length > 0 || uiResult.warnings.length > 0) {
+          report = {
+            success: uiResult.warnings.length === 0 || uiResult.applied.length > 0,
+            appliedSummary: uiResult.applied,
+            warnings: uiResult.warnings,
+            adaptations: [],
+            mepClashesCount: 0,
+          };
+        }
       }
 
       // Combinar adaptaciones declaradas por la IA + adaptaciones detectadas por el ejecutor determinista
@@ -541,9 +574,48 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
         'Cambia los frentes a un tono madera cálido de catálogo',
       ];
 
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-4 right-4 z-[600] print:hidden flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setIsMinimized(false)}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-full border shadow-2xl transition-all cursor-pointer ${
+            isLight
+              ? 'bg-white border-orange-300 text-slate-900 hover:bg-orange-50'
+              : 'bg-zinc-950/95 border-orange-500/40 text-white hover:bg-zinc-900 backdrop-blur-xl'
+          }`}
+          title="Restaurar chat con Ettore"
+        >
+          <img
+            src={ETTORE_AVATAR_URL}
+            alt="Ettore"
+            className="w-6 h-6 rounded-full object-cover border border-black/15 shrink-0"
+          />
+          <span className="text-xs font-extrabold tracking-tight">Ettore</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-500 font-mono font-bold uppercase">
+            PRO
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Cerrar chat con Ettore"
+          className={`p-2 rounded-full border shadow-lg transition-colors cursor-pointer ${
+            isLight
+              ? 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100'
+              : 'bg-zinc-950/95 border-white/15 text-slate-400 hover:text-white hover:bg-zinc-900'
+          }`}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <aside
-      className={`fixed top-14 right-3 bottom-3 w-[410px] max-w-[calc(100vw-1.5rem)] z-40 rounded-2xl border shadow-2xl flex flex-col overflow-hidden transition-all ${
+      className={`fixed top-14 right-3 bottom-3 w-[410px] max-w-[calc(100vw-1.5rem)] z-[600] print:hidden rounded-2xl border shadow-2xl flex flex-col overflow-hidden transition-all ${
         isLight
           ? 'bg-white/98 border-slate-200 text-slate-900'
           : 'bg-zinc-950/96 border-white/15 text-slate-100 backdrop-blur-xl'
@@ -620,6 +692,16 @@ export function KitchenAiChatPanel({ isOpen, onClose, isLight = false }: Kitchen
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => setIsMinimized(true)}
+            title="Minimizar chat de Ettore"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isLight ? 'text-slate-500 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <Minimize2 size={15} />
+          </button>
           <button
             type="button"
             onClick={onClose}

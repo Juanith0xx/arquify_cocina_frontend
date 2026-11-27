@@ -228,14 +228,84 @@ export interface AiPatchDesignAction {
   clearIsland?: boolean;
 }
 
+export type AiBackofficeTab =
+  | 'projects'
+  | 'supplies'
+  | 'textures'
+  | 'analytics'
+  | 'users'
+  | 'manufacturing';
+
+export type AiUiModalId =
+  | 'room_planner'
+  | 'countertop'
+  | 'b2b_quote'
+  | 'bim_export'
+  | 'nano_banana'
+  | 'studio_render'
+  | 'save_project'
+  | 'backoffice'
+  | 'reset_confirm';
+
+export type AiDownloadReportId =
+  | 'commercial_pdf'
+  | 'blueprints_a3_pdf'
+  | 'bom_pdf'
+  | 'excel_cad_cam'
+  | 'labels_qr_pdf'
+  | 'b2b_quote_pdf'
+  | 'b2b_quote_excel'
+  | 'dxf_cnc_zip'
+  | 'bim_zip'
+  | 'bim_ifc'
+  | 'bim_obj'
+  | 'bim_dxf_3d';
+
+export type AiUiAction =
+  | { type: 'set_view_mode'; mode: '2d' | '3d' }
+  | { type: 'set_theme'; theme: 'light' | 'dark' | 'toggle' }
+  | { type: 'open_blueprints' }
+  | { type: 'close_blueprints' }
+  | { type: 'open_modal'; modal: AiUiModalId; backofficeTab?: AiBackofficeTab }
+  | { type: 'close_modal'; modal?: AiUiModalId | 'all' }
+  | {
+      type: 'set_right_tab';
+      tab: 'module' | 'materials' | 'engineering' | 'mep' | 'decoration';
+      accordion?: 'gola' | 'socle' | 'handles' | 'tapacantos' | 'assembly';
+    }
+  | {
+      type: 'set_left_tab';
+      tab: 'modules' | 'placed';
+      category?: 'bases' | 'torres' | 'murales' | 'isla' | 'closets' | 'arch' | 'deco';
+    }
+  | { type: 'toggle_sidebar'; side: 'left' | 'right' | 'both'; collapsed: boolean }
+  | { type: 'set_dimensions'; show: boolean; level?: 1 | 2 | 3 | 4 | 5 | 6 }
+  | { type: 'download_report'; report: AiDownloadReportId }
+  | { type: 'print_blueprints' }
+  | { type: 'history_action'; action: 'undo' | 'redo' }
+  | { type: 'navigate_home' };
+
+export interface AiUiContext {
+  viewMode: '2d' | '3d';
+  theme: 'dark' | 'light';
+  isBlueprintsOpen: boolean;
+  canAccessIndustrialOutputs: boolean;
+  leftTab: 'modules' | 'placed';
+  rightTab: 'module' | 'materials' | 'engineering' | 'mep' | 'decoration';
+  showDimensions: boolean;
+  dimensionLevel: number;
+  openModals: AiUiModalId[];
+}
+
 export interface AiAgentStructuredResponse {
   reply: string;
   stage: 'awaiting_plan_confirmation' | 'ready_to_design' | 'iterating';
-  actionType: 'apply_floor_plan' | 'apply_full_design' | 'patch_design' | 'reply_only';
+  actionType: 'apply_floor_plan' | 'apply_full_design' | 'patch_design' | 'ui_action' | 'reply_only';
   catalogAdaptations?: string[];
   floorPlan?: AiFloorPlanAction;
   fullDesign?: AiFullDesignAction;
   patchDesign?: AiPatchDesignAction;
+  uiActions?: AiUiAction[];
 }
 
 export interface AiExecutionReport {

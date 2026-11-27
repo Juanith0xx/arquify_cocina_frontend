@@ -30,6 +30,7 @@ interface KitchenAgentRequestBody {
   planConfirmed?: boolean;
   currentState: any;
   catalog: any;
+  uiContext?: any;
 }
 
 function getGeminiApiKey(): string | undefined {
@@ -80,7 +81,12 @@ function extractJsonFromText(rawText: string): any {
   }
 }
 
-function buildSystemInstruction(catalog: any, currentState: any, planConfirmed: boolean): string {
+function buildSystemInstruction(
+  catalog: any,
+  currentState: any,
+  planConfirmed: boolean,
+  uiContext?: any
+): string {
   const compactModules = (catalog?.modules || []).map(
     (m: any) =>
       `${m.tool} | ${m.category} | ${m.name} | ancho:${m.minWidth}-${m.maxWidth}cm (def ${m.defaultWidth}) | alt:${m.defaultHeight} | prof:${m.defaultDepth}${m.notes ? ` | ${m.notes}` : ''}`
@@ -138,6 +144,15 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
        - Para **eliminar** una ventana, ventanal, puerta o pilar usa patchDesign.removeArchitecturalElementIds.
      * Para mover la isla completa en cm, usa preferentemente patchDesign.moveIsland = { deltaXCm, deltaZCm } deduciendo el signo de X y Z desde currentState.room.walls y currentState.cabinets[].position. Para mover módulos individuales en planta usa deltaXCm/deltaZCm o xCm/zCm en patchDesign.updateCabinets.
      * Si pide un rediseño completo desde cero, usa actionType = "apply_full_design" con replaceExistingCabinets = true.
+   - **NAVEGACIÓN DE PÁGINA, INTERFAZ Y DESCARGA DE INFORMES (ui_action / uiActions):**
+     * Puedes operar la navegación completa del configurador y de la página cuando el usuario te lo pida (por ejemplo: mostrar o cerrar planos, cambiar a 2D/3D, cambiar modo claro/oscuro, activar/desactivar cotas 3D, ocultar/mostrar paneles, abrir pestañas del configurador, abrir modales como Área, Cubiertas, Cotización B2B, Exportar 3D/BIM, Render NanoBanana, Guardar Proyecto, Backoffice, Partir de Cero, deshacer/rehacer, volver a Inicio, o descargar cualquier informe PDF, Excel, QR, DXF o BIM).
+     * Si el pedido es únicamente de navegación, vista, modal o descarga de informes, usa actionType = "ui_action" y llena el arreglo "uiActions" (puedes incluir varias acciones en secuencia si lo pidió, ej. abrir planos y descargar PDF A3).
+     * Si el pedido combina una edición de diseño con una acción de UI o descarga (ej. "cambia las puertas a blanco y descárgame la cotización PDF"), usa el actionType de diseño correspondiente ("patch_design" o "apply_full_design") y agrega además "uiActions" en el mismo JSON.
+     * **PERMISOS DE ROL (OBLIGATORIO):** Revisa uiContext.canAccessIndustrialOutputs.
+       - Si canAccessIndustrialOutputs es true: tienes acceso a Planos y Despiece (open_blueprints), Cotización B2B, Exportar 3D/BIM y TODAS las descargas (commercial_pdf, blueprints_a3_pdf, bom_pdf, excel_cad_cam, labels_qr_pdf, b2b_quote_pdf, b2b_quote_excel, dxf_cnc_zip, bim_zip, bim_ifc, bim_obj, bim_dxf_3d).
+       - Si canAccessIndustrialOutputs es false: NO emitas open_blueprints ni modales/descargas industriales reservadas a fábrica (blueprints_a3_pdf, bom_pdf, excel_cad_cam, labels_qr_pdf, b2b_quote_pdf, b2b_quote_excel, dxf_cnc_zip, bim_*); en su lugar responde amablemente explicando que esas salidas técnicas están reservadas para cuenta Fábrica/Empresa y ofrece la "Cotización PDF Comercial" (commercial_pdf), que sí está disponible.
+     * Para "descargar cotización PDF" o "informe comercial PDF" usa { "type": "download_report", "report": "commercial_pdf" }. Para "descargar planos PDF" o "planos A3 PDF" usa { "type": "download_report", "report": "blueprints_a3_pdf" }. Para "ficha técnica / BOM PDF" usa "bom_pdf". Para "Excel de corte / CAD/CAM" usa "excel_cad_cam". Para "Excel de cotización / B2B" usa "b2b_quote_excel". Para "PDF cotización cliente B2B/PVP" usa "b2b_quote_pdf". Para "etiquetas QR" usa "labels_qr_pdf". Para "DXF CNC" usa "dxf_cnc_zip". Para "BIM / 3D (.ZIP, .IFC, .OBJ, .DXF)" usa "bim_zip" | "bim_ifc" | "bim_obj" | "bim_dxf_3d".
+     * Para "partir de cero" o "borrar todo el proyecto", NUNCA borres en silencio: abre el modal de confirmación con { "type": "open_modal", "modal": "reset_confirm" }.
    - Si solo hace una consulta o falta un dato indispensable, usa actionType = "reply_only".
 
 3. **REGLAS TÉCNICAS, CONSTRUCTIVAS Y ERGONOMÍA DE MODULACIÓN (ESTRICTO):**
@@ -169,6 +184,9 @@ REGLAS INQUEBRANTABLES (OBLIGATORIAS EN TODO MOMENTO)
 ESTADO ACTUAL DEL PROYECTO EN PANTALLA (FUENTE DE VERDAD)
 ================================================================
 ${JSON.stringify(currentState || {}, null, 2)}
+
+[ESTADO ACTUAL DE LA INTERFAZ Y PERMISOS (uiContext)]
+${JSON.stringify(uiContext || {}, null, 2)}
 
 ================================================================
 CATÁLOGO PERMITIDO (ÚNICAS OPCIONES VÁLIDAS)
@@ -208,7 +226,7 @@ Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
 {
   "reply": "Respuesta breve (2 a 4 frases cortas), cálida, respetuosa y con un toque sutil de humor en español como Ettore.",
   "stage": "awaiting_plan_confirmation" | "ready_to_design" | "iterating",
-  "actionType": "apply_floor_plan" | "apply_full_design" | "patch_design" | "reply_only",
+  "actionType": "apply_floor_plan" | "apply_full_design" | "patch_design" | "ui_action" | "reply_only",
   "catalogAdaptations": ["Lista de adaptaciones realizadas respecto a la foto o pedido (vacía si no hubo)."],
   "floorPlan": {
     "shapeType": "rectangular" | "l_shape" | "u_shape" | "five_corners" | "linear" | "freeform",
@@ -359,10 +377,26 @@ Responde SIEMPRE un objeto JSON válido con esta estructura exacta:
     ],
     "addMepPoints": [],
     "clearIsland": false
-  }
+  },
+  "uiActions": [
+    { "type": "open_blueprints" },
+    { "type": "close_blueprints" },
+    { "type": "set_view_mode", "mode": "2d | 3d" },
+    { "type": "set_theme", "theme": "light | dark | toggle" },
+    { "type": "open_modal", "modal": "room_planner | countertop | b2b_quote | bim_export | nano_banana | studio_render | save_project | backoffice | reset_confirm", "backofficeTab": "projects | supplies | textures | analytics | users | manufacturing" },
+    { "type": "close_modal", "modal": "room_planner | countertop | b2b_quote | bim_export | nano_banana | studio_render | save_project | backoffice | reset_confirm | all" },
+    { "type": "set_right_tab", "tab": "module | materials | engineering | mep | decoration", "accordion": "gola | socle | handles | tapacantos | assembly" },
+    { "type": "set_left_tab", "tab": "modules | placed", "category": "bases | torres | murales | isla | closets | arch | deco" },
+    { "type": "toggle_sidebar", "side": "left | right | both", "collapsed": true },
+    { "type": "set_dimensions", "show": true, "level": 1 },
+    { "type": "download_report", "report": "commercial_pdf | blueprints_a3_pdf | bom_pdf | excel_cad_cam | labels_qr_pdf | b2b_quote_pdf | b2b_quote_excel | dxf_cnc_zip | bim_zip | bim_ifc | bim_obj | bim_dxf_3d" },
+    { "type": "print_blueprints" },
+    { "type": "history_action", "action": "undo | redo" },
+    { "type": "navigate_home" }
+  ]
 }
 
-Incluye únicamente el bloque correspondiente al actionType elegido ("floorPlan", "fullDesign" o "patchDesign"). Nunca incluyas comentarios ni texto fuera del JSON.
+Incluye únicamente el bloque correspondiente al actionType elegido ("floorPlan", "fullDesign", "patchDesign" o "uiActions"; también puedes incluir "uiActions" junto a "patchDesign" o "apply_full_design" si el usuario pidió además navegar o descargar). Nunca incluyas comentarios ni texto fuera del JSON.
 `.trim();
 }
 
@@ -376,6 +410,7 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
     planConfirmed = false,
     currentState,
     catalog,
+    uiContext,
   } = body || {};
 
   // Bloqueo de seguridad en servidor equivalente a NanoBanana (solo usuarios de pago)
@@ -399,7 +434,7 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const systemInstruction = buildSystemInstruction(catalog, currentState, planConfirmed);
+  const systemInstruction = buildSystemInstruction(catalog, currentState, planConfirmed, uiContext);
 
   // Construir contexto conversacional reciente (últimos 10 mensajes para eficiencia)
   const recentHistory = (history || [])
