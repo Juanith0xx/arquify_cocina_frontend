@@ -2182,8 +2182,8 @@ function placeErgonomicIsland(
       structTex
     );
     candidateIslandCabinets.push(cab);
-    if (it.item.hasSink) sinkCabId = cab.id;
-    if (it.item.hasCooktop) cooktopCabId = cab.id;
+    if (it.item.hasSink || cab.variant === 'sink_2_doors' || cab.variant === 'base_sink_2_doors') sinkCabId = cab.id;
+    if (it.item.hasCooktop || cab.variant === 'cooktop_3_drawers' || cab.variant === 'base_cooktop_3_drawers') cooktopCabId = cab.id;
     cursor += it.width;
   }
 
@@ -3255,6 +3255,15 @@ export function executePatchDesignAction(patch: AiPatchDesignAction): AiExecutio
       drawersCount: specs.drawersCount,
       hingeSide: item.hingeSide,
     });
+    if (item.hasSink || specs.variant === 'base_sink_2_doors' || specs.variant === 'sink_2_doors') {
+      const latestSt = useKitchenStore.getState();
+      const sinkModel = latestSt.countertopConfig.sinkModel !== 'none' ? latestSt.countertopConfig.sinkModel : 'alfa_onec_3018';
+      latestSt.setCountertopSink(sinkModel, newId);
+    } else if (item.hasCooktop || specs.variant === 'base_cooktop_3_drawers' || specs.variant === 'cooktop_3_drawers') {
+      const latestSt = useKitchenStore.getState();
+      const cooktopModel = latestSt.countertopConfig.cooktopModel !== 'none' ? latestSt.countertopConfig.cooktopModel : 'fdv_design_60';
+      latestSt.setCountertopCooktop(cooktopModel, newId);
+    }
     addedModuleIds.push(newId);
     appliedSummary.push(`Agregado ${entry.name} (${dims.width} cm)`);
   }

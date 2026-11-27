@@ -77,7 +77,7 @@ export function calculateGolaSystem(
     totalGolaLLengthMm += widthMm;
 
     // Check intermediate Gola C profile requirement for drawers
-    if (cab.variant === '2_pot_drawers' || cab.variant === '1_door_1_drawer' || cab.variant === '2_drawers_1_pot') {
+    if (cab.variant === '2_pot_drawers' || cab.variant === '1_door_1_drawer' || cab.variant === '2_drawers_1_pot' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
       totalGolaCLengthMm += widthMm;
       golaCModulesCount += 1;
     } else if (cab.variant === '4_drawers') {
