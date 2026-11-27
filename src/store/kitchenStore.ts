@@ -379,6 +379,7 @@ interface KitchenState {
   setCountertopSink: (model: SinkModelId, cabinetId?: string | null) => { success: boolean; error?: string };
   setCountertopCooktop: (model: CooktopModelId, cabinetId?: string | null) => { success: boolean; error?: string };
   updateQstoneCatalogItemPrice: (id: string, priceM2Clp: number) => void;
+  setQstoneCatalog: (items: QstoneProductItem[]) => void;
   addQstoneCatalogItem: (item: QstoneProductItem) => void;
   updateQstoneCatalogItem: (id: string, updates: Partial<QstoneProductItem>) => void;
   removeQstoneCatalogItem: (id: string) => void;
@@ -1589,6 +1590,28 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         item.id === id ? { ...item, priceM2Clp } : item
       ),
     })),
+  setQstoneCatalog: (items) =>
+    set((state) => {
+      if (items.length === 0) {
+        return { qstoneCatalog: state.qstoneCatalog.slice(0, 1) };
+      }
+      const currentId = state.countertopConfig.selectedProductId;
+      const matched =
+        items.find((p) => p.id === currentId) ||
+        items.find((p) => p.id === `tex-${currentId}` || `tex-${p.id}` === currentId);
+      const nextSelectedId = matched ? matched.id : items[0].id;
+      return {
+        qstoneCatalog: items,
+        ...(nextSelectedId !== currentId
+          ? {
+              countertopConfig: {
+                ...state.countertopConfig,
+                selectedProductId: nextSelectedId,
+              },
+            }
+          : {}),
+      };
+    }),
   addQstoneCatalogItem: (item) =>
     set((state) => ({
       qstoneCatalog: [

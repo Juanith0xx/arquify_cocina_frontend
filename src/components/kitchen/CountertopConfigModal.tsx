@@ -18,7 +18,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { useKitchenStore } from '../../store/kitchenStore';
-import { useAdminStore, getEffectiveSupplyPrice, isSupplyOfferValid } from '../../store/adminStore';
+import { useAdminStore, mapAdminTexturesToCountertopCatalog } from '../../store/adminStore';
 import { QSTONE_SINKS, FDV_COOKTOPS, SinkModelId, CooktopModelId, CountertopRunOverride } from '../../types/countertop';
 import { generateCountertopPieces, detectContinuousCabinetRuns } from '../../utils/countertopNesting';
 
@@ -34,7 +34,6 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
   const {
     countertopConfig,
     setCountertopConfig,
-    qstoneCatalog,
     cabinets,
     activeCabinetId,
     setCountertopSink,
@@ -53,71 +52,9 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
   const adminTextures = useAdminStore((s) => s.textures);
 
   const fullCatalog = useMemo(() => {
-    // 1. Tomar texturas de cubiertas activas y aprobadas del adminStore (piedras, sinterizados y HPL compacto de cubiertas)
-    const stoneTextures = (adminTextures || [])
-      .filter((t) => t.active && (t.approvalStatus === 'approved' || !t.approvalStatus))
-      .filter((t) => {
-        const cat = t.category;
-        const n = (t.name || '').toLowerCase();
-        const b = (t.brand || t.providerName || '').toLowerCase();
-        return (
-          cat === 'piedras_marmoles' ||
-          (cat as string) === 'cubiertas_hpl' ||
-          n.includes('qstone') ||
-          b.includes('qstone') ||
-          b.includes('sysprotec') ||
-          (b.includes('abet') && t.thicknessMm === 8)
-        );
-      });
-
-    const adminMapped = stoneTextures.map((t) => {
-      const isHpl =
-        (t.category as string) === 'cubiertas_hpl' ||
-        t.thicknessMm === 8 ||
-        (t.brand && t.brand.toLowerCase().includes('abet')) ||
-        (t.name && t.name.toLowerCase().includes('hpl'));
-      const isSintered =
-        !isHpl &&
-        (t.name.toLowerCase().includes('sinteriz') ||
-          (t.finish && t.finish.toLowerCase().includes('sinteriz')) ||
-          t.thicknessMm === 12 ||
-          t.name.includes('12'));
-      const thickness = t.thicknessMm || (isHpl ? 8 : isSintered ? 12 : t.name.includes('20') ? 20 : 18);
-      const basePriceM2 = t.priceM2Clp || Math.round((t.priceSheetClp || 280000) / (isHpl ? 3.965 : 5.12)) || 185000;
-      const effectivePriceM2 = getEffectiveSupplyPrice({
-        priceClp: basePriceM2,
-        isOfferActive: t.isOfferActive,
-        offerDiscountPercent: t.offerDiscountPercent,
-        offerPriceClp: t.offerPriceClp,
-        offerStockLimit: t.offerStockLimit,
-        offerExpirationDate: t.offerExpirationDate,
-        stock: t.stock
-      });
-      return {
-        id: t.id,
-        code: t.code || (isHpl ? 'ABET-CUSTOM' : 'QS-CUSTOM'),
-        name: t.name,
-        materialType: isHpl ? ('hpl_abet' as const) : isSintered ? ('sinterizado' as const) : ('quarzo' as const),
-        thicknessMm: (thickness === 8 || thickness === 12 || thickness === 18 || thickness === 20 ? thickness : 18) as 8 | 12 | 18 | 20,
-        priceM2Clp: effectivePriceM2,
-        originalPriceM2Clp: basePriceM2,
-        isOfferActive: isSupplyOfferValid(t),
-        offerDiscountPercent: t.offerDiscountPercent || 30,
-        sheetWidthMm: isHpl ? 3050 : 3200,
-        sheetHeightMm: isHpl ? 1300 : 1600,
-        colorHex: t.url && t.url.startsWith('#') ? t.url : '#F5F5F7',
-        textureUrl: t.url && !t.url.startsWith('#') ? t.url : t.previewUrl && !t.previewUrl.startsWith('#') ? t.previewUrl : undefined,
-        finish: t.finish || (isHpl ? 'Compacto 8mm' : 'Pulido Seda'),
-        description: `${t.brand || (isHpl ? 'ABET LAMINATI' : 'SYSPROTEC (QSTONE)')} - ${t.finish || 'Formato Placa'}`,
-        active: true,
-      };
-    });
-
-    // Combinar con qstoneCatalog para garantizar disponibilidad de Abet Laminati HPL 8mm y catálogo base
-    const adminIds = new Set(adminMapped.map((p) => p.id));
-    const catalogExtras = qstoneCatalog.filter((p) => p.active !== false && !adminIds.has(p.id));
-    return [...adminMapped, ...catalogExtras];
-  }, [adminTextures, qstoneCatalog]);
+    // Mostrar exclusivamente las cubiertas activas y aprobadas cargadas en el backoffice
+    return mapAdminTexturesToCountertopCatalog(adminTextures || []);
+  }, [adminTextures]);
 
   const [activeTab, setActiveTab] = useState<'material' | 'dimensions' | 'appliances' | 'nesting'>('material');
   const [furnitureTypeTab, setFurnitureTypeTab] = useState<'base' | 'island'>('base');
@@ -158,7 +95,12 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
   }, [fullCatalog, materialFilter, searchQuery]);
 
   const selectedProduct = useMemo(() => {
-    return fullCatalog.find((p) => p.id === countertopConfig.selectedProductId) || fullCatalog[0];
+    const selectedId = countertopConfig.selectedProductId;
+    return (
+      fullCatalog.find((p) => p.id === selectedId) ||
+      fullCatalog.find((p) => p.id === `tex-${selectedId}` || `tex-${p.id}` === selectedId) ||
+      fullCatalog[0]
+    );
   }, [countertopConfig.selectedProductId, fullCatalog]);
 
   const nestingBOM = useMemo(() => {
@@ -522,7 +464,7 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredCatalog.map((product) => {
-                    const isSelected = countertopConfig.selectedProductId === product.id;
+                    const isSelected = selectedProduct?.id === product.id;
                     const isSintered = product.materialType === 'sinterizado';
                     const isHpl = product.materialType === 'hpl_abet' || product.thicknessMm === 8;
 
@@ -1851,7 +1793,7 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
                       }`}>
                         <Sparkles size={14} className="shrink-0" />
                         <span>
-                          Placa trasera exterior activada en <strong>{selectedProduct.name}</strong> hasta el piso (sin zócalo). Se incluye en la cubicación y nesting de planchas.
+                          Placa trasera exterior activada en <strong>{selectedProduct?.name || 'Cubierta'}</strong> hasta el piso (sin zócalo). Se incluye en la cubicación y nesting de planchas.
                         </span>
                       </div>
                     )}
@@ -2568,9 +2510,9 @@ export function CountertopConfigModal({ isOpen, onClose, isLight: isLightProp }:
           <div className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
             Producto activo:{' '}
             <span className={`font-medium ${isLight ? 'text-slate-900 font-semibold' : 'text-white'}`}>
-              {selectedProduct.name} ({selectedProduct.thicknessMm}mm)
-            </span>{' '}
-            • ${selectedProduct.priceM2Clp.toLocaleString('es-CL')} / m²
+              {selectedProduct ? `${selectedProduct.name} (${selectedProduct.thicknessMm}mm)` : 'Sin cubierta disponible'}
+            </span>
+            {selectedProduct && ` • $${selectedProduct.priceM2Clp.toLocaleString('es-CL')} / m²`}
           </div>
           <button
             onClick={onClose}

@@ -3139,48 +3139,74 @@ const saveToLocalStorage = (state: {
   }
 };
 
-function syncTextureToKitchenStore(tex: CustomTextureItem) {
-  const isStone =
-    tex.category === 'piedras_marmoles' ||
-    tex.brand?.toLowerCase().includes('qstone') ||
-    tex.brand?.toLowerCase().includes('sysprotec') ||
-    tex.name.toLowerCase().includes('qstone') ||
-    tex.providerName?.toLowerCase().includes('qstone') ||
-    tex.providerName?.toLowerCase().includes('sysprotec');
+function isCountertopTextureItem(t: CustomTextureItem): boolean {
+  const cat = t.category;
+  const n = (t.name || '').toLowerCase();
+  const b = (t.brand || t.providerName || '').toLowerCase();
+  return (
+    cat === 'piedras_marmoles' ||
+    (cat as string) === 'cubiertas_hpl' ||
+    n.includes('qstone') ||
+    b.includes('qstone') ||
+    b.includes('sysprotec') ||
+    (b.includes('abet') && t.thicknessMm === 8)
+  );
+}
 
-  if (!isStone) return;
-
-  try {
-    const isApproved = tex.active && (tex.approvalStatus === 'approved' || !tex.approvalStatus);
-    if (isApproved) {
+export function mapAdminTexturesToCountertopCatalog(textures: CustomTextureItem[]) {
+  return (textures || [])
+    .filter((t) => t.active && (t.approvalStatus === 'approved' || !t.approvalStatus))
+    .filter(isCountertopTextureItem)
+    .map((t) => {
+      const isHpl =
+        (t.category as string) === 'cubiertas_hpl' ||
+        t.thicknessMm === 8 ||
+        (t.brand && t.brand.toLowerCase().includes('abet')) ||
+        (t.name && t.name.toLowerCase().includes('hpl'));
       const isSintered =
-        tex.name.toLowerCase().includes('sinteriz') ||
-        tex.finish?.toLowerCase().includes('sinteriz') ||
-        tex.category === 'piedras_marmoles' ||
-        tex.sheetFormat?.toLowerCase().includes('3.2');
-
-      const priceM2 = tex.priceM2Clp || Math.round((tex.priceSheetClp || 280000) / 3.965) || 280000;
-
-      useKitchenStore.getState().addQstoneCatalogItem({
-        id: tex.id,
-        code: tex.code || 'QS-CUSTOM',
-        name: tex.name,
-        materialType: isSintered ? 'sinterizado' : 'quarzo',
-        thicknessMm: (tex as any).thicknessMm || (tex.name.includes('20') ? 20 : (tex.name.includes('18') ? 18 : 12)),
-        priceM2Clp: priceM2,
-        sheetWidthMm: 3200,
-        sheetHeightMm: 1600,
-        colorHex: tex.url && tex.url.startsWith('#') ? tex.url : '#F5F5F7',
-        textureUrl: (tex.url && !tex.url.startsWith('#')) ? tex.url : ((tex.previewUrl && !tex.previewUrl.startsWith('#')) ? tex.previewUrl : undefined),
-        finish: tex.finish || 'Pulido Seda',
-        description: `${tex.brand || 'SYSPROTEC (QSTONE)'} - ${tex.finish || 'Formato Placa'}`,
-        active: true,
+        !isHpl &&
+        (t.name.toLowerCase().includes('sinteriz') ||
+          (t.finish && t.finish.toLowerCase().includes('sinteriz')) ||
+          t.thicknessMm === 12 ||
+          t.name.includes('12'));
+      const thickness = t.thicknessMm || (isHpl ? 8 : isSintered ? 12 : t.name.includes('20') ? 20 : 18);
+      const basePriceM2 = t.priceM2Clp || Math.round((t.priceSheetClp || 280000) / (isHpl ? 3.965 : 5.12)) || 185000;
+      const effectivePriceM2 = getEffectiveSupplyPrice({
+        priceClp: basePriceM2,
+        isOfferActive: t.isOfferActive,
+        offerDiscountPercent: t.offerDiscountPercent,
+        offerPriceClp: t.offerPriceClp,
+        offerStockLimit: t.offerStockLimit,
+        offerExpirationDate: t.offerExpirationDate,
+        stock: t.stock,
       });
-    } else {
-      useKitchenStore.getState().removeQstoneCatalogItem(tex.id);
-    }
+      return {
+        id: t.id,
+        code: t.code || (isHpl ? 'ABET-CUSTOM' : 'QS-CUSTOM'),
+        name: t.name,
+        materialType: isHpl ? ('hpl_abet' as const) : isSintered ? ('sinterizado' as const) : ('quarzo' as const),
+        thicknessMm: (thickness === 8 || thickness === 12 || thickness === 18 || thickness === 20 ? thickness : 18) as 8 | 12 | 18 | 20,
+        priceM2Clp: effectivePriceM2,
+        originalPriceM2Clp: basePriceM2,
+        isOfferActive: isSupplyOfferValid(t),
+        offerDiscountPercent: t.offerDiscountPercent || 30,
+        sheetWidthMm: isHpl ? 3050 : 3200,
+        sheetHeightMm: isHpl ? 1300 : 1600,
+        colorHex: t.url && t.url.startsWith('#') ? t.url : '#F5F5F7',
+        textureUrl: t.url && !t.url.startsWith('#') ? t.url : t.previewUrl && !t.previewUrl.startsWith('#') ? t.previewUrl : undefined,
+        finish: t.finish || (isHpl ? 'Compacto 8mm' : 'Pulido Seda'),
+        description: `${t.brand || (isHpl ? 'ABET LAMINATI' : 'SYSPROTEC (QSTONE)')} - ${t.finish || 'Formato Placa'}`,
+        active: true,
+      };
+    });
+}
+
+function syncCountertopCatalogToKitchenStore(textures: CustomTextureItem[]) {
+  try {
+    const mapped = mapAdminTexturesToCountertopCatalog(textures);
+    useKitchenStore.getState().setQstoneCatalog(mapped);
   } catch (e) {
-    console.warn('Error sincronizando textura con kitchenStore:', e);
+    console.warn('Error sincronizando catálogo de cubiertas con kitchenStore:', e);
   }
 }
 
@@ -3196,11 +3222,7 @@ function isStoneTextureItem(tex: CustomTextureItem): boolean {
 }
 
 function syncTexturesTo3DStores(textures: CustomTextureItem[]) {
-  try {
-    textures.forEach(syncTextureToKitchenStore);
-  } catch (e) {
-    console.warn('Error sincronizando texturas con kitchenStore:', e);
-  }
+  syncCountertopCatalogToKitchenStore(textures);
   try {
     const closetStore = useClosetStore.getState();
     if (closetStore && typeof closetStore.setCustomTextures === 'function') {
@@ -4236,7 +4258,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       const supItem = textureToSupplyItem(newTex);
       const currentSupplies = [supItem, ...get().supplies.filter((s) => s.id !== supItem.id && s.code !== supItem.code)];
       persist({ textures: currentTextures, supplies: currentSupplies });
-      syncTextureToKitchenStore(newTex);
+      syncCountertopCatalogToKitchenStore(currentTextures);
       if (!options?.skipCloudSync) {
         void get().saveTextureToCloud(newId, true);
       }
@@ -4252,7 +4274,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
         currentSupplies = currentSupplies.map((s) => (s.id === `sup-${id}` || s.code === target.code ? { ...s, ...supItem } : s));
       }
       persist({ textures: currentTextures, supplies: currentSupplies });
-      if (target) syncTextureToKitchenStore(target);
+      syncCountertopCatalogToKitchenStore(currentTextures);
       if (!options?.skipCloudSync && target) {
         void get().saveTextureToCloud(id, false);
       }
@@ -4263,7 +4285,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       persist({ textures: currentTextures });
       const updated = currentTextures.find((t) => t.id === id);
       if (updated) {
-        syncTextureToKitchenStore(updated);
+        syncCountertopCatalogToKitchenStore(currentTextures);
         void get().saveTextureToCloud(id, false);
       }
     },
@@ -4275,7 +4297,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
       persist({ textures: currentTextures });
       const updated = currentTextures.find((t) => t.id === id);
       if (updated) {
-        syncTextureToKitchenStore(updated);
+        syncCountertopCatalogToKitchenStore(currentTextures);
         void get().saveTextureToCloud(id, false);
       }
     },
@@ -4285,9 +4307,7 @@ export const useAdminStore = create<AdminState>((set, get) => {
         t.id === id ? { ...t, approvalStatus: 'rejected' as const, active: false, rejectionReason: reason } : t
       );
       persist({ textures: currentTextures });
-      try {
-        useKitchenStore.getState().removeQstoneCatalogItem(id);
-      } catch (e) {}
+      syncCountertopCatalogToKitchenStore(currentTextures);
       if (currentTextures.some((t) => t.id === id)) {
         void get().saveTextureToCloud(id, false);
       }
@@ -4297,18 +4317,14 @@ export const useAdminStore = create<AdminState>((set, get) => {
       const currentTextures = get().textures.filter((t) => t.id !== id);
       const currentSupplies = get().supplies.filter((s) => s.id !== `sup-${id}`);
       persist({ textures: currentTextures, supplies: currentSupplies });
-      try {
-        useKitchenStore.getState().removeQstoneCatalogItem(id);
-      } catch (e) {}
+      syncCountertopCatalogToKitchenStore(currentTextures);
       void deleteCloudTexture(id);
     },
 
     resetTexturesToDefault: () => {
       const defaultSuppliesMerged = mergeTexturesIntoSupplies(DEFAULT_SUPPLIES, DEFAULT_CUSTOM_TEXTURES);
       persist({ textures: DEFAULT_CUSTOM_TEXTURES, supplies: defaultSuppliesMerged });
-      try {
-        DEFAULT_CUSTOM_TEXTURES.forEach(syncTextureToKitchenStore);
-      } catch (e) {}
+      syncCountertopCatalogToKitchenStore(DEFAULT_CUSTOM_TEXTURES);
     },
 
     // Tarifas de Manufactura B2B
@@ -4353,7 +4369,7 @@ if (typeof window !== 'undefined') {
   setTimeout(() => {
     try {
       const storedTextures = useAdminStore.getState().textures || [];
-      storedTextures.forEach(syncTextureToKitchenStore);
+      syncCountertopCatalogToKitchenStore(storedTextures);
     } catch (e) {}
   }, 150);
 }
