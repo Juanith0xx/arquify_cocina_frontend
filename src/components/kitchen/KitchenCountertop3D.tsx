@@ -849,8 +849,8 @@ function ContinuousSlabSegmentMesh({
   isLastSeg: boolean;
   isTransparent: boolean;
   matProps: any;
-  sinkCutout?: { localX: number; width: number; depth: number } | null;
-  cooktopCutout?: { localX: number; width: number; depth: number } | null;
+  sinkCutout?: { localX: number; localZ?: number; width: number; depth: number } | null;
+  cooktopCutout?: { localX: number; localZ?: number; width: number; depth: number } | null;
 }) {
   const geom = useMemo(() => {
     if (!sinkCutout && !cooktopCutout) return null;
@@ -867,12 +867,13 @@ function ContinuousSlabSegmentMesh({
 
     let hasValidHole = false;
 
-    const addSafeHole = (cutout: { localX: number; width: number; depth: number }) => {
+    const addSafeHole = (cutout: { localX: number; localZ?: number; width: number; depth: number }) => {
       const margin = 0.4;
+      const zCenter = cutout.localZ ?? 0;
       const hLeft = Math.max(-halfW + margin, cutout.localX - cutout.width / 2);
       const hRight = Math.min(halfW - margin, cutout.localX + cutout.width / 2);
-      const hBack = Math.max(-halfD + margin, -cutout.depth / 2);
-      const hFront = Math.min(halfD - margin, cutout.depth / 2);
+      const hBack = Math.max(-halfD + margin, zCenter - cutout.depth / 2);
+      const hFront = Math.min(halfD - margin, zCenter + cutout.depth / 2);
       if (hRight - hLeft <= 1 || hFront - hBack <= 1) return;
 
       // Orientación horaria (opuesta al contorno antihorario) para triangulación robusta en Three.js
@@ -1239,14 +1240,20 @@ export function KitchenCountertop3D() {
                 cooktopRelX >= segLeft - 0.01 &&
                 (isLastSeg ? cooktopRelX <= segRight + 0.01 : cooktopRelX < segRight);
 
+              // En islas con voladizo trasero (barra), centrar calado y artefacto sobre el casco del mueble (z = 0)
+              const applianceZRun = isIsland ? 0 : localZShift;
+              const applianceCutoutLocalZ = applianceZRun - localZShift;
+
               const sinkCutout = (hasSinkCutoutInSeg && sinkSpec) ? {
                 localX: sinkRelX! - segCenterRelX,
+                localZ: applianceCutoutLocalZ,
                 width: sinkSpec.cutoutWidthMm / 10,
                 depth: sinkSpec.cutoutDepthMm / 10,
               } : null;
 
               const cooktopCutout = (hasCooktopCutoutInSeg && cooktopSpec) ? {
                 localX: cooktopRelX! - segCenterRelX,
+                localZ: applianceCutoutLocalZ,
                 width: cooktopSpec.cutoutWidthMm / 10,
                 depth: cooktopSpec.cutoutDepthMm / 10,
               } : null;
@@ -1272,12 +1279,12 @@ export function KitchenCountertop3D() {
                     <>
                       {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
                         <AlfaTwocF5858aRealistic
-                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, applianceZRun]}
                           stoneThicknessCm={stoneThicknessCm}
                         />
                       ) : (
                         <AlfaOnec3018Realistic
-                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, localZShift]}
+                          position={[sinkCutout.localX, cabTopY + stoneThicknessCm, applianceZRun]}
                           stoneThicknessCm={stoneThicknessCm}
                         />
                       )}
@@ -1286,7 +1293,7 @@ export function KitchenCountertop3D() {
 
                   {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
                   {renderCooktopModelInSeg && cooktopCutout && (
-                    <group position={[cooktopCutout.localX, cabTopY + stoneThicknessCm, localZShift]}>
+                    <group position={[cooktopCutout.localX, cabTopY + stoneThicknessCm, applianceZRun]}>
                       {countertopConfig.cooktopModel === 'fdv_design_90' ? (
                         <FdvDesign90Model position={[0, 0, 0]} />
                       ) : (

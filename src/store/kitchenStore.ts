@@ -76,6 +76,8 @@ export type ToolMode =
   | 'place_island_2_drawers_1_pot'
   | 'place_island_1_door'
   | 'place_island_2_doors'
+  | 'place_island_sink_2_doors'
+  | 'place_island_cooktop_3_drawers'
   | 'place_island_wine_rack'
   | 'place_closet_hanger'
   | 'place_closet_mixed'
@@ -196,8 +198,12 @@ export function getCabinetLabel(cab: Partial<CabinetType>, index: number): strin
   if (cab.variant === 'deco_plant') return 'Planta Interior';
   if (cab.variant === 'deco_dishwasher') return 'Lavavajillas FDV Active 12C';
   if (cab.variant === 'sink_u_drawer') return 'Fregadero Cajón en U';
-  if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') return 'Base Lavaplatos (2 Puertas)';
-  if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') return 'Base Encimera (3 Cajones, 1° Fijo)';
+  if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') {
+    return cab.type === 'island' ? 'Isla Lavaplatos (2 Puertas)' : 'Base Lavaplatos (2 Puertas)';
+  }
+  if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') {
+    return cab.type === 'island' ? 'Isla Encimera (3 Cajones, 1° Fijo)' : 'Base Encimera (3 Cajones, 1° Fijo)';
+  }
   if (cab.variant === 'corner_l' || cab.variant === 'base_corner_l') return 'Esquinero en L (90x90)';
   if (cab.variant?.startsWith('wall_corner_blind')) return 'Aéreo Esquinero Ciego';
   if (cab.variant?.startsWith('corner_blind')) return 'Esquinero Ciego';
@@ -1653,7 +1659,7 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         valid: false,
         minWidth: spec.minCabinetWidthCm,
         actualWidth: cab.width,
-        reason: 'El lavaplatos solo puede cargarse en un Mueble Base Lavaplatos de 2 Puertas.',
+        reason: 'El lavaplatos solo puede cargarse en un Mueble Base o Isla Lavaplatos de 2 Puertas.',
       };
     }
 
@@ -1693,7 +1699,7 @@ export const useKitchenStore = create<KitchenState>((set, get) => {
         valid: false,
         minWidth: spec.minCabinetWidthCm,
         actualWidth: cab.width,
-        reason: 'La encimera solo puede cargarse en un Mueble Base Encimera (3 Cajones con primer cajón fijo).',
+        reason: 'La encimera solo puede cargarse en un Mueble Base o Isla Encimera (3 Cajones con primer cajón fijo).',
       };
     }
 

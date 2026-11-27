@@ -3605,6 +3605,23 @@ export function KitchenBlueprint({
                             ))}
                           </g>
                         );
+                      } else if (v === 'cooktop_3_drawers' || v === 'base_cooktop_3_drawers' || v === 'place_island_cooktop_3_drawers') {
+                        const d1 = bodyH * 0.25;
+                        const d2 = bodyH * 0.50;
+                        return (
+                          <g>
+                            <rect x={cLeftX} y={bodyTopY} width={cW} height={d1} fill="#f1f5f9" stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                            <line x1={cLeftX} y1={bodyTopY + d1} x2={cLeftX + cW} y2={bodyTopY + d1} stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                            <line x1={cLeftX} y1={bodyTopY + d2} x2={cLeftX + cW} y2={bodyTopY + d2} stroke="#0f172a" strokeWidth={isStacked ? "0.5" : "0.7"} />
+                            {showHandles && (
+                              <>
+                                <rect x={cLeftX + cW / 2 - hLen / 2} y={bodyTopY + d1 * 0.35} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                <rect x={cLeftX + cW / 2 - hLen / 2} y={bodyTopY + d1 + (d2 - d1) * 0.35} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                                <rect x={cLeftX + cW / 2 - hLen / 2} y={bodyTopY + d2 + (bodyH - d2) * 0.35} width={hLen} height={hThick} rx={0.5} fill={hColor} stroke="#0f172a" strokeWidth="0.3" />
+                              </>
+                            )}
+                          </g>
+                        );
                       } else if (v.includes('2_drawers_1_pot') || v.includes('2_caj_1_oll') || v.includes('1_pot') || v === 'island_2_drawers_1_pot' || v === '2_drawers_1_pot' || v === 'place_island_2_drawers_1_pot') {
                         const d1 = bodyH * 0.25;
                         const d2 = bodyH * 0.50;
@@ -4231,7 +4248,11 @@ export function KitchenBlueprint({
                         if (isWall) label = `M.A ${Math.round(cab.width * 10)}`;
                         else if (cab.type === 'closet' || cab.variant?.startsWith('closet_')) label = `CLÓSET ${Math.round(cab.width * 10)}`;
                         else if (isTall) label = `TORRE ${Math.round(cab.width * 10)}`;
-                        else if (isIsland) label = `ISLA ${Math.round(cab.width * 10)}`;
+                        else if (isIsland) {
+                          if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') label = `ISLA LAV ${Math.round(cab.width * 10)}`;
+                          else if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') label = `ISLA ENC ${Math.round(cab.width * 10)}`;
+                          else label = `ISLA ${Math.round(cab.width * 10)}`;
+                        }
                         else if (cab.variant === '3_drawers_veggie' || cab.variant === 'base_3_drawers_veggie') label = `VERD ${Math.round(cab.width * 10)}`;
                         else if (cab.variant === 'base_sink_2_doors' || cab.variant === 'sink_2_doors') label = `LAV ${Math.round(cab.width * 10)}`;
                         else if (cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers') label = `ENC ${Math.round(cab.width * 10)}`;

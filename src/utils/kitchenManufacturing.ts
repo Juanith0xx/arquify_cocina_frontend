@@ -165,7 +165,7 @@ export function isCabinetWithDoors(cab: CabinetType): boolean {
     v === 'closet_2_doors' ||
     v === 'closet_inner_drawers' ||
     (cab.type === 'closet' && Boolean(cab.hasDoors)) ||
-    (cab.type === 'island' && (v === '1_door' || v === '2_doors')) ||
+    (cab.type === 'island' && (v === '1_door' || v === '2_doors' || v === 'sink_2_doors' || v === 'base_sink_2_doors')) ||
     (cab.type === 'wall' && (v === '1_door' || v === '2_doors' || !cab.variant)) ||
     (cab.type === 'base' && (v === '1_door' || v === '2_doors' || !cab.variant))
   );
@@ -460,7 +460,7 @@ export function generateKitchenPartsList(cabinets: CabinetType[]): Part[] {
     // 1. Laterales (Sides)
     const isBaseGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && (cab.type === 'base' || cab.type === 'island');
     const isTallSplitGola = (kState.golaSystem === 'aluminum' || kState.golaSystem === 'black') && cab.type === 'tall' && (cab.variant === 'tall_split_2_doors' || cab.variant === 'tall_oven_micro' || cab.variant === 'tall_oven_vent');
-    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot');
+    const hasGolaC = isBaseGola && (cab.variant === '1_door_1_drawer' || cab.variant === '2_pot_drawers' || cab.variant === '4_drawers' || cab.variant === '2_drawers_1_pot' || cab.variant === 'base_cooktop_3_drawers' || cab.variant === 'cooktop_3_drawers');
     const isWineRack = cab.variant?.includes('wine_rack') || cab.variant === 'base_wine_rack' || cab.variant === 'wall_wine_rack' || cab.variant === 'tall_wine_rack' || cab.variant === 'island_wine_rack';
     const isOpen = cab.variant === 'open' || cab.variant === 'tall_open' || cab.variant === 'wall_open' || (cab.type === 'closet' && !cab.hasDoors && cab.variant !== 'closet_2_doors' && cab.variant !== 'closet_inner_drawers');
     const hasFronts = !isWineRack && !isOpen;

@@ -1681,12 +1681,16 @@ export function getCabinetSpecsFromTool(toolMode: string, existingCabinets: any[
     let v = '2_pot_drawers';
     let w = 90;
     let name = 'Isla 2 Olleros';
+    let shelvesCount: number | undefined = undefined;
+    let drawersCount: number | undefined = undefined;
     if (toolMode === 'place_island_wine_rack') { v = 'wine_rack'; w = 25; name = 'Botellero Isla'; }
     else if (toolMode === 'place_island_4_drawers') { v = '4_drawers'; w = 80; name = 'Isla 4 Cajones'; }
     else if (toolMode === 'place_island_2_drawers_1_pot') { v = '2_drawers_1_pot'; w = 80; name = 'Isla 2 Cajones + 1 Ollero'; }
     else if (toolMode === 'place_island_1_door') { v = '1_door'; w = 60; name = 'Isla 1 Puerta'; }
     else if (toolMode === 'place_island_2_doors') { v = '2_doors'; w = 80; name = 'Isla 2 Puertas'; }
-    return { type: 'island', variant: v, name, width: w, height: defaultIslandHeight, depth: defaultIslandDepth };
+    else if (toolMode === 'place_island_sink_2_doors') { v = 'sink_2_doors'; w = 80; name = 'Isla Lavaplatos (2 Puertas)'; shelvesCount = 0; }
+    else if (toolMode === 'place_island_cooktop_3_drawers') { v = 'cooktop_3_drawers'; w = 80; name = 'Isla Encimera (3 Cajones, 1° Fijo)'; shelvesCount = 0; drawersCount = 3; }
+    return { type: 'island', variant: v, name, width: w, height: defaultIslandHeight, depth: defaultIslandDepth, shelvesCount, drawersCount };
   }
 
   // Decoraciones / Equipamiento

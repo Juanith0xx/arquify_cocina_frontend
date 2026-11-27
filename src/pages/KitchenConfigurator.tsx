@@ -250,10 +250,10 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
       openAction: false,
     });
 
-    if (tool === 'place_base_sink_2_doors') {
+    if (tool === 'place_base_sink_2_doors' || tool === 'place_island_sink_2_doors') {
       const currentSink = state.countertopConfig.sinkModel !== 'none' ? state.countertopConfig.sinkModel : 'alfa_onec_3018';
       state.setCountertopSink(currentSink, newId);
-    } else if (tool === 'place_base_cooktop_3_drawers') {
+    } else if (tool === 'place_base_cooktop_3_drawers' || tool === 'place_island_cooktop_3_drawers') {
       const currentCooktop = state.countertopConfig.cooktopModel !== 'none' ? state.countertopConfig.cooktopModel : 'fdv_design_60';
       state.setCountertopCooktop(currentCooktop, newId);
     }
@@ -1836,7 +1836,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                      const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 cajones + 1 ollero', '2 caj. + 1 ollero', '2 olleros', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
                      const torresHasMatch = !searchQ || ['1 pta larga', '2 ptas', 'torre horno', 'torre hornos', 'despensa cajones', 'nicho micro', 'repisas a la vista', 'torre repisas', 'botellero despensa', 'despensa 2 puertas', 'torres'].some(s => s.includes(searchQ));
                      const muralesHasMatch = !searchQ || ['aéreo 1 puerta', 'aéreo 2 puertas', 'pta elevable', 'doble pta', 'nicho micro', 'repisas', 'esquinero', 'botellero', 'new flow 60', 'murales'].some(s => s.includes(searchQ));
-                     const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
+                     const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'isla lavaplatos', 'lavaplatos', 'isla encimera', 'encimera', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
                      const closetsHasMatch = !searchQ || ['barra + maletero', 'mixto', 'lencero', 'cajonera', 'clóset 2 puertas', 'walk-in', 'cajones ocultos', 'closet', 'ropéro'].some(s => s.includes(searchQ));
                      const archHasMatch = !searchQ || ['puerta', 'ventana', 'pilar', 'muro corto', 'arquitectónicos'].some(s => s.includes(searchQ));
                      const decoHasMatch = !searchQ || ['cocina fdv 90', 'refrigerador sbs', 'campana fdv conic 90', 'planta interior', 'lavavajillas', 'decoración'].some(s => s.includes(searchQ));
@@ -1933,7 +1933,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="isla"
                              title="4. Muebles Isla"
-                             count={6}
+                             count={8}
                              icon={<Layers size={14} />}
                              isOpen={Boolean(moduleAccordions.isla || searchQ)}
                              onToggle={() => toggleModuleAccordion('isla')}
@@ -1943,6 +1943,8 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                                'place_island_2_drawers_1_pot',
                                'place_island_1_door',
                                'place_island_2_doors',
+                               'place_island_sink_2_doors',
+                               'place_island_cooktop_3_drawers',
                                'place_island_wine_rack'
                              ].includes(toolMode)}
                              isLight={isLight}
@@ -1952,6 +1954,8 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              {matchesQ('Isla 2 Caj. + 1 Ollero') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_drawers_1_pot'} onClick={() => handleInsertModule('place_island_2_drawers_1_pot')} previewToolId="place_island_2_drawers_1_pot" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Isla 2 Caj. + 1 Ollero" />}
                              {matchesQ('Isla 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_island_1_door'} onClick={() => handleInsertModule('place_island_1_door')} previewToolId="place_island_1_door" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="Isla 1 Puerta" />}
                              {matchesQ('Isla 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_doors'} onClick={() => handleInsertModule('place_island_2_doors')} previewToolId="place_island_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Columns size={14}/>} label="Isla 2 Puertas" />}
+                             {matchesQ('Isla Lavaplatos (2 Puertas)') && <ToolButton isLight={isLight} active={toolMode === 'place_island_sink_2_doors'} onClick={() => handleInsertModule('place_island_sink_2_doors')} previewToolId="place_base_sink_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Isla Lavaplatos (2 Puertas)" />}
+                             {matchesQ('Isla Encimera (3 Cajones, 1° Fijo)') && <ToolButton isLight={isLight} active={toolMode === 'place_island_cooktop_3_drawers'} onClick={() => handleInsertModule('place_island_cooktop_3_drawers')} previewToolId="place_base_cooktop_3_drawers" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Isla Encimera (3 Cajones, 1° Fijo)" />}
                              {matchesQ('Botellero Isla') && <ToolButton isLight={isLight} active={toolMode === 'place_island_wine_rack'} onClick={() => handleInsertModule('place_island_wine_rack')} previewToolId="place_island_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="Botellero Isla" />}
                            </ModuleCategoryAccordion>
                          )}

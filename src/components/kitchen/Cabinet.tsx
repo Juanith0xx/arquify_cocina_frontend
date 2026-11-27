@@ -5038,8 +5038,8 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                    variant === 'closet_walkin' ? 'WALK-IN CLOSET' :
                    variant === 'closet_inner_drawers' ? 'CLÓSET CAJONES OCULTOS' :
                    type === 'closet' ? 'CLÓSET MODULAR' :
-                   variant === 'base_sink_2_doors' ? 'BASE LAVAPLATOS (2 PTAS)' :
-                   variant === 'base_cooktop_3_drawers' ? 'BASE ENCIMERA (3 CAJONES)' :
+                   (variant === 'base_sink_2_doors' || variant === 'sink_2_doors') ? (type === 'island' ? 'ISLA LAVAPLATOS (2 PTAS)' : 'BASE LAVAPLATOS (2 PTAS)') :
+                   (variant === 'base_cooktop_3_drawers' || variant === 'cooktop_3_drawers') ? (type === 'island' ? 'ISLA ENCIMERA (3 CAJONES)' : 'BASE ENCIMERA (3 CAJONES)') :
                    variant?.startsWith('wall_corner_blind') ? 'AÉREO ESQUINERO' :
                    variant?.includes('wine_rack') ? 'BOTELLERO' :
                    (variant ? variant.replace(/_/g, ' ').toUpperCase() : type.toUpperCase())}
