@@ -20,11 +20,13 @@ import {
   ExternalLink,
   ShieldCheck,
   UserCheck,
-  Send
+  Send,
+  Cpu
 } from 'lucide-react';
 import { getSupabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useSupabaseAuthStore, UserRole, TenantInfo } from '../../store/supabaseAuthStore';
 import { useAdminStore } from '../../store/adminStore';
+import { EttoreUsageSection } from './EttoreUsageSection';
 
 export interface UserAccountItem {
   id: string;
@@ -186,7 +188,7 @@ export function UsersAndProvidersTab() {
   const isCloud = isSupabaseConfigured();
   const currentSupabaseUser = useSupabaseAuthStore((state) => state.user);
 
-  const [subTab, setSubTab] = useState<'users' | 'providers' | 'nanobanana'>('users');
+  const [subTab, setSubTab] = useState<'users' | 'providers' | 'nanobanana' | 'ettore'>('users');
   const [creditUserEmail, setCreditUserEmail] = useState('');
   const [creditAmountValue, setCreditAmountValue] = useState(100);
   const [searchTerm, setSearchTerm] = useState('');
@@ -673,7 +675,7 @@ export function UsersAndProvidersTab() {
           isLight ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setSubTab('users')}
             className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
@@ -715,6 +717,20 @@ export function UsersAndProvidersTab() {
             <Sparkles size={15} />
             Renders NanoBanana AI & Créditos
           </button>
+
+          <button
+            onClick={() => setSubTab('ettore')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              subTab === 'ettore'
+                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                : isLight
+                ? 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-900'
+                : 'bg-zinc-800 text-slate-300 hover:bg-zinc-700 hover:text-white'
+            }`}
+          >
+            <Cpu size={15} />
+            Consumo Ettore IA (Tokens)
+          </button>
         </div>
 
         {/* Actions Button */}
@@ -747,7 +763,7 @@ export function UsersAndProvidersTab() {
               <Plus size={16} />
               Nuevo Usuario
             </button>
-          ) : (
+          ) : subTab !== 'ettore' ? (
             <button
               onClick={() => {
                 setEditingTenant(null);
@@ -767,11 +783,12 @@ export function UsersAndProvidersTab() {
               <Plus size={16} />
               Registrar Proveedor
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
       {/* Filter & Search Bar */}
+      {subTab !== 'ettore' && (
       <div
         className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border text-xs transition-colors ${
           isLight ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/40 border-zinc-800/80'
@@ -810,6 +827,7 @@ export function UsersAndProvidersTab() {
           </div>
         )}
       </div>
+      )}
 
       {/* TAB 1: USUARIOS */}
       {subTab === 'users' && (
@@ -1252,6 +1270,11 @@ export function UsersAndProvidersTab() {
           </div>
         );
       })()}
+
+      {/* ========================================================================= */}
+      {/* SUBTAB 4: CONSUMO ETTORE IA (TOKENS Y COSTOS) */}
+      {/* ========================================================================= */}
+      {subTab === 'ettore' && <EttoreUsageSection isLight={isLight} />}
 
       {/* ========================================================================= */}
       {/* MODAL 1: REGISTRAR / EDITAR PROVEEDOR (TENANT) */}

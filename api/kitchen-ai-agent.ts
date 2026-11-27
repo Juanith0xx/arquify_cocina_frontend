@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -23,6 +24,11 @@ interface IncomingImage {
 
 interface KitchenAgentRequestBody {
   userRole?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  tenantId?: string;
+  tenantName?: string;
   message: string;
   images?: IncomingImage[];
   audioDataUrl?: string;
@@ -31,6 +37,50 @@ interface KitchenAgentRequestBody {
   currentState: any;
   catalog: any;
   uiContext?: any;
+}
+
+function getUsageGatewayBaseUrl(): string {
+  const configured =
+    process.env.ETTORE_USAGE_API_BASE_URL ||
+    process.env.VITE_API_BASE_URL ||
+    process.env.VITE_API_PROXY_TARGET ||
+    'https://arquifycocinabackend-production.up.railway.app';
+  return configured.trim().replace(/\/+$/, '');
+}
+
+async function recordEttoreUsageToGateway(payload: {
+  id: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  userRole?: string;
+  tenantId?: string;
+  tenantName?: string;
+  modelUsed: string;
+  actionType?: string;
+  hasImages: boolean;
+  imagesCount: number;
+  hasAudio: boolean;
+  promptTokens: number;
+  outputTokens: number;
+  thoughtsTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+}): Promise<boolean> {
+  const baseUrl = getUsageGatewayBaseUrl();
+  if (!baseUrl) return false;
+  try {
+    const res = await fetch(`${baseUrl}/api/v1/ettore-usage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(2500),
+    });
+    return res.ok;
+  } catch (err: any) {
+    console.warn('[kitchen-ai-agent] No se pudo registrar consumo de tokens en gateway:', err?.message || err);
+    return false;
+  }
 }
 
 function getGeminiApiKey(): string | undefined {
@@ -446,6 +496,11 @@ Incluye únicamente el bloque correspondiente al actionType elegido ("floorPlan"
 export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
   const {
     userRole,
+    userId,
+    userEmail,
+    userName,
+    tenantId,
+    tenantName,
     message,
     images = [],
     audioDataUrl,
@@ -564,9 +619,51 @@ export async function handleKitchenAgentRequest(body: KitchenAgentRequestBody) {
   }
 
   const parsed = extractJsonFromText(response.text);
+
+  // Extraer consumo real de tokens entregado por Gemini (usageMetadata)
+  const meta = response?.usageMetadata || {};
+  const promptTokens = Math.max(0, Math.round(Number(meta.promptTokenCount || 0)));
+  const outputTokens = Math.max(0, Math.round(Number(meta.candidatesTokenCount || 0)));
+  const thoughtsTokens = Math.max(0, Math.round(Number(meta.thoughtsTokenCount || 0)));
+  const cachedTokens = Math.max(0, Math.round(Number(meta.cachedContentTokenCount || 0)));
+  const explicitTotal = Math.max(0, Math.round(Number(meta.totalTokenCount || 0)));
+  const totalTokens = explicitTotal > 0 ? explicitTotal : promptTokens + outputTokens + thoughtsTokens;
+
+  const usageId = crypto.randomUUID();
+  const imagesCount = Array.isArray(images) ? images.slice(0, 4).length : 0;
+  const recordedInCloud = await recordEttoreUsageToGateway({
+    id: usageId,
+    userId,
+    userEmail,
+    userName,
+    userRole: userRole || 'designer',
+    tenantId,
+    tenantName,
+    modelUsed,
+    actionType: typeof parsed?.actionType === 'string' ? parsed.actionType : undefined,
+    hasImages: imagesCount > 0,
+    imagesCount,
+    hasAudio: Boolean(parsedAudio),
+    promptTokens,
+    outputTokens,
+    thoughtsTokens,
+    cachedTokens,
+    totalTokens,
+  });
+
   return {
     ...parsed,
     modelUsed,
+    usage: {
+      id: usageId,
+      modelUsed,
+      promptTokens,
+      outputTokens,
+      thoughtsTokens,
+      cachedTokens,
+      totalTokens,
+      recordedInCloud,
+    },
   };
 }
 

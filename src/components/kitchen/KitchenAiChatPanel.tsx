@@ -35,6 +35,7 @@ import {
   executeFullDesignAction,
   executePatchDesignAction,
 } from '../../utils/kitchenAiExecutor';
+import { recordEttoreUsageFallback } from '../../utils/ettoreUsageApiService';
 
 interface ChatAttachment {
   id: string;
@@ -115,10 +116,16 @@ export function KitchenAiChatPanel({
   uiContext,
   onExecuteUiActions,
 }: KitchenAiChatPanelProps) {
-  const { currentUser } = useAdminStore();
+  const { currentUser, adminEmail } = useAdminStore();
   const supabaseUser = useSupabaseAuthStore((state) => state.user);
+  const supabaseTenant = useSupabaseAuthStore((state) => state.tenant);
 
   const effectiveRole = currentUser?.role || supabaseUser?.role || 'designer';
+  const effectiveUserId = supabaseUser?.id || currentUser?.id || undefined;
+  const effectiveUserEmail = supabaseUser?.email || currentUser?.email || adminEmail || undefined;
+  const effectiveUserName = supabaseUser?.full_name || currentUser?.full_name || effectiveUserEmail || undefined;
+  const effectiveTenantId = supabaseUser?.tenant_id || currentUser?.tenant_id || undefined;
+  const effectiveTenantName = supabaseTenant?.name || currentUser?.tenant_name || undefined;
   const isFreeUser = effectiveRole === 'free_user';
 
   const setRoomPlannerOpen = useKitchenStore((s) => s.setRoomPlannerOpen);
@@ -471,6 +478,11 @@ export function KitchenAiChatPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userRole: effectiveRole,
+          ...(effectiveUserId ? { userId: effectiveUserId } : {}),
+          ...(effectiveUserEmail ? { userEmail: effectiveUserEmail } : {}),
+          ...(effectiveUserName ? { userName: effectiveUserName } : {}),
+          ...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
+          ...(effectiveTenantName ? { tenantName: effectiveTenantName } : {}),
           message: textToSend || (audioToSend ? '' : userMsg.text),
           images: imagesToSend.map((img) => ({ dataUrl: img.dataUrl, label: img.label })),
           ...(audioToSend ? { audioDataUrl: audioToSend } : {}),
@@ -485,6 +497,29 @@ export function KitchenAiChatPanel({
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || 'Error al comunicarse con Ettore.');
+      }
+
+      if (data?.usage && data.usage.recordedInCloud === false) {
+        void recordEttoreUsageFallback({
+          id: data.usage.id || `local_${Date.now()}`,
+          userId: effectiveUserId || null,
+          userEmail: effectiveUserEmail || 'usuario-sin-correo@arquify.local',
+          userName: effectiveUserName || effectiveUserEmail || 'Usuario',
+          userRole: effectiveRole,
+          tenantId: effectiveTenantId || null,
+          tenantName: effectiveTenantName || null,
+          modelUsed: data.usage.modelUsed || data.modelUsed || 'unknown',
+          actionType: typeof data.actionType === 'string' ? data.actionType : null,
+          hasImages: imagesToSend.length > 0,
+          imagesCount: imagesToSend.length,
+          hasAudio: Boolean(audioToSend),
+          promptTokens: Number(data.usage.promptTokens || 0),
+          outputTokens: Number(data.usage.outputTokens || 0),
+          thoughtsTokens: Number(data.usage.thoughtsTokens || 0),
+          cachedTokens: Number(data.usage.cachedTokens || 0),
+          totalTokens: Number(data.usage.totalTokens || 0),
+          createdAt: new Date().toISOString(),
+        });
       }
 
       const structured = data as AiAgentStructuredResponse;
