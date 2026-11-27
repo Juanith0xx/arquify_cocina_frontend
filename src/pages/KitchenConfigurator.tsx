@@ -2,9 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useKitchenStore, CabinetType, getCabinetLabel } from '../store/kitchenStore';
 import { useStore } from '../store';
 import { TexturesSection } from '../components/TexturesSection';
-import { KitchenBlueprint } from '../components/KitchenBlueprint';
+import { KitchenBlueprint, KitchenBlueprintExternalCommand } from '../components/KitchenBlueprint';
 import { exportKitchenToExcel } from '../utils/kitchenExcelGenerator';
+import { exportKitchenPDF } from '../utils/kitchenPdfGenerator';
 import { exportKitchenLabelsPDF } from '../utils/kitchenLabelsPdfGenerator';
+import { exportClientQuotePdf, exportB2BQuoteExcel, QuoteExportMetadata } from '../utils/kitchenQuoteExporter';
+import {
+  downloadKitchenBimZip,
+  downloadKitchenIfcFile,
+  downloadKitchenObjFile,
+  downloadKitchen3dDxfFile,
+  BimExportOptions,
+} from '../utils/cadBimExport';
+import {
+  AiBackofficeTab,
+  AiUiAction,
+  AiUiContext,
+  AiUiModalId,
+} from '../utils/kitchenAiExecutor';
 import { FileSpreadsheet, FileText, RotateCcw, QrCode, Loader2 } from 'lucide-react';
 import { KitchenScene } from '../components/kitchen/KitchenScene';
 import { RoomPlannerModal } from '../components/kitchen/RoomPlannerModal';
@@ -21,7 +36,7 @@ import { calculatePolygonArea } from '../utils/roomGeometry';
 import { KitchenMepPanel } from '../components/kitchen/KitchenMepPanel';
 import { detectMepClashes } from '../utils/mepClashDetection';
 import { resolvePlacement, getCabinetSpecsFromTool, findSmartWallPlacement } from '../utils/kitchenCollision';
-import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search } from 'lucide-react';
+import { ArrowLeft, Box, Square, Move3D, PenTool, LayoutGrid, Trash2, RotateCw, Undo2, Redo2, Flame, Refrigerator, Flower2, Utensils, Info, Sparkles, Maximize2, Layers, Palette, ListOrdered, Save, Columns, Sliders, Sun, Moon, Wine, Wind, Wrench, DollarSign, Calculator, ChevronDown, ChevronRight, ChevronLeft, Globe, Ruler, Menu, X, MoreVertical, Download, Camera, PanelLeft, PanelRight, Search, Lock } from 'lucide-react';
 import { HandlesSection } from '../components/kitchen/HandlesSection';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
@@ -32,8 +47,10 @@ import { HANDLE_CATALOG } from '../types/handle';
 
 import { DecorationSection } from '../components/kitchen/DecorationSection';
 import { NanoBananaRenderModal } from '../components/common/NanoBananaRenderModal';
+import { KitchenAiChatPanel } from '../components/kitchen/KitchenAiChatPanel';
 import { StudioRenderModal } from '../components/common/StudioRenderModal';
 import { StudioRenderProvider } from '../components/common/StudioRenderContext';
+import { ModuleHoverPreviewPopup, HoveredModulePreview } from '../components/kitchen/ModuleHoverPreviewPopup';
 
 const sectionTitle = "text-xs uppercase tracking-wider text-orange-400 font-bold mb-3 mt-4 first:mt-0";
 const labelClass = "text-xs uppercase tracking-wider text-slate-300 font-semibold";
@@ -111,6 +128,8 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const { viewMode, setViewMode, toolMode, setToolMode, cabinets, addCabinet, activeCabinetId, updateCabinet, removeCabinet, setActiveCabinet, applyGlobalTexture, showSocle, setShowSocle, socleFinish, setSocleFinish, socleHeight, setSocleHeight, roomConfig, setRoomPlannerOpen, walls, architecturalElements, activeArchElementId, addArchitecturalElement, updateArchitecturalElement, removeArchitecturalElement, setActiveArchElement, activeWallId, updateWall, removeWall, setActiveWall, golaSystem, setGolaSystem, countertopConfig, setCountertopConfig, qstoneCatalog, islandBackConfig, setIslandBackConfig, mepPoints, handleConfig, undo, redo, canUndo, canRedo } = useKitchenStore();
 
   const [isBackofficeOpen, setIsBackofficeOpen] = useState(false);
+  const [backofficeInitialTab, setBackofficeInitialTab] = useState<AiBackofficeTab | undefined>(undefined);
+  const [blueprintCommand, setBlueprintCommand] = useState<KitchenBlueprintExternalCommand | null>(null);
   const livePriceDisplayMode = useAdminStore((state) => state.livePriceDisplayMode);
   const liveSaleMarginPercent = useAdminStore((state) => state.liveSaleMarginPercent);
   const liveSaleMarginFurniturePercent = useAdminStore((state) => state.liveSaleMarginFurniturePercent);
@@ -289,10 +308,12 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const [isB2BQuoteOpen, setIsB2BQuoteOpen] = useState(false);
   const [isBimModalOpen, setIsBimModalOpen] = useState(false);
   const [isNanoBananaModalOpen, setIsNanoBananaModalOpen] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isStudioRenderModalOpen, setIsStudioRenderModalOpen] = useState(false);
   const [isExportingLabels, setIsExportingLabels] = useState(false);
   const [leftTab, setLeftTab] = useState<'modules' | 'placed'>('modules');
   const [moduleSearchQuery, setModuleSearchQuery] = useState('');
+  const [hoveredModulePreview, setHoveredModulePreview] = useState<HoveredModulePreview | null>(null);
   const [rightTab, setRightTab] = useState<'module' | 'materials' | 'engineering' | 'mep' | 'decoration'>('module');
   const [activeMobileTab, setActiveMobileTab] = useState<'catalog' | 'module' | 'materials' | 'engineering' | 'mep' | 'scene' | 'decoration'>('catalog');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -339,6 +360,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   const supabaseUser = useSupabaseAuthStore((state) => state.user);
   const isAuthenticated = Boolean(isLocalAuth || supabaseUser);
   const effectiveRole = currentUser?.role || supabaseUser?.role || 'designer';
+  const isFreeUser = effectiveRole === 'free_user';
   const isSuperAdmin = Boolean(effectiveRole === 'superadmin');
   const canAccessIndustrialOutputs = Boolean(
     effectiveRole === 'superadmin' || effectiveRole === 'tenant_admin' || effectiveRole === 'operator'
@@ -421,6 +443,441 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
   useEffect(() => {
     useStore.setState({ showDimensions: false });
   }, []);
+
+  const isRoomPlannerOpen = useKitchenStore((s) => s.isRoomPlannerOpen);
+
+  const aiUiContext = useMemo<AiUiContext>(() => {
+    const openModals: AiUiModalId[] = [];
+    if (isRoomPlannerOpen) openModals.push('room_planner');
+    if (isCountertopModalOpen) openModals.push('countertop');
+    if (isB2BQuoteOpen) openModals.push('b2b_quote');
+    if (isBimModalOpen) openModals.push('bim_export');
+    if (isNanoBananaModalOpen) openModals.push('nano_banana');
+    if (isStudioRenderModalOpen) openModals.push('studio_render');
+    if (isSaveModalOpen) openModals.push('save_project');
+    if (isBackofficeOpen) openModals.push('backoffice');
+    if (isResetModalOpen) openModals.push('reset_confirm');
+
+    return {
+      viewMode,
+      theme,
+      isBlueprintsOpen: globalState.isPrinting,
+      canAccessIndustrialOutputs,
+      leftTab,
+      rightTab,
+      showDimensions: globalState.showDimensions,
+      dimensionLevel: globalState.dimensionLevel,
+      openModals,
+    };
+  }, [
+    viewMode,
+    theme,
+    globalState.isPrinting,
+    globalState.showDimensions,
+    globalState.dimensionLevel,
+    canAccessIndustrialOutputs,
+    leftTab,
+    rightTab,
+    isRoomPlannerOpen,
+    isCountertopModalOpen,
+    isB2BQuoteOpen,
+    isBimModalOpen,
+    isNanoBananaModalOpen,
+    isStudioRenderModalOpen,
+    isSaveModalOpen,
+    isBackofficeOpen,
+    isResetModalOpen,
+  ]);
+
+  const handleAiUiActions = async (
+    actions: AiUiAction[]
+  ): Promise<{ applied: string[]; warnings: string[] }> => {
+    const applied: string[] = [];
+    const warnings: string[] = [];
+
+    const closeAllModals = () => {
+      setRoomPlannerOpen(false);
+      setIsCountertopModalOpen(false);
+      setIsB2BQuoteOpen(false);
+      setIsBimModalOpen(false);
+      setIsNanoBananaModalOpen(false);
+      setIsStudioRenderModalOpen(false);
+      setIsSaveModalOpen(false);
+      setIsBackofficeOpen(false);
+      setIsResetModalOpen(false);
+    };
+
+    for (const action of actions) {
+      if (!action || typeof action !== 'object') continue;
+
+      switch (action.type) {
+        case 'set_view_mode': {
+          useStore.getState().setIsPrinting(false);
+          setViewMode(action.mode === '2d' ? '2d' : '3d');
+          applied.push(`Vista cambiada a modo ${action.mode === '2d' ? '2D' : '3D'}`);
+          break;
+        }
+
+        case 'set_theme': {
+          const nextTheme: 'dark' | 'light' =
+            action.theme === 'toggle'
+              ? theme === 'dark'
+                ? 'light'
+                : 'dark'
+              : action.theme === 'light'
+              ? 'light'
+              : 'dark';
+          setTheme(nextTheme);
+          try {
+            localStorage.setItem('arquify_kitchen_theme', nextTheme);
+          } catch {
+            // ignore
+          }
+          applied.push(`Tema cambiado a modo ${nextTheme === 'light' ? 'claro' : 'oscuro'}`);
+          break;
+        }
+
+        case 'open_blueprints': {
+          if (!canAccessIndustrialOutputs) {
+            warnings.push(
+              'Los Planos y Despiece (CAD/CAM) están reservados para cuentas Fábrica/Empresa. Puedes solicitar la Cotización PDF Comercial.'
+            );
+            break;
+          }
+          setIsExportMenuOpen(false);
+          useStore.getState().setIsPrinting(true);
+          applied.push('Abierta vista de Planos y Despiece (CAD/CAM)');
+          break;
+        }
+
+        case 'close_blueprints': {
+          useStore.getState().setIsPrinting(false);
+          applied.push('Cerrada vista de Planos y Despiece');
+          break;
+        }
+
+        case 'open_modal': {
+          if ((action.modal === 'b2b_quote' || action.modal === 'bim_export') && !canAccessIndustrialOutputs) {
+            warnings.push(
+              'Esta herramienta industrial está reservada para cuentas Fábrica/Empresa.'
+            );
+            break;
+          }
+          setIsExportMenuOpen(false);
+          switch (action.modal) {
+            case 'room_planner':
+              if (activeCabinetId) setActiveCabinet(null);
+              if (activeArchElementId) setActiveArchElement(null);
+              useStore.getState().setIsPrinting(false);
+              setRoomPlannerOpen(true);
+              applied.push('Abierto Configurador de Área y Muros');
+              break;
+            case 'countertop':
+              useStore.getState().setIsPrinting(false);
+              setIsCountertopModalOpen(true);
+              applied.push('Abierto Configurador de Cubiertas Qstone');
+              break;
+            case 'b2b_quote':
+              setIsB2BQuoteOpen(true);
+              applied.push('Abierta Cotización Comercial B2B / Retail');
+              break;
+            case 'bim_export':
+              setIsBimModalOpen(true);
+              applied.push('Abierta ventana de Exportación 3D / OpenBIM');
+              break;
+            case 'nano_banana':
+              useStore.getState().setIsPrinting(false);
+              setIsNanoBananaModalOpen(true);
+              applied.push('Abierto Render Fotográfico NanoBanana AI');
+              break;
+            case 'studio_render':
+              useStore.getState().setIsPrinting(false);
+              setIsStudioRenderModalOpen(true);
+              applied.push('Abierto Render de Estudio 3D');
+              break;
+            case 'save_project':
+              setIsSaveModalOpen(true);
+              applied.push('Abierta ventana Guardar Proyecto');
+              break;
+            case 'backoffice':
+              setBackofficeInitialTab(action.backofficeTab);
+              setIsBackofficeOpen(true);
+              applied.push(
+                action.backofficeTab
+                  ? `Abierto Backoffice (${action.backofficeTab})`
+                  : 'Abierto Backoffice & Modo Cliente'
+              );
+              break;
+            case 'reset_confirm':
+              setIsResetModalOpen(true);
+              applied.push('Abierta confirmación para Partir de Cero');
+              break;
+          }
+          break;
+        }
+
+        case 'close_modal': {
+          const target = action.modal || 'all';
+          if (target === 'all') {
+            closeAllModals();
+            useStore.getState().setIsPrinting(false);
+            applied.push('Cerradas ventanas y planos abiertos');
+          } else if (target === 'room_planner') {
+            setRoomPlannerOpen(false);
+            applied.push('Cerrado Configurador de Área');
+          } else if (target === 'countertop') {
+            setIsCountertopModalOpen(false);
+            applied.push('Cerrado Configurador de Cubiertas');
+          } else if (target === 'b2b_quote') {
+            setIsB2BQuoteOpen(false);
+            applied.push('Cerrada Cotización B2B');
+          } else if (target === 'bim_export') {
+            setIsBimModalOpen(false);
+            applied.push('Cerrada Exportación 3D / BIM');
+          } else if (target === 'nano_banana') {
+            setIsNanoBananaModalOpen(false);
+            applied.push('Cerrado Render NanoBanana AI');
+          } else if (target === 'studio_render') {
+            setIsStudioRenderModalOpen(false);
+            applied.push('Cerrado Render de Estudio');
+          } else if (target === 'save_project') {
+            setIsSaveModalOpen(false);
+            applied.push('Cerrada ventana Guardar Proyecto');
+          } else if (target === 'backoffice') {
+            setIsBackofficeOpen(false);
+            setBackofficeInitialTab(undefined);
+            applied.push('Cerrado Backoffice');
+          } else if (target === 'reset_confirm') {
+            setIsResetModalOpen(false);
+            applied.push('Cerrada ventana Partir de Cero');
+          }
+          break;
+        }
+
+        case 'set_right_tab': {
+          useStore.getState().setIsPrinting(false);
+          setIsRightSidebarCollapsed(false);
+          setRightTab(action.tab);
+          setActiveMobileTab(action.tab);
+          if (action.tab === 'engineering' && action.accordion) {
+            setOpenAccordions({
+              gola: false,
+              socle: false,
+              handles: false,
+              tapacantos: false,
+              assembly: false,
+              view: false,
+              [action.accordion]: true,
+            });
+          }
+          const tabLabels: Record<typeof action.tab, string> = {
+            module: 'Módulo / Propiedades',
+            materials: 'Acabados',
+            engineering: 'Herrajes e Ingeniería',
+            mep: 'Instalaciones MEP',
+            decoration: 'Decoración',
+          };
+          applied.push(`Abierta pestaña derecha: ${tabLabels[action.tab]}`);
+          break;
+        }
+
+        case 'set_left_tab': {
+          useStore.getState().setIsPrinting(false);
+          setIsLeftSidebarCollapsed(false);
+          setLeftTab(action.tab);
+          setActiveMobileTab(action.tab === 'modules' ? 'catalog' : 'scene');
+          if (action.tab === 'modules' && action.category) {
+            setModuleAccordions({
+              bases: false,
+              torres: false,
+              murales: false,
+              isla: false,
+              closets: false,
+              arch: false,
+              deco: false,
+              [action.category]: true,
+            });
+          }
+          applied.push(
+            action.tab === 'modules'
+              ? `Abierto catálogo de Módulos${action.category ? ` (${action.category})` : ''}`
+              : 'Abierta lista de módulos en Escena'
+          );
+          break;
+        }
+
+        case 'toggle_sidebar': {
+          if (action.side === 'left' || action.side === 'both') {
+            setIsLeftSidebarCollapsed(Boolean(action.collapsed));
+          }
+          if (action.side === 'right' || action.side === 'both') {
+            setIsRightSidebarCollapsed(Boolean(action.collapsed));
+          }
+          applied.push(
+            action.collapsed
+              ? `Panel(es) oculto(s) para ampliar el visor`
+              : `Panel(es) lateral(es) restaurado(s)`
+          );
+          break;
+        }
+
+        case 'set_dimensions': {
+          const nextLevel =
+            action.level !== undefined
+              ? Math.max(1, Math.min(6, Math.round(action.level)))
+              : useStore.getState().dimensionLevel;
+          useStore.setState({
+            showDimensions: Boolean(action.show),
+            dimensionLevel: nextLevel,
+          });
+          applied.push(
+            action.show
+              ? `Cotas 3D activadas (Nivel ${nextLevel}: ${DIMENSION_LEVEL_DATA[nextLevel]?.title || nextLevel})`
+              : 'Cotas 3D desactivadas'
+          );
+          break;
+        }
+
+        case 'download_report': {
+          const kState = useKitchenStore.getState();
+          const st = useStore.getState();
+          const industrialReports = new Set([
+            'blueprints_a3_pdf',
+            'bom_pdf',
+            'excel_cad_cam',
+            'labels_qr_pdf',
+            'b2b_quote_pdf',
+            'b2b_quote_excel',
+            'dxf_cnc_zip',
+            'bim_zip',
+            'bim_ifc',
+            'bim_obj',
+            'bim_dxf_3d',
+          ]);
+
+          if (industrialReports.has(action.report) && !canAccessIndustrialOutputs) {
+            warnings.push(
+              'Este informe industrial está reservado para cuentas Fábrica/Empresa. Puedes descargar la Cotización PDF Comercial.'
+            );
+            break;
+          }
+
+          if (action.report === 'commercial_pdf') {
+            handleDirectCommercialPdfDownload();
+            applied.push('Descarga iniciada: Cotización PDF Comercial');
+          } else if (action.report === 'blueprints_a3_pdf') {
+            st.setIsPrinting(true);
+            setBlueprintCommand({ id: Date.now(), type: 'export_a3_pdf' });
+            applied.push('Generando y descargando Planos de Fabricación PDF (A3)');
+          } else if (action.report === 'bom_pdf') {
+            exportKitchenPDF(kState.cabinets, st);
+            applied.push('Descarga iniciada: Ficha Técnica PDF (Despiece / BOM)');
+          } else if (action.report === 'excel_cad_cam') {
+            exportKitchenToExcel();
+            applied.push('Descarga iniciada: Planilla Excel CAD/CAM de Corte y Materiales');
+          } else if (action.report === 'labels_qr_pdf') {
+            await handleExportLabels();
+            applied.push('Descarga iniciada: Etiquetas de Producción con QR (PDF)');
+          } else if (action.report === 'b2b_quote_pdf' || action.report === 'b2b_quote_excel') {
+            const adminState = useAdminStore.getState();
+            const margin = adminState.manufacturingRates?.defaultDesignerMarginPercent || 35;
+            const quote = calculateKitchenDualQuote(margin, 0, kState.cabinets);
+            const metadata: QuoteExportMetadata = {
+              clientName: localStorage.getItem('arquify_client_name') || currentUser?.full_name || 'Cliente Particular',
+              projectName: localStorage.getItem('arquify_project_name') || 'Cocina Integral de Autor',
+              projectAddress: currentUser?.address || currentUser?.commune || 'Región Metropolitana, Chile',
+              designerName: currentUser?.full_name || 'Estudio de Arquitectura',
+              designerEmail: currentUser?.email || adminState.adminEmail || 'contacto@estudio.cl',
+              designerPhone: currentUser?.phone || '+56 9 1234 5678',
+              validityDays: 15,
+            };
+            if (action.report === 'b2b_quote_pdf') {
+              exportClientQuotePdf(quote, metadata);
+              applied.push('Descarga iniciada: Cotización Cliente PDF (B2B / PVP)');
+            } else {
+              exportB2BQuoteExcel(quote, metadata);
+              applied.push('Descarga iniciada: Planilla Excel Cotización B2B Completa');
+            }
+          } else if (action.report === 'dxf_cnc_zip') {
+            st.setIsPrinting(true);
+            setBlueprintCommand({ id: Date.now(), type: 'export_dxf_zip' });
+            applied.push('Generando y descargando Paquete DXF CNC (.ZIP)');
+          } else if (
+            action.report === 'bim_zip' ||
+            action.report === 'bim_ifc' ||
+            action.report === 'bim_obj' ||
+            action.report === 'bim_dxf_3d'
+          ) {
+            const exportOptions: BimExportOptions = {
+              projectName: localStorage.getItem('arquify_project_name') || 'PROYECTO COCINA ARQUIFY',
+              clientName: localStorage.getItem('arquify_client_name') || 'CLIENTE PARTICULAR',
+              includeWalls: true,
+              includeCountertop: true,
+              includeSocle: true,
+              includeHandles: true,
+              unit: 'mm',
+            };
+            if (action.report === 'bim_zip') {
+              await downloadKitchenBimZip(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Paquete Completo 3D / OpenBIM (.ZIP)');
+            } else if (action.report === 'bim_ifc') {
+              downloadKitchenIfcFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo OpenBIM (.IFC)');
+            } else if (action.report === 'bim_obj') {
+              downloadKitchenObjFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo 3D (.OBJ)');
+            } else {
+              downloadKitchen3dDxfFile(kState.cabinets, kState, exportOptions);
+              applied.push('Descarga iniciada: Modelo CAD 3D (.DXF)');
+            }
+          }
+          break;
+        }
+
+        case 'print_blueprints': {
+          if (!canAccessIndustrialOutputs) {
+            warnings.push('La impresión de planos de fabricación está reservada para cuentas Fábrica/Empresa.');
+            break;
+          }
+          useStore.getState().setIsPrinting(true);
+          setBlueprintCommand({ id: Date.now(), type: 'print' });
+          applied.push('Abierto diálogo de impresión de Planos');
+          break;
+        }
+
+        case 'history_action': {
+          if (action.action === 'undo') {
+            if (canUndo()) {
+              undo();
+              applied.push('Acción anterior deshecha (Undo)');
+            } else {
+              warnings.push('No hay acciones anteriores para deshacer.');
+            }
+          } else if (action.action === 'redo') {
+            if (canRedo()) {
+              redo();
+              applied.push('Acción rehecha (Redo)');
+            } else {
+              warnings.push('No hay acciones para rehacer.');
+            }
+          }
+          break;
+        }
+
+        case 'navigate_home': {
+          closeAllModals();
+          useStore.getState().setIsPrinting(false);
+          applied.push('Navegando a la página de Inicio');
+          window.setTimeout(() => {
+            onNavigate();
+          }, 250);
+          break;
+        }
+      }
+    }
+
+    return { applied, warnings };
+  };
 
   // Auto-switch right tab to 'module' and mobile tab when an item is selected
   useEffect(() => {
@@ -611,7 +1068,10 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
     <StudioRenderProvider>
       <div className={`flex flex-col h-screen w-screen font-sans overflow-hidden transition-colors ${isLight ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0A0A0A] text-slate-200'}`}>
       {/* Planos de Fabricación y Despiece CAD/CAM */}
-      <KitchenBlueprint />
+      <KitchenBlueprint
+        externalCommand={blueprintCommand}
+        onExternalCommandHandled={() => setBlueprintCommand(null)}
+      />
 
       {/* Modal de Configuración y Dibujo de Estancia */}
       <RoomPlannerModal />
@@ -846,6 +1306,45 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
 
         {/* Zona Derecha: Exportar / Cotizar Dropdown + Guardar + Toggle Paneles + Reset */}
         <div className="hidden lg:flex items-center gap-2">
+          {/* Botón Chat Diseñador IA (Exclusivo usuarios de pago) */}
+          <button
+            onClick={() => setIsAiChatOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold tracking-wide transition-all cursor-pointer ${
+              isAiChatOpen
+                ? 'bg-orange-500 text-black border-orange-600 shadow-sm'
+                : isFreeUser
+                ? isLight
+                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300'
+                : isLight
+                ? 'bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-700'
+                : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/40 text-orange-400'
+            }`}
+            title={
+              isFreeUser
+                ? 'Ettore · Diseñador IA (Exclusivo para usuarios de pago)'
+                : 'Abrir chat con Ettore (Diseñador IA)'
+            }
+          >
+            {isFreeUser ? (
+              <Lock size={13} />
+            ) : (
+              <img
+                src="/assets/ettore-avatar.jpg"
+                alt="Ettore"
+                className="w-4 h-4 rounded-full object-cover border border-black/20 shrink-0"
+              />
+            )}
+            <span>Ettore</span>
+            <span
+              className={`text-[9px] px-1 py-0.5 rounded font-mono font-bold uppercase ${
+                isAiChatOpen ? 'bg-black/20 text-black' : 'bg-orange-500/20 text-orange-500'
+              }`}
+            >
+              PRO
+            </span>
+          </button>
+
           {/* Menú Desplegable Agrupado de Cotizaciones y Exportación */}
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -1057,6 +1556,25 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
             </button>
 
             <button
+              onClick={() => { setIsMobileMenuOpen(false); setIsAiChatOpen(true); }}
+              className="flex items-center justify-between p-3 rounded-xl border border-orange-500/30 bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                {isFreeUser ? (
+                  <Lock size={16} />
+                ) : (
+                  <img
+                    src="/assets/ettore-avatar.jpg"
+                    alt="Ettore"
+                    className="w-5 h-5 rounded-full object-cover border border-black/20 shrink-0"
+                  />
+                )}
+                <span>Ettore (Chat Planos & Diseño)</span>
+              </div>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500 text-black font-mono font-extrabold">PRO</span>
+            </button>
+
+            <button
               onClick={() => { setIsMobileMenuOpen(false); setIsCountertopModalOpen(true); }}
               className="flex items-center gap-3 p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider cursor-pointer"
             >
@@ -1189,6 +1707,46 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                     </div>
                     <span className="text-[9px] px-1.5 py-0.5 bg-black/20 text-black rounded font-mono font-bold uppercase">AI</span>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      if (activeCabinetId) setActiveCabinet(null);
+                      if (activeArchElementId) setActiveArchElement(null);
+                      setIsAiChatOpen((prev) => !prev);
+                    }}
+                    className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+                      isAiChatOpen
+                        ? 'bg-orange-500 border-orange-600 text-black shadow-xs'
+                        : isLight
+                        ? 'bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-900 shadow-xs'
+                        : 'bg-orange-500/15 hover:bg-orange-500/25 border-orange-500/40 text-orange-300'
+                    }`}
+                    title={
+                      isFreeUser
+                        ? 'Chat con Ettore (Exclusivo para usuarios de pago)'
+                        : 'Abrir chat con Ettore (Diseñador IA)'
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      {isFreeUser ? (
+                        <Lock size={14} className="shrink-0" />
+                      ) : (
+                        <img
+                          src="/assets/ettore-avatar.jpg"
+                          alt="Ettore"
+                          className="w-4 h-4 rounded-full object-cover border border-black/20 shrink-0"
+                        />
+                      )}
+                      <span className="font-extrabold">Ettore</span>
+                    </div>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                        isAiChatOpen ? 'bg-black/20 text-black' : 'bg-orange-500/25 text-orange-500'
+                      }`}
+                    >
+                      PRO
+                    </span>
+                  </button>
                </div>
             </div>
 
@@ -1240,7 +1798,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
               </button>
             </div>
 
-            <div className="p-3 lg:p-4 flex-1 overflow-y-auto custom-scrollbar">
+            <div
+              className="p-3 lg:p-4 flex-1 overflow-y-auto custom-scrollbar"
+              onScroll={() => setHoveredModulePreview(null)}
+              onMouseLeave={() => setHoveredModulePreview(null)}
+            >
                {leftTab === 'modules' ? (
                  <div className="flex flex-col gap-2">
                    {/* Buscador Rápido de Módulos */}
@@ -1271,7 +1833,7 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                    {(() => {
                      const searchQ = moduleSearchQuery.trim().toLowerCase();
                      const matchesQ = (label: string) => !searchQ || label.toLowerCase().includes(searchQ);
-                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 cajones + 1 ollero', '2 caj. + 1 ollero', '2 olleros', 'fregadero', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
+                     const basesHasMatch = !searchQ || ['1 puerta', '1 pta + 1 cajón', '2 puertas', 'lavaplatos', 'encimera', '4 cajones', '2 cajones + 1 ollero', '2 caj. + 1 ollero', '2 olleros', 'especiero', 'botellero', 'esquinero ciego', 'esquinero en l', 'bases'].some(s => s.includes(searchQ));
                      const torresHasMatch = !searchQ || ['1 pta larga', '2 ptas', 'torre horno', 'torre hornos', 'despensa cajones', 'nicho micro', 'repisas a la vista', 'torre repisas', 'botellero despensa', 'despensa 2 puertas', 'torres'].some(s => s.includes(searchQ));
                      const muralesHasMatch = !searchQ || ['aéreo 1 puerta', 'aéreo 2 puertas', 'pta elevable', 'doble pta', 'nicho micro', 'repisas', 'esquinero', 'botellero', 'new flow 60', 'murales'].some(s => s.includes(searchQ));
                      const islaHasMatch = !searchQ || ['isla 2 olleros', 'isla 4 cajones', 'isla 2 caj', 'isla 1 puerta', 'isla 2 puertas', 'botellero isla', 'isla'].some(s => s.includes(searchQ));
@@ -1293,27 +1855,26 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                            <ModuleCategoryAccordion
                              id="bases"
                              title="1. Bases"
-                             count={14}
+                             count={13}
                              icon={<Box size={14} />}
                              isOpen={Boolean(moduleAccordions.bases || searchQ)}
                              onToggle={() => toggleModuleAccordion('bases')}
-                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_sink_2_doors', 'place_base_cooktop_3_drawers', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_2_drawers_1_pot', 'place_base_sink_u_drawer', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
+                             hasActiveTool={['place_base_1_door', 'place_base_1_door_1_drawer', 'place_base_2_doors', 'place_base_sink_2_doors', 'place_base_cooktop_3_drawers', 'place_base_4_drawers', 'place_base_3_drawers_veggie', 'place_base_2_pot_drawers', 'place_base_2_drawers_1_pot', 'place_base_spice_rack', 'place_base_wine_rack', 'place_base_corner_blind', 'place_base_corner_l'].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} icon={<Box size={14}/>} label="1 Puerta" />}
-                             {matchesQ('1 Pta + 1 Cajón') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />}
-                             {matchesQ('2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} icon={<Box size={14}/>} label="2 Puertas" />}
-                             {matchesQ('Lavaplatos (2 Puertas)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_2_doors'} onClick={() => handleInsertModule('place_base_sink_2_doors')} icon={<Box size={14}/>} label="Lavaplatos (2 Puertas)" />}
-                             {matchesQ('Encimera (3 Cajones, 1° Fijo)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_cooktop_3_drawers'} onClick={() => handleInsertModule('place_base_cooktop_3_drawers')} icon={<Box size={14}/>} label="Encimera (3 Cajones, 1° Fijo)" />}
-                             {matchesQ('4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} icon={<Box size={14}/>} label="4 Cajones" />}
-                             {matchesQ('Verdulero 3 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_3_drawers_veggie'} onClick={() => handleInsertModule('place_base_3_drawers_veggie')} icon={<Box size={14}/>} label="Verdulero 3 Cajones" />}
-                             {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} icon={<Box size={14}/>} label="2 Olleros" />}
-                             {(matchesQ('2 Cajones + 1 Ollero') || matchesQ('2 Caj. + 1 Ollero')) && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_drawers_1_pot'} onClick={() => handleInsertModule('place_base_2_drawers_1_pot')} icon={<LayoutGrid size={14}/>} label="2 Caj. + 1 Ollero" />}
-                             {matchesQ('Fregadero Cajón en U') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_u_drawer'} onClick={() => handleInsertModule('place_base_sink_u_drawer')} icon={<Box size={14}/>} label="Fregadero Cajón en U" />}
-                             {matchesQ('Especiero') && <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} icon={<Box size={14}/>} label="Especiero" />}
-                             {matchesQ('Botellero Base') && <ToolButton isLight={isLight} active={toolMode === 'place_base_wine_rack'} onClick={() => handleInsertModule('place_base_wine_rack')} icon={<Wine size={14}/>} label="Botellero Base" />}
-                             {matchesQ('Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_blind'} onClick={() => handleInsertModule('place_base_corner_blind')} icon={<Box size={14}/>} label="Esquinero Ciego" />}
-                             {matchesQ('Esquinero en L (90x90)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_l'} onClick={() => handleInsertModule('place_base_corner_l')} icon={<Box size={14}/>} label="Esquinero en L (90x90)" />}
+                             {matchesQ('1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door'} onClick={() => handleInsertModule('place_base_1_door')} previewToolId="place_base_1_door" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="1 Puerta" />}
+                             {matchesQ('1 Pta + 1 Cajón') && <ToolButton isLight={isLight} active={toolMode === 'place_base_1_door_1_drawer'} onClick={() => handleInsertModule('place_base_1_door_1_drawer')} previewToolId="place_base_1_door_1_drawer" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="1 Pta + 1 Cajón" />}
+                             {matchesQ('2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_doors'} onClick={() => handleInsertModule('place_base_2_doors')} previewToolId="place_base_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="2 Puertas" />}
+                             {matchesQ('Lavaplatos (2 Puertas)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_sink_2_doors'} onClick={() => handleInsertModule('place_base_sink_2_doors')} previewToolId="place_base_sink_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Lavaplatos (2 Puertas)" />}
+                             {matchesQ('Encimera (3 Cajones, 1° Fijo)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_cooktop_3_drawers'} onClick={() => handleInsertModule('place_base_cooktop_3_drawers')} previewToolId="place_base_cooktop_3_drawers" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Encimera (3 Cajones, 1° Fijo)" />}
+                             {matchesQ('4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_4_drawers'} onClick={() => handleInsertModule('place_base_4_drawers')} previewToolId="place_base_4_drawers" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="4 Cajones" />}
+                             {matchesQ('Verdulero 3 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_base_3_drawers_veggie'} onClick={() => handleInsertModule('place_base_3_drawers_veggie')} previewToolId="place_base_3_drawers_veggie" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Verdulero 3 Cajones" />}
+                             {matchesQ('2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_pot_drawers'} onClick={() => handleInsertModule('place_base_2_pot_drawers')} previewToolId="place_base_2_pot_drawers" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="2 Olleros" />}
+                             {(matchesQ('2 Cajones + 1 Ollero') || matchesQ('2 Caj. + 1 Ollero')) && <ToolButton isLight={isLight} active={toolMode === 'place_base_2_drawers_1_pot'} onClick={() => handleInsertModule('place_base_2_drawers_1_pot')} previewToolId="place_base_2_drawers_1_pot" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="2 Caj. + 1 Ollero" />}
+                             {matchesQ('Especiero') && <ToolButton isLight={isLight} active={toolMode === 'place_base_spice_rack'} onClick={() => handleInsertModule('place_base_spice_rack')} previewToolId="place_base_spice_rack" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Especiero" />}
+                             {matchesQ('Botellero Base') && <ToolButton isLight={isLight} active={toolMode === 'place_base_wine_rack'} onClick={() => handleInsertModule('place_base_wine_rack')} previewToolId="place_base_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="Botellero Base" />}
+                             {matchesQ('Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_blind'} onClick={() => handleInsertModule('place_base_corner_blind')} previewToolId="place_base_corner_blind" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Esquinero Ciego" />}
+                             {matchesQ('Esquinero en L (90x90)') && <ToolButton isLight={isLight} active={toolMode === 'place_base_corner_l'} onClick={() => handleInsertModule('place_base_corner_l')} previewToolId="place_base_corner_l" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Esquinero en L (90x90)" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1329,16 +1890,16 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              hasActiveTool={['place_tall_1_door', 'place_tall_split_2_doors', 'place_tall_oven_micro', 'place_tall_oven_vent', 'place_tall_inner_drawers', 'place_tall_microwave_niche', 'place_tall_open', 'place_tall_wine_rack', 'place_tall_2_doors', 'place_tall_terminal_shelves'].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('1 Pta Larga (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_1_door'} onClick={() => handleInsertModule('place_tall_1_door')} icon={<LayoutGrid size={14}/>} label="1 Pta Larga (Repisas)" />}
-                             {matchesQ('2 Ptas (Línea Base + Alta)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_split_2_doors'} onClick={() => handleInsertModule('place_tall_split_2_doors')} icon={<LayoutGrid size={14}/>} label="2 Ptas (Línea Base + Alta)" />}
-                             {matchesQ('Torre Horno + Micro Empotrado') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_micro'} onClick={() => handleInsertModule('place_tall_oven_micro')} icon={<LayoutGrid size={14}/>} label="Torre Horno + Micro Empotrado" />}
-                             {matchesQ('Torre Hornos Vent. Técnica') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_vent'} onClick={() => handleInsertModule('place_tall_oven_vent')} icon={<LayoutGrid size={14}/>} label="Torre Hornos Vent. Técnica" />}
-                             {matchesQ('Despensa Cajones Interiores') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_inner_drawers'} onClick={() => handleInsertModule('place_tall_inner_drawers')} icon={<LayoutGrid size={14}/>} label="Despensa Cajones Interiores" />}
-                             {matchesQ('Nicho Micro Portátil') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_microwave_niche'} onClick={() => handleInsertModule('place_tall_microwave_niche')} icon={<LayoutGrid size={14}/>} label="Nicho Micro Portátil" />}
-                             {matchesQ('Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_open'} onClick={() => handleInsertModule('place_tall_open')} icon={<LayoutGrid size={14}/>} label="Repisas a la Vista" />}
-                             {matchesQ('Torre Repisas Terminales') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_terminal_shelves'} onClick={() => handleInsertModule('place_tall_terminal_shelves')} icon={<LayoutGrid size={14}/>} label="Torre Repisas Terminales" />}
-                             {matchesQ('Botellero Despensa') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_wine_rack'} onClick={() => handleInsertModule('place_tall_wine_rack')} icon={<Wine size={14}/>} label="Botellero Despensa" />}
-                             {matchesQ('Despensa 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_2_doors'} onClick={() => handleInsertModule('place_tall_2_doors')} icon={<LayoutGrid size={14}/>} label="Despensa 2 Puertas" />}
+                             {matchesQ('1 Pta Larga (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_1_door'} onClick={() => handleInsertModule('place_tall_1_door')} previewToolId="place_tall_1_door" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="1 Pta Larga (Repisas)" />}
+                             {matchesQ('2 Ptas (Línea Base + Alta)') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_split_2_doors'} onClick={() => handleInsertModule('place_tall_split_2_doors')} previewToolId="place_tall_split_2_doors" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="2 Ptas (Línea Base + Alta)" />}
+                             {matchesQ('Torre Horno + Micro Empotrado') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_micro'} onClick={() => handleInsertModule('place_tall_oven_micro')} previewToolId="place_tall_oven_micro" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Torre Horno + Micro Empotrado" />}
+                             {matchesQ('Torre Hornos Vent. Técnica') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_oven_vent'} onClick={() => handleInsertModule('place_tall_oven_vent')} previewToolId="place_tall_oven_vent" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Torre Hornos Vent. Técnica" />}
+                             {matchesQ('Despensa Cajones Interiores') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_inner_drawers'} onClick={() => handleInsertModule('place_tall_inner_drawers')} previewToolId="place_tall_inner_drawers" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Despensa Cajones Interiores" />}
+                             {matchesQ('Nicho Micro Portátil') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_microwave_niche'} onClick={() => handleInsertModule('place_tall_microwave_niche')} previewToolId="place_tall_microwave_niche" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Nicho Micro Portátil" />}
+                             {matchesQ('Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_open'} onClick={() => handleInsertModule('place_tall_open')} previewToolId="place_tall_open" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Repisas a la Vista" />}
+                             {matchesQ('Torre Repisas Terminales') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_terminal_shelves'} onClick={() => handleInsertModule('place_tall_terminal_shelves')} previewToolId="place_tall_terminal_shelves" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Torre Repisas Terminales" />}
+                             {matchesQ('Botellero Despensa') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_wine_rack'} onClick={() => handleInsertModule('place_tall_wine_rack')} previewToolId="place_tall_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="Botellero Despensa" />}
+                             {matchesQ('Despensa 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_tall_2_doors'} onClick={() => handleInsertModule('place_tall_2_doors')} previewToolId="place_tall_2_doors" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Despensa 2 Puertas" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1354,16 +1915,16 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              hasActiveTool={['place_wall_1_door', 'place_wall_2_doors', 'place_wall_lift_up', 'place_wall_lift_up_double', 'place_wall_microwave_niche', 'place_wall_open', 'place_wall_corner_blind', 'place_wall_wine_rack', 'place_wall_hood_new_flow', 'place_wall_door_shelf'].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('1. Aéreo 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />}
-                             {matchesQ('2. Aéreo 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_2_doors'} onClick={() => handleInsertModule('place_wall_2_doors')} icon={<Square size={14}/>} label="2. Aéreo 2 Puertas" />}
-                             {matchesQ('3. Pta Elevable Aventos') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up'} onClick={() => handleInsertModule('place_wall_lift_up')} icon={<Square size={14}/>} label="3. Pta Elevable Aventos" />}
-                             {matchesQ('4. Doble Pta Elevable') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up_double'} onClick={() => handleInsertModule('place_wall_lift_up_double')} icon={<Square size={14}/>} label="4. Doble Pta Elevable" />}
-                             {matchesQ('5. Nicho Micro + Pta Sup') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_microwave_niche'} onClick={() => handleInsertModule('place_wall_microwave_niche')} icon={<Square size={14}/>} label="5. Nicho Micro + Pta Sup" />}
-                             {matchesQ('6. Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_open'} onClick={() => handleInsertModule('place_wall_open')} icon={<Square size={14}/>} label="6. Repisas a la Vista" />}
-                             {matchesQ('7. Aéreo Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />}
-                             {matchesQ('8. Botellero Aéreo') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />}
-                             {matchesQ('9. New Flow 60') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} icon={<Wind size={14}/>} label="9. New Flow 60" />}
-                             {matchesQ('10. Aéreo Puerta + Repisa') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_door_shelf'} onClick={() => handleInsertModule('place_wall_door_shelf')} icon={<Square size={14}/>} label="10. Aéreo Puerta + Repisa" />}
+                             {matchesQ('1. Aéreo 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_1_door'} onClick={() => handleInsertModule('place_wall_1_door')} previewToolId="place_wall_1_door" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="1. Aéreo 1 Puerta" />}
+                             {matchesQ('2. Aéreo 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_2_doors'} onClick={() => handleInsertModule('place_wall_2_doors')} previewToolId="place_wall_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="2. Aéreo 2 Puertas" />}
+                             {matchesQ('3. Pta Elevable Aventos') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up'} onClick={() => handleInsertModule('place_wall_lift_up')} previewToolId="place_wall_lift_up" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="3. Pta Elevable Aventos" />}
+                             {matchesQ('4. Doble Pta Elevable') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_lift_up_double'} onClick={() => handleInsertModule('place_wall_lift_up_double')} previewToolId="place_wall_lift_up_double" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="4. Doble Pta Elevable" />}
+                             {matchesQ('5. Nicho Micro + Pta Sup') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_microwave_niche'} onClick={() => handleInsertModule('place_wall_microwave_niche')} previewToolId="place_wall_microwave_niche" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="5. Nicho Micro + Pta Sup" />}
+                             {matchesQ('6. Repisas a la Vista') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_open'} onClick={() => handleInsertModule('place_wall_open')} previewToolId="place_wall_open" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="6. Repisas a la Vista" />}
+                             {matchesQ('7. Aéreo Esquinero Ciego') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_corner_blind'} onClick={() => handleInsertModule('place_wall_corner_blind')} previewToolId="place_wall_corner_blind" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="7. Aéreo Esquinero Ciego" />}
+                             {matchesQ('8. Botellero Aéreo') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_wine_rack'} onClick={() => handleInsertModule('place_wall_wine_rack')} previewToolId="place_wall_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="8. Botellero Aéreo" />}
+                             {matchesQ('9. New Flow 60') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_hood_new_flow'} onClick={() => handleInsertModule('place_wall_hood_new_flow')} previewToolId="place_wall_hood_new_flow" onHoverPreview={setHoveredModulePreview} icon={<Wind size={14}/>} label="9. New Flow 60" />}
+                             {matchesQ('10. Aéreo Puerta + Repisa') && <ToolButton isLight={isLight} active={toolMode === 'place_wall_door_shelf'} onClick={() => handleInsertModule('place_wall_door_shelf')} previewToolId="place_wall_door_shelf" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="10. Aéreo Puerta + Repisa" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1386,12 +1947,12 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              ].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('Isla 2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_island'} onClick={() => handleInsertModule('place_island')} icon={<Box size={14}/>} label="Isla 2 Olleros" />}
-                             {matchesQ('Isla 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_island_4_drawers'} onClick={() => handleInsertModule('place_island_4_drawers')} icon={<LayoutGrid size={14}/>} label="Isla 4 Cajones" />}
-                             {matchesQ('Isla 2 Caj. + 1 Ollero') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_drawers_1_pot'} onClick={() => handleInsertModule('place_island_2_drawers_1_pot')} icon={<LayoutGrid size={14}/>} label="Isla 2 Caj. + 1 Ollero" />}
-                             {matchesQ('Isla 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_island_1_door'} onClick={() => handleInsertModule('place_island_1_door')} icon={<Square size={14}/>} label="Isla 1 Puerta" />}
-                             {matchesQ('Isla 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_doors'} onClick={() => handleInsertModule('place_island_2_doors')} icon={<Columns size={14}/>} label="Isla 2 Puertas" />}
-                             {matchesQ('Botellero Isla') && <ToolButton isLight={isLight} active={toolMode === 'place_island_wine_rack'} onClick={() => handleInsertModule('place_island_wine_rack')} icon={<Wine size={14}/>} label="Botellero Isla" />}
+                             {matchesQ('Isla 2 Olleros') && <ToolButton isLight={isLight} active={toolMode === 'place_island'} onClick={() => handleInsertModule('place_island')} previewToolId="place_island" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="Isla 2 Olleros" />}
+                             {matchesQ('Isla 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_island_4_drawers'} onClick={() => handleInsertModule('place_island_4_drawers')} previewToolId="place_island_4_drawers" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Isla 4 Cajones" />}
+                             {matchesQ('Isla 2 Caj. + 1 Ollero') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_drawers_1_pot'} onClick={() => handleInsertModule('place_island_2_drawers_1_pot')} previewToolId="place_island_2_drawers_1_pot" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="Isla 2 Caj. + 1 Ollero" />}
+                             {matchesQ('Isla 1 Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_island_1_door'} onClick={() => handleInsertModule('place_island_1_door')} previewToolId="place_island_1_door" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="Isla 1 Puerta" />}
+                             {matchesQ('Isla 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_island_2_doors'} onClick={() => handleInsertModule('place_island_2_doors')} previewToolId="place_island_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Columns size={14}/>} label="Isla 2 Puertas" />}
+                             {matchesQ('Botellero Isla') && <ToolButton isLight={isLight} active={toolMode === 'place_island_wine_rack'} onClick={() => handleInsertModule('place_island_wine_rack')} previewToolId="place_island_wine_rack" onHoverPreview={setHoveredModulePreview} icon={<Wine size={14}/>} label="Botellero Isla" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1415,13 +1976,13 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              ].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('1. Barra + Maletero') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_hanger'} onClick={() => handleInsertModule('place_closet_hanger')} icon={<Box size={14}/>} label="1. Barra + Maletero" />}
-                             {matchesQ('2. Mixto (Barra + Cajones)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_mixed'} onClick={() => handleInsertModule('place_closet_mixed')} icon={<LayoutGrid size={14}/>} label="2. Mixto (Barra + Cajones)" />}
-                             {matchesQ('3. Lencero (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_shelves'} onClick={() => handleInsertModule('place_closet_shelves')} icon={<Square size={14}/>} label="3. Lencero (Repisas)" />}
-                             {matchesQ('4. Cajonera 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_drawers'} onClick={() => handleInsertModule('place_closet_drawers')} icon={<LayoutGrid size={14}/>} label="4. Cajonera 4 Cajones" />}
-                             {matchesQ('5. Clóset 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_2_doors'} onClick={() => handleInsertModule('place_closet_2_doors')} icon={<Columns size={14}/>} label="5. Clóset 2 Puertas" />}
-                             {matchesQ('6. Walk-in Abierto') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_walkin'} onClick={() => handleInsertModule('place_closet_walkin')} icon={<Layers size={14}/>} label="6. Walk-in Abierto" />}
-                             {matchesQ('7. Cajones Ocultos (2 Ptas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_inner_drawers'} onClick={() => handleInsertModule('place_closet_inner_drawers')} icon={<LayoutGrid size={14}/>} label="7. Cajones Ocultos (2 Ptas)" />}
+                             {matchesQ('1. Barra + Maletero') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_hanger'} onClick={() => handleInsertModule('place_closet_hanger')} previewToolId="place_closet_hanger" onHoverPreview={setHoveredModulePreview} icon={<Box size={14}/>} label="1. Barra + Maletero" />}
+                             {matchesQ('2. Mixto (Barra + Cajones)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_mixed'} onClick={() => handleInsertModule('place_closet_mixed')} previewToolId="place_closet_mixed" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="2. Mixto (Barra + Cajones)" />}
+                             {matchesQ('3. Lencero (Repisas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_shelves'} onClick={() => handleInsertModule('place_closet_shelves')} previewToolId="place_closet_shelves" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="3. Lencero (Repisas)" />}
+                             {matchesQ('4. Cajonera 4 Cajones') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_drawers'} onClick={() => handleInsertModule('place_closet_drawers')} previewToolId="place_closet_drawers" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="4. Cajonera 4 Cajones" />}
+                             {matchesQ('5. Clóset 2 Puertas') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_2_doors'} onClick={() => handleInsertModule('place_closet_2_doors')} previewToolId="place_closet_2_doors" onHoverPreview={setHoveredModulePreview} icon={<Columns size={14}/>} label="5. Clóset 2 Puertas" />}
+                             {matchesQ('6. Walk-in Abierto') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_walkin'} onClick={() => handleInsertModule('place_closet_walkin')} previewToolId="place_closet_walkin" onHoverPreview={setHoveredModulePreview} icon={<Layers size={14}/>} label="6. Walk-in Abierto" />}
+                             {matchesQ('7. Cajones Ocultos (2 Ptas)') && <ToolButton isLight={isLight} active={toolMode === 'place_closet_inner_drawers'} onClick={() => handleInsertModule('place_closet_inner_drawers')} previewToolId="place_closet_inner_drawers" onHoverPreview={setHoveredModulePreview} icon={<LayoutGrid size={14}/>} label="7. Cajones Ocultos (2 Ptas)" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1437,9 +1998,9 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              hasActiveTool={['place_arch_door', 'place_arch_window', 'place_arch_pillar'].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_door'} onClick={() => { setToolMode('place_arch_door'); setViewMode('3d'); }} icon={<Columns size={14}/>} label="Puerta" />}
-                             {matchesQ('Ventana') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_window'} onClick={() => { setToolMode('place_arch_window'); setViewMode('3d'); }} icon={<Square size={14}/>} label="Ventana" />}
-                             {matchesQ('Pilar / Muro Corto') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_pillar'} onClick={() => { setToolMode('place_arch_pillar'); setViewMode('3d'); }} icon={<Maximize2 size={14}/>} label="Pilar / Muro Corto" />}
+                             {matchesQ('Puerta') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_door'} onClick={() => { setToolMode('place_arch_door'); setViewMode('3d'); }} previewToolId="place_arch_door" onHoverPreview={setHoveredModulePreview} icon={<Columns size={14}/>} label="Puerta" />}
+                             {matchesQ('Ventana') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_window'} onClick={() => { setToolMode('place_arch_window'); setViewMode('3d'); }} previewToolId="place_arch_window" onHoverPreview={setHoveredModulePreview} icon={<Square size={14}/>} label="Ventana" />}
+                             {matchesQ('Pilar / Muro Corto') && <ToolButton isLight={isLight} active={toolMode === 'place_arch_pillar'} onClick={() => { setToolMode('place_arch_pillar'); setViewMode('3d'); }} previewToolId="place_arch_pillar" onHoverPreview={setHoveredModulePreview} icon={<Maximize2 size={14}/>} label="Pilar / Muro Corto" />}
                            </ModuleCategoryAccordion>
                          )}
 
@@ -1455,11 +2016,11 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
                              hasActiveTool={['place_deco_stove', 'place_deco_fridge', 'place_deco_hood', 'place_deco_plant', 'place_deco_dishwasher'].includes(toolMode)}
                              isLight={isLight}
                            >
-                             {matchesQ('1. Cocina FDV 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_stove'} onClick={() => handleInsertModule('place_deco_stove')} icon={<Flame size={14}/>} label="1. Cocina FDV 90" />}
-                             {matchesQ('2. Refrigerador SBS') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_fridge'} onClick={() => handleInsertModule('place_deco_fridge')} icon={<Refrigerator size={14}/>} label="2. Refrigerador SBS" />}
-                             {matchesQ('3. Campana FDV Conic 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_hood'} onClick={() => handleInsertModule('place_deco_hood')} icon={<Sparkles size={14}/>} label="3. Campana FDV Conic 90" />}
-                             {matchesQ('4. Planta Interior') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_plant'} onClick={() => handleInsertModule('place_deco_plant')} icon={<Flower2 size={14}/>} label="4. Planta Interior" />}
-                             {matchesQ('5. Lavavajillas FDV 12C') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_dishwasher'} onClick={() => handleInsertModule('place_deco_dishwasher')} icon={<Utensils size={14}/>} label="5. Lavavajillas FDV 12C" />}
+                             {matchesQ('1. Cocina FDV 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_stove'} onClick={() => handleInsertModule('place_deco_stove')} previewToolId="place_deco_stove" onHoverPreview={setHoveredModulePreview} icon={<Flame size={14}/>} label="1. Cocina FDV 90" />}
+                             {matchesQ('2. Refrigerador SBS') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_fridge'} onClick={() => handleInsertModule('place_deco_fridge')} previewToolId="place_deco_fridge" onHoverPreview={setHoveredModulePreview} icon={<Refrigerator size={14}/>} label="2. Refrigerador SBS" />}
+                             {matchesQ('3. Campana FDV Conic 90') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_hood'} onClick={() => handleInsertModule('place_deco_hood')} previewToolId="place_deco_hood" onHoverPreview={setHoveredModulePreview} icon={<Sparkles size={14}/>} label="3. Campana FDV Conic 90" />}
+                             {matchesQ('4. Planta Interior') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_plant'} onClick={() => handleInsertModule('place_deco_plant')} previewToolId="place_deco_plant" onHoverPreview={setHoveredModulePreview} icon={<Flower2 size={14}/>} label="4. Planta Interior" />}
+                             {matchesQ('5. Lavavajillas FDV 12C') && <ToolButton isLight={isLight} active={toolMode === 'place_deco_dishwasher'} onClick={() => handleInsertModule('place_deco_dishwasher')} previewToolId="place_deco_dishwasher" onHoverPreview={setHoveredModulePreview} icon={<Utensils size={14}/>} label="5. Lavavajillas FDV 12C" />}
                            </ModuleCategoryAccordion>
                          )}
                        </>
@@ -3297,6 +3858,15 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
      isLight={isLight}
    />
 
+   {/* Panel Flotante de Chat Diseñador de Cocinas IA (Exclusivo Usuarios de Pago) */}
+   <KitchenAiChatPanel
+     isOpen={isAiChatOpen}
+     onClose={() => setIsAiChatOpen(false)}
+     isLight={isLight}
+     uiContext={aiUiContext}
+     onExecuteUiActions={handleAiUiActions}
+   />
+
     {/* Modal Renders Fotorrealistas de Estudio Three.js (Sin IA) */}
    <StudioRenderModal
      isOpen={isStudioRenderModalOpen}
@@ -3307,18 +3877,59 @@ export function KitchenConfigurator({ onNavigate }: { onNavigate: () => void }) 
    {/* Modal Backoffice & Modo Cliente */}
    <AdminBackofficeModal
      isOpen={isBackofficeOpen}
-     onClose={() => setIsBackofficeOpen(false)}
+     onClose={() => {
+       setIsBackofficeOpen(false);
+       setBackofficeInitialTab(undefined);
+     }}
      onNavigateToModule={() => setIsBackofficeOpen(false)}
+     initialTab={backofficeInitialTab}
+   />
+   <ModuleHoverPreviewPopup
+     preview={!isLeftSidebarCollapsed && leftTab === 'modules' ? hoveredModulePreview : null}
+     isLight={isLight}
    />
     </div>
    </StudioRenderProvider>
   );
 }
 
-function ToolButton({ active, onClick, icon, label, isLight }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, isLight?: boolean }) {
+function ToolButton({
+  active,
+  onClick,
+  icon,
+  label,
+  isLight,
+  previewToolId,
+  onHoverPreview,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  isLight?: boolean;
+  previewToolId?: string;
+  onHoverPreview?: (preview: HoveredModulePreview | null) => void;
+}) {
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        onHoverPreview?.(null);
+        onClick();
+      }}
+      onMouseEnter={(e) => {
+        if (!previewToolId || !onHoverPreview) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        onHoverPreview({
+          toolId: previewToolId,
+          anchorRight: rect.right,
+          anchorCenterY: rect.top + rect.height / 2,
+        });
+      }}
+      onMouseLeave={() => {
+        if (previewToolId && onHoverPreview) {
+          onHoverPreview(null);
+        }
+      }}
       className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-all border cursor-pointer ${
         active 
           ? 'bg-orange-500/20 border-orange-500 text-orange-500 font-bold shadow-[0_0_10px_rgba(249,115,22,0.15)]' 

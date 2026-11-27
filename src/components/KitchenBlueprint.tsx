@@ -21,7 +21,20 @@ import { KitchenMepBlueprintSheet } from './kitchen/KitchenMepBlueprintSheet';
 import { useAdminStore } from '../store/adminStore';
 import { useSupabaseAuthStore } from '../store/supabaseAuthStore';
 
-export function KitchenBlueprint() {
+export interface KitchenBlueprintExternalCommand {
+  id: number;
+  type: 'export_a3_pdf' | 'export_dxf_zip' | 'print';
+}
+
+interface KitchenBlueprintProps {
+  externalCommand?: KitchenBlueprintExternalCommand | null;
+  onExternalCommandHandled?: () => void;
+}
+
+export function KitchenBlueprint({
+  externalCommand,
+  onExternalCommandHandled,
+}: KitchenBlueprintProps = {}) {
   const state = useStore();
   const kState = useKitchenStore();
   const { currentUser } = useAdminStore();
@@ -47,6 +60,25 @@ export function KitchenBlueprint() {
 
   // Captura de alta fidelidad del Canvas 3D de la escena activa (se refresca al abrir planos o cambiar muebles)
   const [snapshot3D, setSnapshot3D] = useState<string | null>(null);
+  const externalHandlersRef = React.useRef<{
+    exportA3: () => void;
+    exportDxf: () => void;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!state.isPrinting || !externalCommand) return;
+    const timer = window.setTimeout(() => {
+      onExternalCommandHandled?.();
+      if (externalCommand.type === 'export_a3_pdf') {
+        externalHandlersRef.current?.exportA3();
+      } else if (externalCommand.type === 'export_dxf_zip') {
+        externalHandlersRef.current?.exportDxf();
+      } else if (externalCommand.type === 'print') {
+        window.print();
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [state.isPrinting, externalCommand, onExternalCommandHandled]);
 
   React.useEffect(() => {
     if (state.isPrinting) {
@@ -163,6 +195,11 @@ export function KitchenBlueprint() {
       setIsExportingA3(false);
       setExportProgress(null);
     }
+  };
+
+  externalHandlersRef.current = {
+    exportA3: handleExportA3,
+    exportDxf: handleExportAllDxf,
   };
 
   let allParts: Part[] = [];

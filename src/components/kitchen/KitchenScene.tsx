@@ -14,6 +14,7 @@ import { useKitchenStore } from '../../store/kitchenStore';
 import { useStore } from '../../store';
 import { Wall } from './Wall';
 import { Cabinet } from './Cabinet';
+import { CabinetRevealWrapper, KitchenFinishingReveal } from './CabinetRevealWrapper';
 import { KitchenSocle } from './KitchenSocle';
 import { KitchenRunDimensions } from './KitchenRunDimensions';
 import { KitchenSpatialDimensions } from './KitchenSpatialDimensions';
@@ -1301,13 +1302,19 @@ function SceneContent({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
         <React.Suspense fallback={null}>
           {cabinets.map((cab, idx) => {
             if (toolMode === 'move_active' && cab.id === useKitchenStore.getState().activeCabinetId) return null;
-            return <Cabinet key={cab.id} {...cab} index={idx} />;
+            return (
+              <CabinetRevealWrapper key={cab.id} cabinet={cab}>
+                <Cabinet {...cab} index={idx} />
+              </CabinetRevealWrapper>
+            );
           })}
           {!draggingCabinetId && (
             <>
-              <KitchenSocle />
-              <KitchenCountertop3D />
-              <KitchenIslandBackPanel />
+              <KitchenFinishingReveal>
+                <KitchenSocle />
+                <KitchenCountertop3D />
+                <KitchenIslandBackPanel />
+              </KitchenFinishingReveal>
               <KitchenRunDimensions />
               <KitchenSpatialDimensions />
               <KitchenMepScene />

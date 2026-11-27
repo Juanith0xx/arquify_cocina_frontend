@@ -865,33 +865,31 @@ function ContinuousSlabSegmentMesh({
     shape.lineTo(-halfW, halfD);
     shape.closePath();
 
-    if (sinkCutout) {
-      const hole = new THREE.Path();
-      const hLeft = sinkCutout.localX - sinkCutout.width / 2;
-      const hRight = sinkCutout.localX + sinkCutout.width / 2;
-      const hBack = -sinkCutout.depth / 2;
-      const hFront = sinkCutout.depth / 2;
-      hole.moveTo(hLeft, hBack);
-      hole.lineTo(hRight, hBack);
-      hole.lineTo(hRight, hFront);
-      hole.lineTo(hLeft, hFront);
-      hole.closePath();
-      shape.holes.push(hole);
-    }
+    let hasValidHole = false;
 
-    if (cooktopCutout) {
+    const addSafeHole = (cutout: { localX: number; width: number; depth: number }) => {
+      const margin = 0.4;
+      const hLeft = Math.max(-halfW + margin, cutout.localX - cutout.width / 2);
+      const hRight = Math.min(halfW - margin, cutout.localX + cutout.width / 2);
+      const hBack = Math.max(-halfD + margin, -cutout.depth / 2);
+      const hFront = Math.min(halfD - margin, cutout.depth / 2);
+      if (hRight - hLeft <= 1 || hFront - hBack <= 1) return;
+
+      // Orientación horaria (opuesta al contorno antihorario) para triangulación robusta en Three.js
       const hole = new THREE.Path();
-      const hLeft = cooktopCutout.localX - cooktopCutout.width / 2;
-      const hRight = cooktopCutout.localX + cooktopCutout.width / 2;
-      const hBack = -cooktopCutout.depth / 2;
-      const hFront = cooktopCutout.depth / 2;
       hole.moveTo(hLeft, hBack);
-      hole.lineTo(hRight, hBack);
-      hole.lineTo(hRight, hFront);
       hole.lineTo(hLeft, hFront);
+      hole.lineTo(hRight, hFront);
+      hole.lineTo(hRight, hBack);
       hole.closePath();
       shape.holes.push(hole);
-    }
+      hasValidHole = true;
+    };
+
+    if (sinkCutout) addSafeHole(sinkCutout);
+    if (cooktopCutout) addSafeHole(cooktopCutout);
+
+    if (!hasValidHole) return null;
 
     const g = new THREE.ExtrudeGeometry(shape, {
       depth: stoneThicknessCm,
@@ -984,7 +982,6 @@ export function KitchenCountertop3D() {
     const accessoryCabinets = cabinets.filter((c) =>
       c.variant === 'base_sink_2_doors' ||
       c.variant === 'sink_2_doors' ||
-      c.variant === 'sink_u_drawer' ||
       c.id === countertopConfig.sinkCabinetId ||
       c.variant === 'base_cooktop_3_drawers' ||
       c.variant === 'cooktop_3_drawers' ||
@@ -999,7 +996,6 @@ export function KitchenCountertop3D() {
           const isSink =
             cab.variant === 'base_sink_2_doors' ||
             cab.variant === 'sink_2_doors' ||
-            cab.variant === 'sink_u_drawer' ||
             cab.id === countertopConfig.sinkCabinetId;
 
           const isCooktop =
@@ -1143,8 +1139,7 @@ export function KitchenCountertop3D() {
         const sinkCabinet = run.cabinets.find(
           (c) => c.id === countertopConfig.sinkCabinetId ||
                  c.variant === 'base_sink_2_doors' ||
-                 c.variant === 'sink_2_doors' ||
-                 c.variant === 'sink_u_drawer'
+                 c.variant === 'sink_2_doors'
         );
         const cooktopCabinet = run.cabinets.find(
           (c) => c.id === countertopConfig.cooktopCabinetId ||
@@ -1152,8 +1147,14 @@ export function KitchenCountertop3D() {
                  c.variant === 'cooktop_3_drawers'
         );
 
+        // Proyección real de posición mundial sobre el eje local +X de la corrida (evita desfases por micro-gaps)
+        const uRunX = Math.cos(rot);
+        const uRunZ = -Math.sin(rot);
+        const projectCabCenterRelX = (cab: CabinetType) =>
+          (cab.position[0] - run.centerWorld[0]) * uRunX +
+          (cab.position[2] - run.centerWorld[2]) * uRunZ;
+
         // Calcular posición relativa del lavaplatos dentro de la corrida
-        const leftCoverOffsetCm = (run.leftCoverThickMm || 0) / 10;
         let sinkRelX: number | null = null;
         let sinkSpec: SinkSpec | null = null;
         if (sinkCabinet) {
@@ -1161,16 +1162,7 @@ export function KitchenCountertop3D() {
             ? countertopConfig.sinkModel
             : 'alfa_onec_3018';
           sinkSpec = QSTONE_SINKS[model] || QSTONE_SINKS.alfa_onec_3018;
-          // Calcular distancia desde el extremo izquierdo de la corrida hasta el centro del gabinete del lavaplatos
-          let currentDist = leftCoverOffsetCm;
-          for (const cab of run.cabinets) {
-            if (cab.id === sinkCabinet.id) {
-              const centerDistFromLeft = currentDist + cab.width / 2;
-              sinkRelX = -totalRunLengthCm / 2 + centerDistFromLeft;
-              break;
-            }
-            currentDist += cab.width;
-          }
+          sinkRelX = projectCabCenterRelX(sinkCabinet);
         }
 
         // Posición relativa de la encimera dentro de la corrida
@@ -1181,15 +1173,7 @@ export function KitchenCountertop3D() {
             ? countertopConfig.cooktopModel
             : 'fdv_design_60';
           cooktopSpec = FDV_COOKTOPS[model] || FDV_COOKTOPS.fdv_design_60;
-          let currentDist = leftCoverOffsetCm;
-          for (const cab of run.cabinets) {
-            if (cab.id === cooktopCabinet.id) {
-              const centerDistFromLeft = currentDist + cab.width / 2;
-              cooktopRelX = -totalRunLengthCm / 2 + centerDistFromLeft;
-              break;
-            }
-            currentDist += cab.width;
-          }
+          cooktopRelX = projectCabCenterRelX(cooktopCabinet);
         }
 
         // Renderizar los tramos de la corrida según segmentLengthsMm
@@ -1227,26 +1211,41 @@ export function KitchenCountertop3D() {
 
               const isLastSeg = segIdx === run.segmentLengthsMm.length - 1;
 
-              // Comprobar si el lavaplatos o la encimera caen en este tramo
-              const hasSinkInSeg =
+              // Comprobar si el calado del lavaplatos o encimera intersecta este tramo (y en cuál va el modelo 3D)
+              const sinkHalfW = sinkSpec ? sinkSpec.cutoutWidthMm / 20 : 0;
+              const cooktopHalfW = cooktopSpec ? cooktopSpec.cutoutWidthMm / 20 : 0;
+
+              const hasSinkCutoutInSeg =
                 sinkRelX !== null &&
                 sinkSpec !== null &&
-                sinkRelX >= segLeft - 1 &&
-                sinkRelX <= segRight + 1;
+                sinkRelX + sinkHalfW > segLeft + 0.5 &&
+                sinkRelX - sinkHalfW < segRight - 0.5;
 
-              const hasCooktopInSeg =
+              const renderSinkModelInSeg =
+                sinkRelX !== null &&
+                sinkSpec !== null &&
+                sinkRelX >= segLeft - 0.01 &&
+                (isLastSeg ? sinkRelX <= segRight + 0.01 : sinkRelX < segRight);
+
+              const hasCooktopCutoutInSeg =
                 cooktopRelX !== null &&
                 cooktopSpec !== null &&
-                cooktopRelX >= segLeft - 1 &&
-                cooktopRelX <= segRight + 1;
+                cooktopRelX + cooktopHalfW > segLeft + 0.5 &&
+                cooktopRelX - cooktopHalfW < segRight - 0.5;
 
-              const sinkCutout = (hasSinkInSeg && sinkSpec) ? {
+              const renderCooktopModelInSeg =
+                cooktopRelX !== null &&
+                cooktopSpec !== null &&
+                cooktopRelX >= segLeft - 0.01 &&
+                (isLastSeg ? cooktopRelX <= segRight + 0.01 : cooktopRelX < segRight);
+
+              const sinkCutout = (hasSinkCutoutInSeg && sinkSpec) ? {
                 localX: sinkRelX! - segCenterRelX,
                 width: sinkSpec.cutoutWidthMm / 10,
                 depth: sinkSpec.cutoutDepthMm / 10,
               } : null;
 
-              const cooktopCutout = (hasCooktopInSeg && cooktopSpec) ? {
+              const cooktopCutout = (hasCooktopCutoutInSeg && cooktopSpec) ? {
                 localX: cooktopRelX! - segCenterRelX,
                 width: cooktopSpec.cutoutWidthMm / 10,
                 depth: cooktopSpec.cutoutDepthMm / 10,
@@ -1269,7 +1268,7 @@ export function KitchenCountertop3D() {
                   />
 
                   {/* MONTAJE BAJO CUBIERTA DEL LAVAPLATOS REALISTA */}
-                  {sinkCutout && (
+                  {renderSinkModelInSeg && sinkCutout && (
                     <>
                       {countertopConfig.sinkModel === 'alfa_twoc_f5858a' ? (
                         <AlfaTwocF5858aRealistic
@@ -1286,7 +1285,7 @@ export function KitchenCountertop3D() {
                   )}
 
                   {/* ENCIMERA A GAS FDV ENCASTRADA EN EL CALADO */}
-                  {cooktopCutout && (
+                  {renderCooktopModelInSeg && cooktopCutout && (
                     <group position={[cooktopCutout.localX, cabTopY + stoneThicknessCm, localZShift]}>
                       {countertopConfig.cooktopModel === 'fdv_design_90' ? (
                         <FdvDesign90Model position={[0, 0, 0]} />

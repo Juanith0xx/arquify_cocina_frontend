@@ -544,6 +544,138 @@ export function resolveCornerEncounters(runs: ContinuousRunInfo[]) {
 }
 
 /**
+ * Divide una corrida larga en tramos transportables (<= maxSegmentLengthMm)
+ * desplazando las juntas de corte fuera de las zonas de calado de lavaplatos o encimera.
+ */
+function computeSafeSegmentLengthsMm(
+  chain: CabinetType[],
+  totalLengthMm: number,
+  leftCoverThickMm: number,
+  maxSegmentLengthMm: number,
+  config?: CountertopConfig
+): number[] {
+  if (totalLengthMm <= maxSegmentLengthMm) {
+    return [totalLengthMm];
+  }
+
+  // Detectar intervalos prohibidos para juntas (calado + 120 mm de margen sólido por lado)
+  const forbiddenZones: Array<{ start: number; end: number }> = [];
+  const cabinetSeams: number[] = [];
+  let cursorMm = leftCoverThickMm;
+
+  for (let i = 0; i < chain.length; i++) {
+    const cab = chain[i];
+    const cabLenMm = Math.round(cab.width * 10);
+    const centerMm = cursorMm + cabLenMm / 2;
+
+    const isSink =
+      cab.id === config?.sinkCabinetId ||
+      cab.variant === 'base_sink_2_doors' ||
+      cab.variant === 'sink_2_doors';
+
+    const isCooktop =
+      cab.id === config?.cooktopCabinetId ||
+      cab.variant === 'base_cooktop_3_drawers' ||
+      cab.variant === 'cooktop_3_drawers';
+
+    if (isSink) {
+      const model =
+        config?.sinkModel && config.sinkModel !== 'none'
+          ? config.sinkModel
+          : 'alfa_onec_3018';
+      const cutW = QSTONE_SINKS[model]?.cutoutWidthMm || 730;
+      forbiddenZones.push({
+        start: Math.max(0, Math.round(centerMm - cutW / 2 - 120)),
+        end: Math.min(totalLengthMm, Math.round(centerMm + cutW / 2 + 120)),
+      });
+    }
+
+    if (isCooktop) {
+      const model =
+        config?.cooktopModel && config.cooktopModel !== 'none'
+          ? config.cooktopModel
+          : 'fdv_design_60';
+      const cutW = FDV_COOKTOPS[model]?.cutoutWidthMm || 840;
+      forbiddenZones.push({
+        start: Math.max(0, Math.round(centerMm - cutW / 2 - 120)),
+        end: Math.min(totalLengthMm, Math.round(centerMm + cutW / 2 + 120)),
+      });
+    }
+
+    cursorMm += cabLenMm;
+    if (i < chain.length - 1) {
+      cabinetSeams.push(cursorMm);
+    }
+  }
+
+  const isInForbidden = (posMm: number) =>
+    forbiddenZones.some((z) => posMm > z.start && posMm < z.end);
+
+  const minSegs = Math.ceil(totalLengthMm / maxSegmentLengthMm);
+
+  for (let numSegs = minSegs; numSegs <= minSegs + 2; numSegs++) {
+    const cuts: number[] = [];
+    let prevCut = 0;
+    let validAll = true;
+
+    for (let k = 1; k < numSegs; k++) {
+      const remSegs = numSegs - k;
+      const minCut = Math.max(prevCut + 250, totalLengthMm - remSegs * maxSegmentLengthMm);
+      const maxCut = Math.min(prevCut + maxSegmentLengthMm, totalLengthMm - remSegs * 250);
+      if (minCut > maxCut) {
+        validAll = false;
+        break;
+      }
+
+      const ideal = Math.round(prevCut + (totalLengthMm - prevCut) / (remSegs + 1));
+      const candidates = new Set<number>();
+      if (ideal >= minCut && ideal <= maxCut) candidates.add(ideal);
+
+      for (const seam of cabinetSeams) {
+        if (seam >= minCut && seam <= maxCut) candidates.add(seam);
+      }
+      for (const z of forbiddenZones) {
+        if (z.start >= minCut && z.start <= maxCut) candidates.add(z.start);
+        if (z.end >= minCut && z.end <= maxCut) candidates.add(z.end);
+      }
+      candidates.add(minCut);
+      candidates.add(maxCut);
+
+      const safeCandidates = Array.from(candidates)
+        .filter((c) => c >= minCut && c <= maxCut && !isInForbidden(c))
+        .sort((a, b) => Math.abs(a - ideal) - Math.abs(b - ideal));
+
+      if (safeCandidates.length === 0) {
+        validAll = false;
+        break;
+      }
+
+      const chosen = safeCandidates[0];
+      cuts.push(chosen);
+      prevCut = chosen;
+    }
+
+    if (validAll && totalLengthMm - prevCut <= maxSegmentLengthMm) {
+      const lengths: number[] = [];
+      let start = 0;
+      for (const cut of cuts) {
+        lengths.push(cut - start);
+        start = cut;
+      }
+      lengths.push(totalLengthMm - start);
+      return lengths;
+    }
+  }
+
+  // Fallback uniforme si una geometría extrema no admite margen completo
+  const baseSeg = Math.floor(totalLengthMm / minSegs);
+  const remainder = totalLengthMm - baseSeg * minSegs;
+  return Array.from({ length: minSegs }, (_, idx) =>
+    idx === minSegs - 1 ? baseSeg + remainder : baseSeg
+  );
+}
+
+/**
  * Agrupa gabinetes adyacentes y alineados en corridas continuas (runs).
  */
 export function detectContinuousCabinetRuns(
@@ -687,18 +819,15 @@ export function detectContinuousCabinetRuns(
       const canWaterfallLeft = !isLeftBlockedByTall && !isLeftBlockedByAny && !isLeftBlockedByPillar;
       const canWaterfallRight = !isRightBlockedByTall && !isRightBlockedByAny && !isRightBlockedByPillar;
 
-      // Segmentación según criterio logístico de transporte (Casa <= 2500mm, Edificio <= 2000mm)
-      let segmentLengthsMm: number[] = [];
-      if (totalLengthMm <= maxSegmentLengthMm) {
-        segmentLengthsMm = [totalLengthMm];
-      } else {
-        const numSegs = Math.ceil(totalLengthMm / maxSegmentLengthMm);
-        const baseSeg = Math.floor(totalLengthMm / numSegs);
-        const remainder = totalLengthMm - baseSeg * numSegs;
-        segmentLengthsMm = Array.from({ length: numSegs }, (_, idx) =>
-          idx === numSegs - 1 ? baseSeg + remainder : baseSeg
-        );
-      }
+      // Segmentación según criterio logístico de transporte (Casa <= 2500mm, Edificio <= 2000mm),
+      // evitando que cualquier junta de corte atraviese el calado de un lavaplatos o encimera.
+      const segmentLengthsMm = computeSafeSegmentLengthsMm(
+        chain,
+        totalLengthMm,
+        leftCoverThickMm,
+        maxSegmentLengthMm,
+        config
+      );
 
       const runId = `${isIsland ? 'ISL' : 'BASE'}-RUN-${runs.length + 1}`;
       const centerWorld: [number, number, number] = [
@@ -1168,7 +1297,7 @@ export function generateCountertopPieces(
           : (config.baseWaterfallRight ?? config.waterfallRight));
 
     // Chequear si esta corrida contiene encastre de lavaplatos o encimera
-    const sinkCab = run.cabinets.find((c) => c.id === config.sinkCabinetId || c.variant === 'base_sink_2_doors' || c.variant === 'sink_2_doors' || c.variant === 'sink_u_drawer');
+    const sinkCab = run.cabinets.find((c) => c.id === config.sinkCabinetId || c.variant === 'base_sink_2_doors' || c.variant === 'sink_2_doors');
     const cooktopCab = run.cabinets.find((c) => c.id === config.cooktopCabinetId || c.variant === 'base_cooktop_3_drawers' || c.variant === 'cooktop_3_drawers');
 
     let sinkDistFromRunLeftMm: number | null = null;

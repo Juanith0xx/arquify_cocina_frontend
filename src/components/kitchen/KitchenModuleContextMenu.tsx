@@ -1360,7 +1360,9 @@ export function KitchenModuleContextMenu({
                 activeCabinet.variant?.includes('wine_rack') ? 15 :
                 activeCabinet.variant?.startsWith('wall_corner_blind') ? 60 :
                 (activeCabinet.variant?.startsWith('corner_blind') ? 80 :
-                 (activeCabinet.variant === 'base_sink_2_doors' || activeCabinet.variant === 'base_cooktop_3_drawers' ? 80 : 30))
+                 ((activeCabinet.variant === 'base_sink_2_doors' || activeCabinet.variant === 'sink_2_doors')
+                  ? (countertopConfig.sinkModel === 'alfa_twoc_f5858a' && (!countertopConfig.sinkCabinetId || countertopConfig.sinkCabinetId === activeCabinet.id) ? 90 : 80)
+                  : (activeCabinet.variant === 'base_cooktop_3_drawers' ? 80 : 30)))
               }
               maxCm={
                 activeCabinet.variant === 'wall_hood_new_flow' ? 60 :
@@ -1408,7 +1410,7 @@ export function KitchenModuleContextMenu({
               isLight={isLight}
               label={activeCabinet.variant === 'tall_terminal_shelves' ? 'Profundidad de Repisas (Saliente)' : 'Profundidad'}
               valueCm={activeCabinet.depth}
-              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 32 : (activeCabinet.variant === 'tall_terminal_shelves' ? 15 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25)))}
+              minCm={activeCabinet.variant === 'wall_hood_new_flow' ? 32 : (activeCabinet.variant === 'tall_terminal_shelves' ? 15 : ((activeCabinet.variant === 'base_sink_2_doors' || activeCabinet.variant === 'sink_2_doors') ? 55 : (activeCabinet.type === 'closet' ? 40 : (activeCabinet.type === 'island' ? 30 : 25))))}
               maxCm={activeCabinet.variant === 'wall_hood_new_flow' ? 40 : (activeCabinet.variant === 'tall_terminal_shelves' ? 50 : (activeCabinet.type === 'closet' ? 80 : (activeCabinet.type === 'island' ? 120 : 80)))}
               stepMm={1}
               onChangeCm={(val) => updateCabinet(activeCabinet.id, { depth: val })}

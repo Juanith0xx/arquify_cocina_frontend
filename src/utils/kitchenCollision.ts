@@ -2275,43 +2275,123 @@ export function findCornerSnapForCabinet(
     Math.round(newCabZ * 10) / 10,
   ];
 
-  // 5. Detectar y reubicar módulo perpendicular acoplado (ej. cajonera)
+  // 5. Detectar y reubicar únicamente el módulo perpendicular del MISMO nivel vertical (sin sobreponer ni mezclar aéreos con base)
   const connectedUpdates: Array<{ id: string; position: [number, number, number]; rotation: number }> = [];
 
   let syncedBlindWidth: number | undefined = undefined;
 
-  for (const other of allCabinets) {
-    if (other.id === cab.id) continue;
-    const rotDiff = Math.abs(Math.sin((other.rotation || 0) - wallRot));
-    if (rotDiff > 0.7) {
-      const distToCab = Math.hypot(other.position[0] - cab.position[0], other.position[2] - cab.position[2]);
-      if (distToCab < (cabWidth + other.width + other.depth) / 2 + 30) {
-        syncedBlindWidth = other.depth;
-        const perpDx = bestPerpWall.end[0] - bestPerpWall.start[0];
-        const perpDz = bestPerpWall.end[1] - bestPerpWall.start[1];
-        const perpLen = Math.hypot(perpDx, perpDz);
-        const uPerpX = perpDx / perpLen;
-        const uPerpZ = perpDz / perpLen;
-        const perpRot = Math.atan2(bestPerpNormal[0], bestPerpNormal[1]);
+  const perpDx = bestPerpWall.end[0] - bestPerpWall.start[0];
+  const perpDz = bestPerpWall.end[1] - bestPerpWall.start[1];
+  const perpLen = Math.hypot(perpDx, perpDz);
 
-        const flushDistPerp = perpThickness / 2 + other.depth / 2;
-        const esquineroFrontPos: [number, number] = [
-          newCabPos[0] + (cabDepth / 2) * nHostX,
-          newCabPos[2] + (cabDepth / 2) * nHostZ,
-        ];
-        const sPerpCornerFront = (esquineroFrontPos[0] - bestPerpWall.start[0]) * uPerpX + (esquineroFrontPos[1] - bestPerpWall.start[1]) * uPerpZ;
-        const sCornerPerp = (cornerVertex[0] - bestPerpWall.start[0]) * uPerpX + (cornerVertex[1] - bestPerpWall.start[1]) * uPerpZ;
-        const awayDir = sPerpCornerFront >= sCornerPerp ? 1 : -1;
-        const sOtherCenter = sPerpCornerFront + awayDir * (other.width / 2);
+  if (perpLen >= 10) {
+    const uPerpX = perpDx / perpLen;
+    const uPerpZ = perpDz / perpLen;
+    const perpRot = Math.atan2(bestPerpNormal[0], bestPerpNormal[1]);
 
-        const newOtherX = bestPerpWall.start[0] + sOtherCenter * uPerpX + flushDistPerp * bestPerpNormal[0];
-        const newOtherZ = bestPerpWall.start[1] + sOtherCenter * uPerpZ + flushDistPerp * bestPerpNormal[1];
+    const esquineroFrontPos: [number, number] = [
+      newCabPos[0] + (cabDepth / 2) * nHostX,
+      newCabPos[2] + (cabDepth / 2) * nHostZ,
+    ];
+    const sPerpCornerFront =
+      (esquineroFrontPos[0] - bestPerpWall.start[0]) * uPerpX +
+      (esquineroFrontPos[1] - bestPerpWall.start[1]) * uPerpZ;
+    const sCornerPerp =
+      (cornerVertex[0] - bestPerpWall.start[0]) * uPerpX +
+      (cornerVertex[1] - bestPerpWall.start[1]) * uPerpZ;
+    const awayDir = sPerpCornerFront >= sCornerPerp ? 1 : -1;
 
-        connectedUpdates.push({
-          id: other.id,
-          position: [Math.round(newOtherX * 10) / 10, other.position[1], Math.round(newOtherZ * 10) / 10],
-          rotation: perpRot,
-        });
+    const isCabWall = cab.type === 'wall';
+    const isCabBase = cab.type === 'base' || cab.type === 'island';
+
+    // Filtrar estrictamente módulos del mismo nivel vertical (wall con wall; base/island con base/island) sobre el muro perpendicular
+    const perpWallSameTier = allCabinets
+      .filter((other) => {
+        if (other.id === cab.id) return false;
+        if (other.type === 'tall' || other.type === 'decoration' || other.variant?.startsWith('deco_')) return false;
+        const sameTier =
+          (isCabWall && other.type === 'wall') ||
+          (isCabBase && (other.type === 'base' || other.type === 'island'));
+        if (!sameTier) return false;
+        if (Math.abs((other.position[1] || 0) - (cab.position[1] || 0)) > 35) return false;
+
+        // Misma orientación que el muro perpendicular (no muro opuesto)
+        if (Math.cos((other.rotation || 0) - perpRot) <= 0.7) return false;
+
+        // Debe estar apoyado contra bestPerpWall (descarta islas u otros muros)
+        const normDistPerp =
+          (other.position[0] - bestPerpWall.start[0]) * bestPerpNormal[0] +
+          (other.position[2] - bestPerpWall.start[1]) * bestPerpNormal[1];
+        const expectedFlushPerp = perpThickness / 2 + other.depth / 2;
+        if (Math.abs(normDistPerp - expectedFlushPerp) > 35) return false;
+
+        return true;
+      })
+      .map((other) => {
+        const sCurr =
+          (other.position[0] - bestPerpWall.start[0]) * uPerpX +
+          (other.position[2] - bestPerpWall.start[1]) * uPerpZ;
+        const sNearEdge = sCurr - awayDir * (other.width / 2);
+        const gapToFront = (sNearEdge - sPerpCornerFront) * awayDir;
+        return { other, sCurr, gapToFront };
+      })
+      .sort((a, b) => (a.sCurr - b.sCurr) * awayDir);
+
+    // Elegir únicamente el primer módulo perpendicular adosado al encuentro de esquina
+    const firstMatch = perpWallSameTier.find(
+      (item) =>
+        Math.abs(item.gapToFront) <= 35 &&
+        Math.hypot(item.other.position[0] - cab.position[0], item.other.position[2] - cab.position[2]) <
+          (cabWidth + item.other.width + item.other.depth) / 2 + 30
+    );
+
+    if (firstMatch) {
+      syncedBlindWidth = firstMatch.other.depth;
+
+      const targetFirstCenterS = sPerpCornerFront + awayDir * (firstMatch.other.width / 2);
+      const rawDeltaS = targetFirstCenterS - firstMatch.sCurr;
+
+      if (Math.abs(rawDeltaS) > 0.2) {
+        // Recoger la corrida contigua en el muro perpendicular para desplazarla en bloque (0 sobreposición)
+        const chain: typeof perpWallSameTier = [firstMatch];
+        const startIdx = perpWallSameTier.indexOf(firstMatch);
+        for (let idx = startIdx + 1; idx < perpWallSameTier.length; idx++) {
+          const prev = chain[chain.length - 1];
+          const curr = perpWallSameTier[idx];
+          const prevFarEdge = prev.sCurr + awayDir * (prev.other.width / 2);
+          const currNearEdge = curr.sCurr - awayDir * (curr.other.width / 2);
+          const seamGap = (currNearEdge - prevFarEdge) * awayDir;
+          if (seamGap >= -2 && seamGap <= 4.5) {
+            chain.push(curr);
+          } else {
+            break;
+          }
+        }
+
+        // Respetar límites interiores del muro perpendicular al desplazar la corrida
+        let clampedDeltaS = rawDeltaS;
+        const lastInChain = chain[chain.length - 1];
+        const lastFarEdge = lastInChain.sCurr + awayDir * (lastInChain.other.width / 2);
+        const wallFarLimit = awayDir > 0 ? perpLen - perpThickness / 2 : perpThickness / 2;
+        if (awayDir > 0 && lastFarEdge + clampedDeltaS > wallFarLimit) {
+          clampedDeltaS = Math.min(clampedDeltaS, wallFarLimit - lastFarEdge);
+        } else if (awayDir < 0 && lastFarEdge + clampedDeltaS < wallFarLimit) {
+          clampedDeltaS = Math.max(clampedDeltaS, wallFarLimit - lastFarEdge);
+        }
+
+        if (Math.abs(clampedDeltaS) > 0.2) {
+          for (const item of chain) {
+            const nextS = item.sCurr + clampedDeltaS;
+            const flushDistPerp = perpThickness / 2 + item.other.depth / 2;
+            const newOtherX = bestPerpWall.start[0] + nextS * uPerpX + flushDistPerp * bestPerpNormal[0];
+            const newOtherZ = bestPerpWall.start[1] + nextS * uPerpZ + flushDistPerp * bestPerpNormal[1];
+            connectedUpdates.push({
+              id: item.other.id,
+              position: [Math.round(newOtherX * 10) / 10, item.other.position[1], Math.round(newOtherZ * 10) / 10],
+              rotation: perpRot,
+            });
+          }
+        }
       }
     }
   }

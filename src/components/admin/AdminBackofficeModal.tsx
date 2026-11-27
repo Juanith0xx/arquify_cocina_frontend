@@ -42,12 +42,14 @@ interface AdminBackofficeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigateToModule: (route: 'kitchen' | 'closet' | 'special' | 'hpl-bathroom' | 'office' | 'chair') => void;
+  initialTab?: 'projects' | 'supplies' | 'textures' | 'users' | 'analytics' | 'manufacturing';
 }
 
 export function AdminBackofficeModal({
   isOpen,
   onClose,
   onNavigateToModule,
+  initialTab,
 }: AdminBackofficeModalProps) {
   const {
     adminEmail,
@@ -73,6 +75,12 @@ export function AdminBackofficeModal({
   const [activeTab, setActiveTab] = useState<'projects' | 'supplies' | 'textures' | 'users' | 'analytics' | 'manufacturing'>(
     isFreeUser ? 'projects' : isProvider ? 'supplies' : 'projects'
   );
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   useEffect(() => {
     if (isFreeUser) {

@@ -1,9 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiProxyTarget =
+    env.VITE_API_PROXY_TARGET?.trim() ||
+    'https://arquifycocinabackend-production.up.railway.app';
+
   return {
     resolve: {
       alias: {
@@ -21,6 +26,13 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy: {
+        '/api/v1': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+          secure: apiProxyTarget.startsWith('https://'),
+        },
+      },
     },
     plugins: [
       react(),
@@ -53,6 +65,35 @@ export default defineConfig(() => {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ error: err?.message || 'Error generating render' }));
+              }
+            });
+          });
+
+          server.middlewares.use('/api/kitchen-ai-agent', async (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              res.end(JSON.stringify({ error: 'Method not allowed' }));
+              return;
+            }
+
+            let bodyStr = '';
+            req.on('data', (chunk) => {
+              bodyStr += chunk.toString();
+            });
+
+            req.on('end', async () => {
+              try {
+                const body = JSON.parse(bodyStr);
+                const { handleKitchenAgentRequest } = await import('./api/kitchen-ai-agent.ts');
+                const result = await handleKitchenAgentRequest(body);
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                console.error('Error in /api/kitchen-ai-agent middleware:', err);
+                res.statusCode = err?.statusCode || 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: err?.message || 'Error in kitchen AI design agent' }));
               }
             });
           });
