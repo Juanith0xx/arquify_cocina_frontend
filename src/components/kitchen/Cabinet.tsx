@@ -4652,9 +4652,17 @@ function CabinetBase({ id, type, variant, width, height, depth, position, rotati
                         const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 3 - golaRegruesoDeduct);
                         const drawerH = availH / 2;
                         midNotchCenterYFromBottom = gap + drawerH + 2.0;
-                     } else if (effectiveVariant === '2_drawers_1_pot' || effectiveVariant === '3_drawers_veggie' || effectiveVariant === 'base_3_drawers_veggie') {
+                     } else if (
+                        effectiveVariant === '2_drawers_1_pot' ||
+                        effectiveVariant === 'base_cooktop_3_drawers' ||
+                        effectiveVariant === 'cooktop_3_drawers' ||
+                        effectiveVariant === '3_drawers_veggie' ||
+                        effectiveVariant === 'base_3_drawers_veggie'
+                     ) {
                         const availH = Math.max(20, cabH - 3.5 - 4.0 - gap * 4 - golaRegruesoDeduct);
-                        const lowerH = availH * (effectiveVariant.includes('veggie') ? 0.43 : 0.5);
+                        const lowerH = effectiveVariant.includes('veggie')
+                           ? Math.round(availH * 0.43 * 10) / 10
+                           : availH * 0.5;
                         midNotchCenterYFromBottom = gap + lowerH + 2.0;
                      }
 
